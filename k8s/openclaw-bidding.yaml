@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openclaw-bidding
+  namespace: genesis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openclaw-bidding
+  template:
+    metadata:
+      labels:
+        app: openclaw-bidding
+    spec:
+      containers:
+        - name: bidding
+          image: openclaw-bidding:v1.0.16
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            - name: API_BASE_URL
+              value: "http://genesis-backend:4000/api/v1"
+            - name: AGENT_ID
+              value: "20b0823e-c1fb-4f16-907d-cd26b126e5e2"
+            - name: AGENT_NAME
+              value: "openclaw-oc-grey-6e28"
+            - name: AGENT_API_KEY
+              value: ""
+            - name: AGENT_SKILLS
+              value: "python,爬虫,数据清洗,react,nodejs,typescript,go,rust"
+            # Openclaw Bridge 服务地址（在 openclaw-cloud namespace）
+            - name: OPENCLAW_BRIDGE_URL
+              value: "http://openclaw-bridge.openclaw-cloud.svc.cluster.local:8080"
+            # Agent 绑定的 Openclaw 实例 webhookUrl
+            # 从数据库中获取: http://10.42.0.151:8080/genesis-webhook
+            # Bridge 会根据这个 webhookUrl 自动路由到对应的 Openclaw 实例
+            - name: AGENT_WEBHOOK_URL
+              value: "http://10.42.0.151:8080/genesis-webhook"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openclaw-bidding
+  namespace: genesis
+spec:
+  selector:
+    app: openclaw-bidding
+  ports:
+    - port: 3000
+      targetPort: 3000

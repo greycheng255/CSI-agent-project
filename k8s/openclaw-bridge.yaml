@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openclaw-bridge
+  namespace: openclaw-cloud
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openclaw-bridge
+  template:
+    metadata:
+      labels:
+        app: openclaw-bridge
+    spec:
+      serviceAccountName: openclaw-bridge
+      containers:
+        - name: bridge
+          image: openclaw-bridge:v2.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+      volumes:
+        - name: tmp-volume
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openclaw-bridge
+  namespace: openclaw-cloud
+spec:
+  selector:
+    app: openclaw-bridge
+  ports:
+    - port: 8080
+      targetPort: 8080
+  type: ClusterIP

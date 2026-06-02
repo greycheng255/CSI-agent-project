@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: genesis-agent-heartbeat
+  namespace: genesis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: genesis-agent-heartbeat
+  template:
+    metadata:
+      labels:
+        app: genesis-agent-heartbeat
+    spec:
+      containers:
+        - name: heartbeat
+          image: genesis-agent:v2.9.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              API_BASE="${API_BASE:-http://genesis-backend:4000}"
+              INTERVAL="${HEARTBEAT_INTERVAL:-30}"
+              OWNER_TOKEN="${OWNER_TOKEN:-}"
+              OWNER_USER_ID="${OWNER_USER_ID:-}"
+              
+              echo "Starting heartbeat service"
+              echo "API Base: $API_BASE"
+              echo "Interval: ${INTERVAL}s"
+              
+              # 如果没有配置 AGENT_IDS，则自动从 API 获取
+              if [ -n "$AGENT_IDS" ]; then
+                echo "Using configured AGENT_IDS: $AGENT_IDS"
+              elif [ -n "$OWNER_USER_ID" ]; then
+                echo "Auto-fetching agents for user: $OWNER_USER_ID"
+              else
+                echo "Error: Please set AGENT_IDS or OWNER_USER_ID"
+                exit 1
+              fi
+              
+              while true; do
+                # 如果没有配置 AGENT_IDS，则从 API 获取
+                if [ -z "$AGENT_IDS" ] && [ -n "$OWNER_USER_ID" ]; then
+                  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Fetching agents from API..."
+                  
+                  # 构建请求头
+                  if [ -n "$OWNER_TOKEN" ]; then
+                    agents_response=$(wget -qO- --header="Authorization: Bearer ${OWNER_TOKEN}" "${API_BASE}/api/v1/owner/agents/user/${OWNER_USER_ID}" 2>&1)
+                  else
+                    agents_response=$(wget -qO- "${API_BASE}/api/v1/owner/agents/user/${OWNER_USER_ID}" 2>&1)
+                  fi
+                  
+                  echo "API Response: $agents_response"
+                  
+                  # 提取所有 Agent ID (使用 grep 和 sed 解析 JSON 数组中的 id 字段)
+                  agent_list=$(echo "$agents_response" | grep -o '"id":"[^"]*"' | sed 's/"id":"//g; s/"//g')
+                  
+                  if [ -z "$agent_list" ]; then
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] No agents found, retrying in ${INTERVAL}s..."
+                    sleep "$INTERVAL"
+                    continue
+                  fi
+                  
+                  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Found agents:"
+                  echo "$agent_list"
+                else
+                  # 使用配置的 AGENT_IDS
+                  agent_list=$(echo "$AGENT_IDS" | tr ',' '\n')
+                fi
+                
+                # 发送心跳
+                echo "$agent_list" | while read agent_id; do
+                  agent_id=$(echo "$agent_id" | tr -d ' ')
+                  if [ -n "$agent_id" ]; then
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Sending heartbeat to Agent[$agent_id]..."
+                    response=$(wget -qO- --post-data="" "${API_BASE}/api/v1/owner/agents/${agent_id}/heartbeat" 2>&1)
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Agent[$agent_id]: $response"
+                  fi
+                done
+                
+                sleep "$INTERVAL"
+              done
+          env:
+            - name: AGENT_IDS
+              value: ""
+            - name: OWNER_USER_ID
+              value: "2281dc78-c0df-4a48-b873-36b68c2b02a1"
+            - name: OWNER_TOKEN
+              value: ""
+            - name: API_BASE
+              value: "http://genesis-backend:4000"
+            - name: HEARTBEAT_INTERVAL
+              value: "30"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: genesis-agent-heartbeat
+  namespace: genesis
+spec:
+  selector:
+    app: genesis-agent-heartbeat
+  ports:
+    - port: 8080
+      targetPort: 8080

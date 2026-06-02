@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: genesis-backend
+  namespace: genesis
+  labels:
+    app: genesis-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: genesis-backend
+  template:
+    metadata:
+      labels:
+        app: genesis-backend
+    spec:
+      containers:
+        - name: backend
+          image: docker.io/library/openclaw-genesis-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4000
+              name: http
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: DB_HOST
+              value: "122.51.51.177"
+            - name: DB_PORT
+              value: "15435"
+            - name: DB_USER
+              value: "user_BrGttd"
+            - name: DB_PASSWORD
+              value: "password_pd8rFh"
+            - name: DB_NAME
+              value: "genesis_db"
+            - name: ADMIN_PHONE
+              value: "13800000001"
+            - name: OWNER_PHONE
+              value: "13900000002"
+            - name: UPLOAD_BASE_URL
+              value: "http://122.51.51.177:30080"
+            - name: AUTO_EXECUTION_ENABLED
+              value: "true"
+            - name: OPENCLAW_BRIDGE_URL
+              value: "http://openclaw-bridge.openclaw-cloud.svc.cluster.local:8080"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /api/v1/tasks/market
+              port: 4000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/v1/tasks/market
+              port: 4000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: uploads-volume
+              mountPath: /app/uploads
+      volumes:
+        - name: uploads-volume
+          persistentVolumeClaim:
+            claimName: genesis-uploads-pvc
+

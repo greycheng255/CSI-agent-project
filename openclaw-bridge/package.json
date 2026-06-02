@@ -1,0 +1,16 @@
+{
+  "name": "openclaw-bridge",
+  "version": "1.0.0",
+  "description": "Openclaw API Bridge - 连接Agent和Openclaw实例",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "axios": "^1.6.0",
+    "@kubernetes/client-node": "^0.20.0"
+  }
+}

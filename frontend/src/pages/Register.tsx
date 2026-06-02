@@ -1,0 +1,216 @@
+import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useAuthStore } from '../store/authStore';
+import { Terminal, Loader2, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { API_BASE } from '../config/api';
+
+export default function Register() {
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  
+  const login = useAuthStore(state => state.login);
+  const navigate = useNavigate();
+
+  const validatePhone = (phone: string) => {
+    return /^1[3-9]\d{9}$/.test(phone);
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    // 验证输入
+    if (!phone || !password || !confirmPassword) {
+      setError('请填写所有必填项');
+      return;
+    }
+
+    if (!validatePhone(phone)) {
+      setError('请输入正确的手机号');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('密码长度至少6位');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('两次输入的密码不一致');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // 调用注册 API
+      const res = await fetch(`${API_BASE}/api/v1/users/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone,
+          password,
+          displayName: displayName || undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || '注册失败');
+      }
+
+      // 注册成功后自动登录
+      const loginRes = await fetch(`${API_BASE}/api/v1/users/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, password }),
+      });
+
+      if (!loginRes.ok) {
+        throw new Error('注册成功但登录失败，请手动登录');
+      }
+
+      const loginData = await loginRes.json();
+      login(loginData.user, loginData.token);
+      
+      setSuccess(true);
+      
+      // 2秒后跳转到首页
+      setTimeout(() => {
+        navigate('/');
+      }, 2000);
+      
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : '注册失败，请稍后重试';
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (success) {
+    return (
+      <div className="max-w-md mx-auto mt-20">
+        <div className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-8 shadow-2xl text-center">
+          <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-green-400 mb-2">注册成功</h1>
+          <p className="text-gray-400">欢迎加入碳硅网络</p>
+          <p className="text-gray-500 text-sm mt-2">正在跳转...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-md mx-auto mt-20">
+      <div className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-8 shadow-2xl">
+        <div className="text-center mb-8">
+          <Terminal className="w-12 h-12 text-green-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold">加入碳硅网络</h1>
+          <p className="text-gray-500 mt-2 text-sm">创建您的节点账户</p>
+        </div>
+
+        {error && (
+          <div className="mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleRegister} className="space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              手机号 <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              placeholder="请输入11位手机号"
+              maxLength={11}
+              className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-gray-200 focus:outline-none focus:border-green-500 transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              昵称 <span className="text-gray-600">(可选)</span>
+            </label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={e => setDisplayName(e.target.value)}
+              placeholder="设置您的昵称"
+              className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-gray-200 focus:outline-none focus:border-green-500 transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              密码 <span className="text-red-400">*</span>
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="设置密码（至少6位）"
+                className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-gray-200 focus:outline-none focus:border-green-500 transition-colors pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-400"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-2">
+              确认密码 <span className="text-red-400">*</span>
+            </label>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+              placeholder="再次输入密码"
+              className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-gray-200 focus:outline-none focus:border-green-500 transition-colors"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-3 bg-green-500/10 text-green-400 border border-green-500/30 font-bold rounded-lg hover:bg-green-500/20 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                注册中...
+              </>
+            ) : (
+              '注册'
+            )}
+          </button>
+        </form>
+
+        <div className="mt-6 text-center">
+          <p className="text-gray-500 text-sm">
+            已有账户？{' '}
+            <Link to="/login" className="text-green-400 hover:text-green-300">
+              立即登录
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

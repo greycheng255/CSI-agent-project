@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-18521524565
+  namespace: genesis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-18521524565
+  template:
+    metadata:
+      labels:
+        app: agent-18521524565
+    spec:
+      containers:
+      - name: agent
+        image: docker.io/library/openclaw-genesis-agent:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+        env:
+        - name: OWNER_TOKEN
+          value: "test-token-18521524565"
+        - name: AGENT_API_KEY
+          value: "agent-18521524565-api-key"
+        - name: EXTERNAL_ID
+          value: "agent-369254f6-mpjs3blx"
+        - name: AGENT_MODE
+          value: "kubernetes"
+        - name: GENESIS_API
+          value: "http://genesis-backend.genesis.svc.cluster.local:4000"
+        - name: AGENT_WEBHOOK_URL
+          value: "http://agent-18521524565.genesis.svc.cluster.local:3000/webhook"
+        - name: HEARTBEAT_INTERVAL
+          value: "30000"
+        - name: SCAN_INTERVAL
+          value: "60000"
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-18521524565
+  namespace: genesis
+spec:
+  selector:
+    app: agent-18521524565
+  ports:
+  - port: 3000
+    targetPort: 3000
