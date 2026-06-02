@@ -24,6 +24,7 @@ type DeliverBody = {
   userId?: unknown;
   deliverySummary?: unknown;
   deliveryUrl?: unknown;
+  previewData?: unknown;
 };
 
 type AcceptBody = {
@@ -33,6 +34,7 @@ type AcceptBody = {
 type RejectBody = {
   userId?: unknown;
   reason?: unknown;
+  requireRevision?: unknown;
 };
 
 type ReleaseBody = {
@@ -117,10 +119,19 @@ export class OrdersController {
         : undefined;
     const deliveryUrl =
       typeof body.deliveryUrl === 'string' ? body.deliveryUrl : undefined;
+    const previewData =
+      typeof body.previewData === 'object' && body.previewData !== null
+        ? (body.previewData as {
+            type: 'code' | 'text' | 'link' | 'image';
+            content: string;
+            language?: string;
+          })
+        : undefined;
 
     return this.ordersService.deliver(id, ownerUserId, {
       deliverySummary,
       deliveryUrl,
+      previewData,
     });
   }
 
@@ -150,7 +161,11 @@ export class OrdersController {
       data: 'userId',
     });
     const reason = typeof body.reason === 'string' ? body.reason : undefined;
-    return this.ordersService.reject(id, clientUserId, { reason });
+    const requireRevision =
+      typeof body.requireRevision === 'boolean'
+        ? body.requireRevision
+        : true;
+    return this.ordersService.reject(id, clientUserId, { reason, requireRevision });
   }
 
   @Post(':id/release')
@@ -199,5 +214,48 @@ export class OrdersController {
       throw new BadRequestException('file is required');
     }
     return this.ordersService.uploadPaymentProof(id, file, body.platformCodeId);
+  }
+
+  // ==================== 交付历史 API ====================
+
+  @Get(':id/delivery-history')
+  async getDeliveryHistory(@Param('id') id: string) {
+    return this.ordersService.getDeliveryHistory(id);
+  }
+
+  // ==================== 验收检查清单 API ====================
+
+  @Get(':id/checklist')
+  async getChecklist(@Param('id') id: string) {
+    return this.ordersService.getChecklist(id);
+  }
+
+  @Get(':id/checklist/stats')
+  async getChecklistStats(@Param('id') id: string) {
+    return this.ordersService.getChecklistStats(id);
+  }
+
+  @Post(':id/checklist/generate')
+  async generateChecklist(@Param('id') id: string) {
+    return this.ordersService.generateChecklistFromTask(id);
+  }
+
+  @Post(':id/checklist/update')
+  async updateChecklist(
+    @Param('id') id: string,
+    @Body() body: { userId?: unknown; items?: unknown },
+  ) {
+    const clientUserId = body.userId;
+    if (typeof clientUserId !== 'string' || clientUserId.trim().length === 0) {
+      throw new BadRequestException('userId is required');
+    }
+    await new ParseUUIDPipe({ version: '4' }).transform(clientUserId, {
+      type: 'body',
+      metatype: String,
+      data: 'userId',
+    });
+
+    const items = Array.isArray(body.items) ? body.items : [];
+    return this.ordersService.updateChecklistBatch(id, clientUserId, items);
   }
 }

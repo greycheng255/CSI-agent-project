@@ -3,6 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ShieldCheck, Loader2, CheckCircle2, Camera, Clock, AlertCircle, FileText, ChevronDown, ChevronUp, MessageSquare, RefreshCw } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
+import DeliveryHistory from '../components/DeliveryHistory';
+import DeliveryForm from '../components/DeliveryForm';
+import AcceptanceChecklist from '../components/AcceptanceChecklist';
+import { acceptDelivery, rejectDelivery } from '../api/deliveryApi';
 
 type OrderStatus =
   | 'PENDING_PAYMENT'
@@ -243,13 +247,10 @@ export default function OrderDetail() {
   
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
-  const [delivering, setDelivering] = useState(false);
   const [accepting, setAccepting] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [canceling, setCanceling] = useState(false);
-  const [deliverySummary, setDeliverySummary] = useState('已完成交付，请雇主验收。');
-  const [deliveryUrl, setDeliveryUrl] = useState('');
-  const [rejectReason, setRejectReason] = useState('交付未满足验收标准。');
+  const [rejectReason, setRejectReason] = useState('');
   const [expandedPhases, setExpandedPhases] = useState<string[]>([]);
   const [helpMessage, setHelpMessage] = useState('');
   const [sendingHelp, setSendingHelp] = useState(false);
@@ -499,98 +500,7 @@ export default function OrderDetail() {
     }
   };
 
-  const handleDeliver = async () => {
-    if (!user) {
-      alert('请先登录');
-      navigate('/login');
-      return;
-    }
-    if (!deliverySummary.trim()) {
-      alert('请输入交付说明');
-      return;
-    }
-    setDelivering(true);
-    try {
-      const res = await fetch(`${apiBase}/api/v1/orders/${id}/deliver`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.id,
-          deliverySummary,
-          deliveryUrl: deliveryUrl || undefined,
-        }),
-      });
-      if (res.ok) {
-        fetchOrder();
-        alert('交付已提交，等待雇主验收');
-      } else {
-        const err = await res.json().catch(() => null);
-        alert(err?.message || '交付失败');
-      }
-    } catch {
-      alert('交付请求失败');
-    } finally {
-      setDelivering(false);
-    }
-  };
-
-  const handleAccept = async () => {
-    if (!user) {
-      alert('请先登录');
-      navigate('/login');
-      return;
-    }
-    setAccepting(true);
-    try {
-      const res = await fetch(`${apiBase}/api/v1/orders/${id}/accept`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
-      });
-      if (res.ok) {
-        fetchOrder();
-        alert('已确认验收');
-      } else {
-        const err = await res.json().catch(() => null);
-        alert(err?.message || '验收失败');
-      }
-    } catch {
-      alert('验收请求失败');
-    } finally {
-      setAccepting(false);
-    }
-  };
-
-  const handleReject = async () => {
-    if (!user) {
-      alert('请先登录');
-      navigate('/login');
-      return;
-    }
-    if (!rejectReason.trim()) {
-      alert('请输入拒绝原因');
-      return;
-    }
-    setRejecting(true);
-    try {
-      const res = await fetch(`${apiBase}/api/v1/orders/${id}/reject`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, reason: rejectReason }),
-      });
-      if (res.ok) {
-        fetchOrder();
-        alert('已拒绝交付，订单进入仲裁');
-      } else {
-        const err = await res.json().catch(() => null);
-        alert(err?.message || '拒绝失败');
-      }
-    } catch {
-      alert('拒绝请求失败');
-    } finally {
-      setRejecting(false);
-    }
-  };
+  // 旧的交付处理函数已移除，使用 deliveryApi.ts 中的新函数
 
   const handleCancel = async () => {
     if (!user) {
@@ -871,68 +781,57 @@ export default function OrderDetail() {
               </div>
             )}
 
-            {/* 交付区域（仅开发者可见） */}
-            {isOwner && order.status === 'IN_PROGRESS' && (
-              <div className="bg-[#111] border border-gray-800 rounded-lg p-6">
-                <h2 className="text-lg font-semibold text-white mb-4">提交交付</h2>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-2">交付说明</label>
-                    <textarea
-                      value={deliverySummary}
-                      onChange={(e) => setDeliverySummary(e.target.value)}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-                      rows={3}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-2">交付链接（可选）</label>
-                    <input
-                      type="text"
-                      value={deliveryUrl}
-                      onChange={(e) => setDeliveryUrl(e.target.value)}
-                      placeholder="https://..."
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                  <button
-                    onClick={handleDeliver}
-                    disabled={delivering}
-                    className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                  >
-                    {delivering ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4" />
-                    )}
-                    提交交付
-                  </button>
-                </div>
-              </div>
+            {/* 交付历史（所有用户可见） */}
+            {(order.status === 'DELIVERED' || order.status === 'ACCEPTED' || order.status === 'PENDING_RELEASE' || order.status === 'COMPLETED' || order.status === 'REJECTED' || order.status === 'ARBITRATING') && (
+              <DeliveryHistory orderId={order.id} />
             )}
 
-            {/* 验收区域（仅雇主可见） */}
+            {/* 验收检查清单（雇主和开发者可见） */}
+            {(isClient || isOwner) && (order.status === 'DELIVERED' || order.status === 'ACCEPTED' || order.status === 'PENDING_RELEASE' || order.status === 'COMPLETED') && (
+              <AcceptanceChecklist
+                orderId={order.id}
+                userId={user?.id || ''}
+                isClient={isClient}
+                orderStatus={order.status}
+                onStatusChange={fetchOrder}
+              />
+            )}
+
+            {/* 交付表单（仅开发者可见） */}
+            {isOwner && (order.status === 'IN_PROGRESS' || order.status === 'DELIVERED') && (
+              <DeliveryForm
+                orderId={order.id}
+                userId={user?.id || ''}
+                onSuccess={() => {
+                  fetchOrder();
+                  alert('交付提交成功！');
+                }}
+                onCancel={() => {}}
+              />
+            )}
+
+            {/* 验收操作区域（仅雇主可见） */}
             {isClient && order.status === 'DELIVERED' && (
               <div className="bg-[#111] border border-gray-800 rounded-lg p-6">
-                <h2 className="text-lg font-semibold text-white mb-4">验收交付</h2>
-                {order.deliverySummary && (
-                  <div className="mb-4 p-3 bg-gray-800/30 rounded-lg">
-                    <p className="text-sm text-gray-300">{order.deliverySummary}</p>
-                    {order.deliveryUrl && (
-                      <a 
-                        href={order.deliveryUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-sm text-blue-400 hover:text-blue-300 mt-2 inline-block"
-                      >
-                        查看交付物 →
-                      </a>
-                    )}
-                  </div>
-                )}
+                <h2 className="text-lg font-semibold text-white mb-4">验收操作</h2>
+                <p className="text-sm text-gray-400 mb-4">
+                  请先在上方检查清单中逐项确认，然后再进行验收操作。
+                </p>
                 <div className="flex gap-3">
                   <button
-                    onClick={handleAccept}
+                    onClick={async () => {
+                      if (!window.confirm('确认验收此交付？资金将释放给开发者。')) return;
+                      setAccepting(true);
+                      try {
+                        await acceptDelivery(order.id, user?.id || '');
+                        fetchOrder();
+                        alert('验收成功！');
+                      } catch (err) {
+                        alert(err instanceof Error ? err.message : '验收失败');
+                      } finally {
+                        setAccepting(false);
+                      }
+                    }}
                     disabled={accepting}
                     className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                   >
@@ -947,31 +846,84 @@ export default function OrderDetail() {
                     onClick={() => document.getElementById('reject-section')?.scrollIntoView({ behavior: 'smooth' })}
                     className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-600/30 rounded-lg font-medium transition-colors"
                   >
-                    拒绝
+                    退回修改
                   </button>
                 </div>
                 
-                {/* 拒绝原因 */}
+                {/* 退回修改/拒绝区域 */}
                 <div id="reject-section" className="mt-4 pt-4 border-t border-gray-800">
-                  <label className="block text-sm text-gray-400 mb-2">拒绝原因</label>
+                  <label className="block text-sm text-gray-400 mb-2">原因说明</label>
                   <textarea
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="说明需要修改的地方..."
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-red-500 mb-3"
                     rows={2}
                   />
-                  <button
-                    onClick={handleReject}
-                    disabled={rejecting}
-                    className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                  >
-                    {rejecting ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4" />
-                    )}
-                    确认拒绝并仲裁
-                  </button>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={async () => {
+                        if (!rejectReason.trim()) {
+                          alert('请填写退回原因');
+                          return;
+                        }
+                        if (!window.confirm('退回给开发者修改？开发者可以重新提交交付。')) return;
+                        setRejecting(true);
+                        try {
+                          await rejectDelivery(order.id, user?.id || '', {
+                            reason: rejectReason,
+                            requireRevision: true,
+                          });
+                          fetchOrder();
+                          alert('已退回给开发者修改');
+                        } catch (err) {
+                          alert(err instanceof Error ? err.message : '操作失败');
+                        } finally {
+                          setRejecting(false);
+                        }
+                      }}
+                      disabled={rejecting}
+                      className="flex-1 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                    >
+                      {rejecting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4" />
+                      )}
+                      退回修改
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!rejectReason.trim()) {
+                          alert('请填写拒绝原因');
+                          return;
+                        }
+                        if (!window.confirm('确认拒绝并发起仲裁？这将进入平台仲裁流程。')) return;
+                        setRejecting(true);
+                        try {
+                          await rejectDelivery(order.id, user?.id || '', {
+                            reason: rejectReason,
+                            requireRevision: false,
+                          });
+                          fetchOrder();
+                          alert('已拒绝并发起仲裁');
+                        } catch (err) {
+                          alert(err instanceof Error ? err.message : '操作失败');
+                        } finally {
+                          setRejecting(false);
+                        }
+                      }}
+                      disabled={rejecting}
+                      className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                    >
+                      {rejecting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4" />
+                      )}
+                      拒绝并仲裁
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

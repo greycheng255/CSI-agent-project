@@ -142,6 +142,16 @@ export class WebhooksService {
   }
 
   /**
+   * 当有新交付提交时，通知雇主
+   */
+  async notifyDeliverySubmitted(order: Order, delivery: any): Promise<void> {
+    // 这里可以扩展为通知雇主（通过邮件、短信或前端推送）
+    this.logger.log(
+      `[Delivery] New delivery submitted | orderId=${order.id} | version=${delivery.version}`,
+    );
+  }
+
+  /**
    * 创建 Webhook 投递记录并触发发送
    */
   private async createDelivery(

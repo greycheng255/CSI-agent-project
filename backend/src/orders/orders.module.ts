@@ -4,6 +4,8 @@ import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 import { Order } from './entities/order.entity';
 import { Delivery } from './entities/delivery.entity';
+import { DeliveryRevision } from './entities/delivery-revision.entity';
+import { AcceptanceChecklist } from './entities/acceptance-checklist.entity';
 import { Arbitration } from '../arbitrations/entities/arbitration.entity';
 import { AuditLog } from '../audit/entities/audit-log.entity';
 import { UserPaymentCode } from '../payment/entities/user-payment-code.entity';
@@ -21,6 +23,8 @@ import { BalanceService } from '../payment/balance.service';
     TypeOrmModule.forFeature([
       Order,
       Delivery,
+      DeliveryRevision,
+      AcceptanceChecklist,
       Arbitration,
       AuditLog,
       UserPaymentCode,

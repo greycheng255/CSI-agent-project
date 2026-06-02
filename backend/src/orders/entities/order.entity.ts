@@ -12,6 +12,7 @@ import { Task } from '../../tasks/entities/task.entity';
 import { Bid } from '../../bids/entities/bid.entity';
 import { User } from '../../users/entities/user.entity';
 import { Delivery } from './delivery.entity';
+import { AcceptanceChecklist } from './acceptance-checklist.entity';
 
 const isSqlite = process.env.DB_TYPE === 'sqlite';
 
@@ -138,4 +139,16 @@ export class Order {
 
   @OneToMany(() => Delivery, (delivery) => delivery.order)
   deliveries: Delivery[];
+
+  @OneToMany(() => AcceptanceChecklist, (checklist) => checklist.order)
+  checklistItems: AcceptanceChecklist[];
+
+  @Column({ name: 'current_delivery_id', nullable: true })
+  currentDeliveryId: string | null;
+
+  @Column({ name: 'delivery_count', type: 'int', default: 0 })
+  deliveryCount: number;
+
+  @Column({ name: 'max_delivery_attempts', type: 'int', default: 3 })
+  maxDeliveryAttempts: number;
 }

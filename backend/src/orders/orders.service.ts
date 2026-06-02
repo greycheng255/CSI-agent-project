@@ -9,7 +9,9 @@ import { Repository } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Order, OrderStatus } from './entities/order.entity';
-import { Delivery } from './entities/delivery.entity';
+import { Delivery, DeliveryStatus } from './entities/delivery.entity';
+import { DeliveryRevision, RevisionType } from './entities/delivery-revision.entity';
+import { AcceptanceChecklist, ChecklistItemStatus } from './entities/acceptance-checklist.entity';
 import {
   Arbitration,
   ArbitrationStatus,
@@ -23,10 +25,22 @@ import { BalanceService } from '../payment/balance.service';
 type DeliverDto = {
   deliverySummary?: string;
   deliveryUrl?: string;
+  previewData?: {
+    type: 'code' | 'text' | 'link' | 'image';
+    content: string;
+    language?: string;
+  };
 };
 
 type RejectDto = {
   reason?: string;
+  requireRevision?: boolean; // 是否要求修改（true=退回修改，false=直接拒绝/仲裁）
+};
+
+type ChecklistCheckDto = {
+  itemId: string;
+  status: ChecklistItemStatus;
+  comment?: string;
 };
 
 @Injectable()
@@ -36,6 +50,10 @@ export class OrdersService {
     private ordersRepository: Repository<Order>,
     @InjectRepository(Delivery)
     private deliveriesRepository: Repository<Delivery>,
+    @InjectRepository(DeliveryRevision)
+    private deliveryRevisionsRepository: Repository<DeliveryRevision>,
+    @InjectRepository(AcceptanceChecklist)
+    private acceptanceChecklistRepository: Repository<AcceptanceChecklist>,
     @InjectRepository(Arbitration)
     private arbitrationsRepository: Repository<Arbitration>,
     @InjectRepository(AuditLog)
@@ -314,11 +332,18 @@ export class OrdersService {
     return saved;
   }
 
+  /**
+   * 提交交付物（支持多次迭代）
+   */
   async deliver(id: string, ownerUserId: string, data: DeliverDto) {
     const order = await this.findOne(id);
-    if (order.status !== OrderStatus.IN_PROGRESS) {
-      throw new BadRequestException('Order is not in progress');
+    
+    // 检查订单状态是否允许交付
+    const allowedStatuses = [OrderStatus.IN_PROGRESS, OrderStatus.DELIVERED];
+    if (!allowedStatuses.includes(order.status)) {
+      throw new BadRequestException('Order is not in progress or delivered');
     }
+    
     const orderOwnerId = order.owner?.id || order.ownerUserId;
     if (!orderOwnerId) {
       throw new BadRequestException('Order has no owner');
@@ -326,26 +351,60 @@ export class OrdersService {
     if (orderOwnerId !== ownerUserId) {
       throw new BadRequestException('Only the owner can deliver');
     }
+
+    // 检查是否超过最大交付次数
+    if (order.deliveryCount >= order.maxDeliveryAttempts) {
+      throw new BadRequestException(`Maximum delivery attempts (${order.maxDeliveryAttempts}) reached`);
+    }
+
+    // 如果有之前的交付，将其标记为已替代
+    if (order.currentDeliveryId) {
+      await this.deliveriesRepository.update(
+        { id: order.currentDeliveryId },
+        { status: DeliveryStatus.SUPERSEDED }
+      );
+    }
+
+    // 创建新交付
+    const version = order.deliveryCount + 1;
     const delivery = this.deliveriesRepository.create({
       order,
       owner: order.owner,
-      deliveryText:
-        typeof data.deliverySummary === 'string' ? data.deliverySummary : null,
-      attachmentUrl:
-        typeof data.deliveryUrl === 'string' ? data.deliveryUrl : null,
+      version,
+      status: DeliveryStatus.PENDING_REVIEW,
+      deliveryText: typeof data.deliverySummary === 'string' ? data.deliverySummary : null,
+      attachmentUrl: typeof data.deliveryUrl === 'string' ? data.deliveryUrl : null,
+      previewData: data.previewData || null,
     });
     await this.deliveriesRepository.save(delivery);
 
+    // 创建交付修订记录
+    const revision = this.deliveryRevisionsRepository.create({
+      delivery,
+      deliveryId: delivery.id,
+      type: version === 1 ? RevisionType.SUBMIT : RevisionType.MODIFY,
+      version,
+      deliveryText: delivery.deliveryText,
+      attachmentUrl: delivery.attachmentUrl,
+      comment: version === 1 ? 'Initial delivery' : `Revision ${version}`,
+      createdBy: order.owner,
+      createdById: ownerUserId,
+    });
+    await this.deliveryRevisionsRepository.save(revision);
+
+    // 更新订单状态
     const from = order.status;
     order.status = OrderStatus.DELIVERED;
     order.deliveredAt = new Date();
     order.deliverySummary = delivery.deliveryText;
     order.deliveryUrl = delivery.attachmentUrl;
+    order.currentDeliveryId = delivery.id;
+    order.deliveryCount = version;
     const saved = await this.ordersRepository.save(order);
 
     // [追踪点] 订单已交付
     console.log(
-      `[ORDER-FLOW] 订单已交付 | orderId=${saved.id} | ownerId=${ownerUserId} | deliveryUrl=${saved.deliveryUrl}`,
+      `[ORDER-FLOW] 订单已交付 | orderId=${saved.id} | version=${version} | ownerId=${ownerUserId} | deliveryUrl=${saved.deliveryUrl}`,
     );
 
     await this.logOrderStatusChange({
@@ -354,9 +413,25 @@ export class OrdersService {
       to: saved.status,
       actorType: ActorType.OWNER,
       actorId: ownerUserId,
-      payload: { deliveryId: delivery.id },
+      payload: { deliveryId: delivery.id, version },
     });
-    return saved;
+
+    // 触发 Webhook 通知雇主
+    void this.webhooksService.notifyDeliverySubmitted(saved, delivery);
+
+    return { order: saved, delivery };
+  }
+
+  /**
+   * 获取订单的所有交付历史
+   */
+  async getDeliveryHistory(orderId: string) {
+    const deliveries = await this.deliveriesRepository.find({
+      where: { order: { id: orderId } },
+      relations: ['revisions', 'owner'],
+      order: { version: 'DESC' },
+    });
+    return deliveries;
   }
 
   async accept(id: string, clientUserId: string) {
@@ -495,6 +570,9 @@ export class OrdersService {
     return completed;
   }
 
+  /**
+   * 拒绝交付（支持退回修改或直接拒绝）
+   */
   async reject(id: string, clientUserId: string, data: RejectDto) {
     const order = await this.findOne(id);
     if (order.status !== OrderStatus.DELIVERED) {
@@ -507,7 +585,62 @@ export class OrdersService {
     if (orderClientId !== clientUserId) {
       throw new BadRequestException('Only the client can reject');
     }
+
+    // 更新当前交付状态
+    if (order.currentDeliveryId) {
+      await this.deliveriesRepository.update(
+        { id: order.currentDeliveryId },
+        { 
+          status: DeliveryStatus.REJECTED,
+          rejectionReason: data.reason || null,
+          rejectedAt: new Date(),
+        }
+      );
+
+      // 创建拒绝修订记录
+      const revision = this.deliveryRevisionsRepository.create({
+        deliveryId: order.currentDeliveryId,
+        type: RevisionType.REJECT,
+        version: order.deliveryCount,
+        comment: data.reason || 'Delivery rejected',
+        createdById: clientUserId,
+      });
+      await this.deliveryRevisionsRepository.save(revision);
+    }
+
     const from = order.status;
+    
+    // 如果要求修改，退回给 Agent 继续工作
+    if (data.requireRevision !== false) {
+      order.status = OrderStatus.IN_PROGRESS;
+      order.disputeReason = data.reason ? String(data.reason) : null;
+      const saved = await this.ordersRepository.save(order);
+
+      // [追踪点] 交付被退回修改
+      console.log(
+        `[ORDER-FLOW] 交付被退回修改 | orderId=${saved.id} | version=${order.deliveryCount} | reason=${data.reason}`,
+      );
+
+      // 触发 Webhook，通知 Agent 需要修改
+      void this.webhooksService.notifyOrderRejected(saved, data.reason);
+
+      await this.logOrderStatusChange({
+        orderId: saved.id,
+        from,
+        to: saved.status,
+        actorType: ActorType.CLIENT,
+        actorId: clientUserId,
+        payload: { 
+          reason: data.reason,
+          action: 'require_revision',
+          deliveryVersion: order.deliveryCount,
+        },
+      });
+
+      return { order: saved, action: 'require_revision' };
+    }
+
+    // 直接拒绝，进入仲裁流程
     order.status = OrderStatus.REJECTED;
     order.disputeReason = data.reason ? String(data.reason) : null;
     const saved = await this.ordersRepository.save(order);
@@ -680,5 +813,134 @@ export class OrdersService {
       filename,
       orderId,
     };
+  }
+
+  // ==================== 验收检查清单功能 ====================
+
+  /**
+   * 从任务验收标准生成检查清单
+   */
+  async generateChecklistFromTask(orderId: string): Promise<AcceptanceChecklist[]> {
+    const order = await this.findOne(orderId);
+    const acceptanceCriteria = order.task?.acceptanceCriteria;
+    
+    if (!acceptanceCriteria) {
+      return [];
+    }
+
+    // 解析验收标准（假设每行是一个检查项）
+    const criteriaLines = acceptanceCriteria
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
+    const checklistItems: AcceptanceChecklist[] = [];
+    
+    for (let i = 0; i < criteriaLines.length; i++) {
+      const item = this.acceptanceChecklistRepository.create({
+        order,
+        orderId: order.id,
+        itemIndex: i,
+        criteriaText: criteriaLines[i],
+        status: ChecklistItemStatus.PENDING,
+      });
+      checklistItems.push(await this.acceptanceChecklistRepository.save(item));
+    }
+
+    return checklistItems;
+  }
+
+  /**
+   * 获取订单的检查清单
+   */
+  async getChecklist(orderId: string): Promise<AcceptanceChecklist[]> {
+    return this.acceptanceChecklistRepository.find({
+      where: { orderId },
+      order: { itemIndex: 'ASC' },
+    });
+  }
+
+  /**
+   * 更新检查项状态
+   */
+  async updateChecklistItem(
+    orderId: string,
+    clientUserId: string,
+    data: ChecklistCheckDto,
+  ): Promise<AcceptanceChecklist> {
+    const order = await this.findOne(orderId);
+    
+    // 验证权限
+    const orderClientId = order.client?.id || order.clientUserId;
+    if (orderClientId !== clientUserId) {
+      throw new BadRequestException('Only the client can update checklist');
+    }
+
+    // 只能在交付后验收前更新
+    if (order.status !== OrderStatus.DELIVERED) {
+      throw new BadRequestException('Can only update checklist when order is delivered');
+    }
+
+    const item = await this.acceptanceChecklistRepository.findOne({
+      where: { id: data.itemId, orderId },
+    });
+
+    if (!item) {
+      throw new NotFoundException('Checklist item not found');
+    }
+
+    item.status = data.status;
+    item.comment = data.comment || null;
+    item.checkedById = clientUserId;
+    item.checkedAt = new Date();
+
+    return this.acceptanceChecklistRepository.save(item);
+  }
+
+  /**
+   * 批量更新检查清单
+   */
+  async updateChecklistBatch(
+    orderId: string,
+    clientUserId: string,
+    items: ChecklistCheckDto[],
+  ): Promise<AcceptanceChecklist[]> {
+    const results: AcceptanceChecklist[] = [];
+    for (const item of items) {
+      results.push(await this.updateChecklistItem(orderId, clientUserId, item));
+    }
+    return results;
+  }
+
+  /**
+   * 获取检查清单统计
+   */
+  async getChecklistStats(orderId: string): Promise<{
+    total: number;
+    passed: number;
+    failed: number;
+    pending: number;
+    na: number;
+    passRate: number;
+  }> {
+    const items = await this.getChecklist(orderId);
+    
+    const stats = {
+      total: items.length,
+      passed: items.filter(i => i.status === ChecklistItemStatus.PASSED).length,
+      failed: items.filter(i => i.status === ChecklistItemStatus.FAILED).length,
+      pending: items.filter(i => i.status === ChecklistItemStatus.PENDING).length,
+      na: items.filter(i => i.status === ChecklistItemStatus.NA).length,
+      passRate: 0,
+    };
+
+    if (stats.total > 0) {
+      const checkableItems = stats.total - stats.na;
+      if (checkableItems > 0) {
+        stats.passRate = Math.round((stats.passed / checkableItems) * 100);
+      }
+    }
+
+    return stats;
   }
 }
