@@ -164,20 +164,39 @@ export class OrdersService {
       where: { id },
       relations: [
         'task',
-        'bid',
-        'bid.agent',
-        'bid.agent.owner',
         'client',
         'owner',
       ],
     });
     if (!order) throw new NotFoundException('Order not found');
+    
+    // 如果订单有 bid_id，再加载 bid 关系
+    if (order.bidId) {
+      const orderWithBid = await this.ordersRepository.findOne({
+        where: { id },
+        relations: [
+          'task',
+          'bid',
+          'bid.agent',
+          'bid.agent.owner',
+          'client',
+          'owner',
+        ],
+      });
+      if (orderWithBid) {
+        await this.enrichOrdersWithPaymentCodes([orderWithBid]);
+        return orderWithBid;
+      }
+    }
+    
     await this.enrichOrdersWithPaymentCodes([order]);
     return order;
   }
 
   async findAll(status?: OrderStatus) {
+    console.log('[DEBUG] findAll called with status:', status);
     const where = status ? { status } : {};
+    console.log('[DEBUG] where clause:', where);
     const orders = await this.ordersRepository.find({
       where,
       relations: [
@@ -190,7 +209,10 @@ export class OrdersService {
       ],
       order: { createdAt: 'DESC' },
     });
-    return this.enrichOrdersWithPaymentCodes(orders);
+    console.log('[DEBUG] orders found:', orders.length);
+    const result = await this.enrichOrdersWithPaymentCodes(orders);
+    console.log('[DEBUG] enriched orders:', result.length);
+    return result;
   }
 
   async findByClient(userId: string) {
@@ -243,7 +265,7 @@ export class OrdersService {
 
   async listDeliveries(orderId: string) {
     return this.deliveriesRepository.find({
-      where: { order: { id: orderId } },
+      where: { orderId },
       relations: ['owner'],
       order: { createdAt: 'DESC' },
       take: 50,
@@ -368,8 +390,8 @@ export class OrdersService {
     // 创建新交付
     const version = order.deliveryCount + 1;
     const delivery = this.deliveriesRepository.create({
-      order,
-      owner: order.owner,
+      orderId: order.id,
+      ownerUserId: order.ownerUserId,
       version,
       status: DeliveryStatus.PENDING_REVIEW,
       deliveryText: typeof data.deliverySummary === 'string' ? data.deliverySummary : null,
@@ -380,14 +402,12 @@ export class OrdersService {
 
     // 创建交付修订记录
     const revision = this.deliveryRevisionsRepository.create({
-      delivery,
       deliveryId: delivery.id,
       type: version === 1 ? RevisionType.SUBMIT : RevisionType.MODIFY,
       version,
       deliveryText: delivery.deliveryText,
       attachmentUrl: delivery.attachmentUrl,
       comment: version === 1 ? 'Initial delivery' : `Revision ${version}`,
-      createdBy: order.owner,
       createdById: ownerUserId,
     });
     await this.deliveryRevisionsRepository.save(revision);
@@ -427,7 +447,7 @@ export class OrdersService {
    */
   async getDeliveryHistory(orderId: string) {
     const deliveries = await this.deliveriesRepository.find({
-      where: { order: { id: orderId } },
+      where: { orderId },
       relations: ['revisions', 'owner'],
       order: { version: 'DESC' },
     });
@@ -838,11 +858,11 @@ export class OrdersService {
     
     for (let i = 0; i < criteriaLines.length; i++) {
       const item = this.acceptanceChecklistRepository.create({
-        order,
         orderId: order.id,
         itemIndex: i,
-        criteriaText: criteriaLines[i],
+        criterion: criteriaLines[i],
         status: ChecklistItemStatus.PENDING,
+        sortOrder: i,
       });
       checklistItems.push(await this.acceptanceChecklistRepository.save(item));
     }

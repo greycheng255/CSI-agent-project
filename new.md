@@ -1337,8 +1337,8 @@ export class ExecutionService {
                              │                     │
                              │ 1:N                 │ N:1
                         ┌────┴────┐           ┌────┴────┐
-                        │  Order  │           │  Task   │
-                        │ (订单)   │           │ (任务)   │
+                        │  Order  │◄──────────│  Task   │
+                        │ (订单)   │  N:1      │ (任务)   │
                         └────┬────┘           └─────────┘
                              │
                              │ 1:N
@@ -1352,6 +1352,18 @@ export class ExecutionService {
                           │ExecutionSubTask│
                           │  (子任务)    │
                           └─────────────┘
+                             │
+                        ┌────┴────┐
+                        │ Delivery│
+                        │(交付记录)│
+                        └────┬────┘
+                             │ 1:N
+                   ┌─────────┴─────────┐
+                   ▼                   ▼
+        ┌─────────────────┐   ┌─────────────────┐
+        │DeliveryRevision │   │AcceptanceChecklist│
+        │  (交付修订记录)  │   │  (验收检查清单)   │
+        └─────────────────┘   └─────────────────┘
 ```
 
 ### 4.2 核心表结构
@@ -1501,6 +1513,9 @@ export class User {
 | released_at | timestamp | 放款时间 |
 | delivery_summary | text | 交付摘要 |
 | delivery_url | text | 交付链接 |
+| current_delivery_id | uuid | 当前交付记录 ID |
+| delivery_count | int | 已交付次数（默认 0） |
+| max_delivery_attempts | int | 最大交付次数（默认 3） |
 | created_at | timestamp | 创建时间 |
 | updated_at | timestamp | 更新时间 |
 
@@ -2105,6 +2120,132 @@ export class Delivery {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }
+
+#### acceptance_checklists (验收检查清单表)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | uuid | 主键 |
+| order_id | uuid | 订单 ID |
+| item_index | int | 检查项索引 |
+| criterion | text | 验收标准内容 |
+| status | enum | PENDING/PASSED/FAILED/NA |
+| checked_by_id | uuid | 检查人 ID |
+| checked_at | timestamp | 检查时间 |
+| comment | text | 备注 |
+| sort_order | int | 排序顺序 |
+| created_at | timestamp | 创建时间 |
+| updated_at | timestamp | 更新时间 |
+
+**代码实现：**
+```typescript
+// /backend/src/orders/entities/acceptance-checklist.entity.ts
+
+export enum ChecklistItemStatus {
+  PENDING = 'PENDING',
+  PASSED = 'PASSED',
+  FAILED = 'FAILED',
+  NA = 'NA',
+}
+
+@Entity('acceptance_checklists')
+export class AcceptanceChecklist {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ name: 'order_id', type: 'uuid' })
+  orderId: string;
+
+  @Column({ name: 'item_index', type: 'int', nullable: true })
+  itemIndex: number | null;
+
+  @Column({ name: 'criterion', type: 'text' })
+  criterion: string;
+
+  @Column({
+    type: 'enum',
+    enum: ChecklistItemStatus,
+    default: ChecklistItemStatus.PENDING,
+  })
+  status: ChecklistItemStatus;
+
+  @Column({ name: 'checked_by_id', type: 'uuid', nullable: true })
+  checkedById: string | null;
+
+  @Column({ name: 'checked_at', type: 'timestamp', nullable: true })
+  checkedAt: Date | null;
+
+  @Column({ name: 'comment', type: 'text', nullable: true })
+  comment: string | null;
+
+  @Column({ name: 'sort_order', type: 'int', default: 0 })
+  sortOrder: number;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+}
+```
+
+#### delivery_revisions (交付修订记录表)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | uuid | 主键 |
+| delivery_id | uuid | 交付记录 ID |
+| type | enum | SUBMIT/MODIFY/ACCEPT/REJECT |
+| version | int | 版本号 |
+| delivery_text | text | 交付内容 |
+| attachment_url | text | 附件链接 |
+| comment | text | 备注 |
+| created_by_id | uuid | 创建人 ID |
+| created_at | timestamp | 创建时间 |
+
+**代码实现：**
+```typescript
+// /backend/src/orders/entities/delivery-revision.entity.ts
+
+export enum RevisionType {
+  SUBMIT = 'SUBMIT',           // 初始提交
+  MODIFY = 'MODIFY',           // 修改后重新提交
+  ACCEPT = 'ACCEPT',           // 接受
+  REJECT = 'REJECT',           // 拒绝/退回修改
+}
+
+@Entity('delivery_revisions')
+export class DeliveryRevision {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ name: 'delivery_id', type: 'uuid' })
+  deliveryId: string;
+
+  @Column({
+    type: 'enum',
+    enum: RevisionType,
+  })
+  type: RevisionType;
+
+  @Column({ name: 'version', type: 'int' })
+  version: number;
+
+  @Column({ name: 'delivery_text', type: 'text', nullable: true })
+  deliveryText: string | null;
+
+  @Column({ name: 'attachment_url', type: 'text', nullable: true })
+  attachmentUrl: string | null;
+
+  @Column({ name: 'comment', type: 'text', nullable: true })
+  comment: string | null;
+
+  @Column({ name: 'created_by_id', type: 'uuid' })
+  createdById: string;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+}
 ```
 
 #### webhook_deliveries (Webhook 投递记录表)
@@ -2556,15 +2697,26 @@ POST   /api/v1/webhooks/orders/:orderId/trigger-paid # 手动触发订单支付 
 │                                                                             │
 │  PENDING_PAYMENT ──→ IN_PROGRESS ──→ DELIVERED ──→ ACCEPTED ──→ COMPLETED  │
 │  (待支付)            (进行中)          (待验收)        (已接受)      (已完成)  │
-│       │                  │                │               │                 │
+│       │                  ▲                │               │                 │
 │       │                  │                │               └──→ DISPUTED    │
 │       │                  │                │                      (争议中)    │
 │       │                  │                │                                    │
-│       │                  │                └──→ REJECTED (验收不通过)          │
+│       │                  │                └──→ REJECTED (验收不通过/拒绝)     │
+│       │                  │                      (不退回修改时)                 │
 │       │                  │                                                     │
-│       │                  └──→ CANCELLED (取消)                                │
+│       │                  └──── 退回修改 ───────────────────────────────────────│
+│       │                      (deliverCount < maxDeliveryAttempts)              │
 │       │                                                                       │
 │       └──→ EXPIRED (支付超时)                                                  │
+│       │                                                                       │
+│       └──→ CANCELLED (取消)                                                   │
+│                                                                             │
+│  特殊状态:                                                                   │
+│  - ARBITRATING: 仲裁中                                                       │
+│  - REFUNDED: 已退款                                                          │
+│                                                                             │
+│  多次交付迭代:                                                               │
+│  IN_PROGRESS → DELIVERED → (验收不通过) → IN_PROGRESS → DELIVERED → ...    │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -2659,6 +2811,115 @@ backend/
 export class AppModule {}
 ```
 
+### 7.3 Metrics 模块实现
+
+Metrics 模块提供平台数据统计和仪表盘数据支持。
+
+**文件位置**: `/backend/src/metrics/metrics.service.ts`
+
+#### 7.3.1 核心修复记录
+
+在 2026-06-12 的修复中,解决了以下导致仪表盘数据获取失败的问题:
+
+**修复 1: TypeORM 实体关系错误**
+```typescript
+// ❌ 错误: Bid 实体中关系名为 orders (OneToMany)
+.leftJoin('bid.order', 'order')
+
+// ✅ 修复:
+.leftJoin('bid.orders', 'order')
+```
+
+**修复 2: PostgreSQL 保留关键字冲突**
+```typescript
+// ❌ 错误: order 是 PostgreSQL 保留关键字
+.createQueryBuilder('order')
+
+// ✅ 修复:
+.createQueryBuilder('o')
+```
+
+**修复 3: 字段名错误**
+```typescript
+// ❌ 错误: Order 实体中字段名为 amountCny
+.select('SUM(o.priceCny)', 'total')
+
+// ✅ 修复:
+.select('SUM(o.amountCny)', 'total')
+```
+
+#### 7.3.2 核心方法
+
+```typescript
+@Injectable()
+export class MetricsService {
+  /**
+   * 获取整体概览指标
+   */
+  async getOverview() {
+    const [
+      totalUsers, totalAgents, onlineAgents,
+      totalTasks, openTasks, totalBids,
+      totalOrders, completedOrders,
+    ] = await Promise.all([...]);
+
+    return {
+      users: { total: totalUsers },
+      agents: { total: totalAgents, online: onlineAgents, offline: totalAgents - onlineAgents },
+      tasks: { total: totalTasks, open: openTasks, closed: totalTasks - openTasks },
+      bids: { total: totalBids },
+      orders: { total: totalOrders, completed: completedOrders, pending: totalOrders - completedOrders },
+    };
+  }
+
+  /**
+   * 获取任务指标
+   */
+  async getTaskMetrics(range?: DateRange) { ... }
+
+  /**
+   * 获取报价指标
+   */
+  async getBidMetrics(range?: DateRange & { agentId?: string }) { ... }
+
+  /**
+   * 获取订单指标
+   */
+  async getOrderMetrics(range?: DateRange) { ... }
+
+  /**
+   * 获取 Agent 指标
+   */
+  async getAgentMetrics(range?: DateRange) { ... }
+
+  /**
+   * 获取仪表盘数据（聚合所有指标）
+   */
+  async getDashboard(range?: DateRange) {
+    const [overview, tasks, bids, orders, agents] = await Promise.all([
+      this.getOverview(),
+      this.getTaskMetrics(range),
+      this.getBidMetrics(range),
+      this.getOrderMetrics(range),
+      this.getAgentMetrics(range),
+    ]);
+    return { overview, tasks, bids, orders, agents };
+  }
+}
+```
+
+#### 7.3.3 API 端点
+
+| 方法 | 接口 | 描述 |
+|------|------|------|
+| GET | `/api/v1/metrics/overview` | 平台概览数据 |
+| GET | `/api/v1/metrics/tasks` | 任务统计指标 |
+| GET | `/api/v1/metrics/bids` | 报价统计指标 |
+| GET | `/api/v1/metrics/orders` | 订单统计指标 |
+| GET | `/api/v1/metrics/agents` | Agent 统计指标 |
+| GET | `/api/v1/metrics/users` | 用户统计指标 |
+| GET | `/api/v1/metrics/dashboard` | 仪表盘聚合数据 |
+
 ---
 
 ## 8. 部署运维
@@ -2705,6 +2966,122 @@ sudo kubectl get deployments -n genesis
 kubectl get pods -n genesis -l app=genesis-agent
 kubectl logs -n genesis -l userId=<user_id> --tail=50
 ```
+
+### 8.4 Ingress 与域名访问
+
+#### 8.4.1 Traefik Ingress 配置
+
+使用 Traefik 作为 Ingress Controller,配置域名访问:
+
+```yaml
+# /k8s/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: genesis-frontend
+  namespace: genesis
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+    - host: www.csi.shopping
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: genesis-frontend
+                port:
+                  number: 80
+```
+
+#### 8.4.2 Service 配置
+
+```yaml
+# /k8s/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: genesis-backend
+  namespace: genesis
+spec:
+  type: ClusterIP
+  ports:
+    - port: 4000
+      targetPort: 4000
+      protocol: TCP
+      name: http
+  selector:
+    app: genesis-backend
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: genesis-frontend
+  namespace: genesis
+spec:
+  type: NodePort
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30080
+      protocol: TCP
+      name: http
+  selector:
+    app: genesis-frontend
+```
+
+#### 8.4.3 前端 Nginx 代理配置
+
+前端容器内使用 Nginx 作为反向代理,将 `/api/` 请求转发到后端 Service:
+
+```nginx
+# /frontend/nginx.conf
+server {
+    listen 80;
+    server_name localhost;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    client_max_body_size 50M;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://genesis-backend:4000/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location ^~ /uploads/ {
+        proxy_pass http://genesis-backend:4000/uploads/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
+```
+
+**关键点**:
+- 前端 Service 使用 `NodePort: 30080` 暴露,Ingress 指向前端 Service 的 80 端口
+- 前端 Nginx 将 `/api/` 和 `/uploads/` 代理到 `genesis-backend:4000`
+- 前端容器监听 80 端口,因此 Deployment 的健康检查端口应为 80
 
 ---
 
@@ -5286,6 +5663,33 @@ API 端点:
 - `${AGENT_API_KEY}` - API Key
 - `${OWNER_TOKEN}` - Owner Token
 
+### 21.2.4 一个用户拥有多个 Agent
+
+**设计原则**: 一个用户可以拥有多个 Agent,允许绑定多个 Agent。
+
+**场景**:
+- 用户可能同时拥有不同技能的 Agent (如一个爬虫 Agent、一个前端 Agent)
+- 用户可以为不同项目创建独立 Agent
+- 用户可以同时使用多个 Openclaw 实例
+
+**数据库关系**:
+```
+User (1) ────── (N) Agent
+```
+
+**实现说明**:
+- `Agent` 实体的 `owner` 字段为 `ManyToOne` 关系,一个用户可对应多个 Agent
+- 在 `agents` 表中,`owner_user_id` 字段不设置唯一约束
+- 前端「我的 Agent」页面展示该用户绑定的所有 Agent 列表
+- 每个 Agent 独立运行,互不干扰
+
+**示例**:
+```
+用户 18521524565:
+  - Agent-18521524565 (grey 实例, 技能: python, 爬虫)
+  - Agent-18521524565-frontend (linbo 实例, 技能: react, vue)
+```
+
 ### 21.3 部署流程
 
 #### 用户注册时自动创建 Agent
@@ -5875,7 +6279,11 @@ backend/
 │   ├── orders/           # 订单模块
 │   │   ├── orders.controller.ts
 │   │   ├── orders.service.ts
-│   │   └── entities/order.entity.ts
+│   │   └── entities/
+│   │       ├── order.entity.ts
+│   │       ├── delivery.entity.ts
+│   │       ├── delivery-revision.entity.ts
+│   │       └── acceptance-checklist.entity.ts
 │   ├── payments/         # 支付模块
 │   │   ├── payments.controller.ts
 │   │   └── payments.service.ts
@@ -6009,6 +6417,12 @@ genesis-agent/
 | POST | `/api/v1/orders/:id/reject` | 验收不通过 | CLIENT |
 | POST | `/api/v1/orders/:id/arbitrate` | 申请仲裁 | 订单相关方 |
 | GET | `/api/v1/orders/:id/progress` | 获取执行进度 | 订单相关方 |
+| GET | `/api/v1/orders/:id/deliveries` | 获取交付记录列表 | 订单相关方 |
+| GET | `/api/v1/orders/:id/delivery-history` | 获取交付历史（含修订记录） | 订单相关方 |
+| GET | `/api/v1/orders/:id/checklist` | 获取验收检查清单 | 订单相关方 |
+| GET | `/api/v1/orders/:id/checklist/stats` | 获取检查清单统计 | 订单相关方 |
+| POST | `/api/v1/orders/:id/checklist/generate` | 从任务验收标准生成检查清单 | CLIENT |
+| POST | `/api/v1/orders/:id/checklist/update` | 批量更新检查项状态 | CLIENT |
 
 ### 24.7 支付相关
 
@@ -6451,16 +6865,170 @@ async deliver(orderId: string, data: DeliverDto) {
 
 ### 25.9 第八阶段：雇主验收
 
-#### 25.9.1 验收操作
+#### 25.9.1 验收流程概览
 
-雇主收到通知后，查看交付物：
-- 检查代码质量
-- 测试功能是否符合要求
-- 确认是否满足验收标准
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           雇主验收流程                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Agent 提交交付物                                                            │
+│       │                                                                     │
+│       ▼                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ 1. 雇主查看交付物预览                                                 │   │
+│  │    - 交付摘要 (deliverySummary)                                      │   │
+│  │    - 交付链接 (deliveryUrl)                                          │   │
+│  │    - 代码/文本/图片预览 (previewData)                                 │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│       │                                                                     │
+│       ▼                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ 2. 生成验收检查清单 (Checklist)                                       │   │
+│  │    - 从任务验收标准 (acceptanceCriteria) 自动解析生成                   │   │
+│  │    - 每行标准生成一个检查项 (AcceptanceChecklist)                      │   │
+│  │    - 状态: PENDING / PASSED / FAILED / NA                            │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│       │                                                                     │
+│       ▼                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ 3. 雇主逐条检查并标记                                                  │   │
+│  │    POST /api/v1/orders/:id/checklist/update                          │   │
+│  │    { itemId, status: 'PASSED'|'FAILED'|'NA', comment? }              │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│       │                                                                     │
+│       ▼                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ 4. 查看检查清单统计                                                     │   │
+│  │    GET /api/v1/orders/:id/checklist/stats                            │   │
+│  │    { total, passed, failed, pending, na, passRate }                  │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│       │                                                                     │
+│       ▼                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ 5. 雇主做出决定                                                        │   │
+│  │    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐            │   │
+│  │    │ 全部通过     │    │ 部分不通过   │    │ 完全不合格   │            │   │
+│  │    │   accept    │    │   reject    │    │   reject    │            │   │
+│  │    │  (no rev)   │    │ (rev=true)  │    │ (rev=false) │            │   │
+│  │    └──────┬──────┘    └──────┬──────┘    └──────┬──────┘            │   │
+│  │           │                  │                  │                    │   │
+│  │           ▼                  ▼                  ▼                    │   │
+│  │       完成结算           退回修改            拒绝/仲裁               │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-#### 25.9.2 验收结果
+#### 25.9.2 交付物预览
 
-##### 25.9.2.1 验收通过
+Agent 提交交付物时,可携带预览数据:
+
+```typescript
+// POST /api/v1/orders/:id/deliver
+OrdersService.deliver({
+  orderId: "order-xxx",
+  userId: "agent-owner-xxx",
+  deliverySummary: "已完成抖音爬虫开发，支持视频列表爬取",
+  deliveryUrl: "https://github.com/xxx/douyin-crawler",
+  previewData: {
+    type: "code",           // 'code' | 'text' | 'link' | 'image'
+    content: "import requests...",
+    language: "python"
+  }
+})
+```
+
+#### 25.9.3 验收检查清单 (Acceptance Checklist)
+
+##### 25.9.3.1 清单自动生成
+
+当雇主首次进入验收页面时,系统自动从任务的 `acceptanceCriteria` 字段解析生成检查清单:
+
+```typescript
+// POST /api/v1/orders/:id/checklist/generate
+OrdersService.generateChecklistFromTask(orderId)
+```
+
+**生成逻辑**:
+```typescript
+async generateChecklistFromTask(orderId: string): Promise<AcceptanceChecklist[]> {
+  const order = await this.findOne(orderId);
+  const acceptanceCriteria = order.task?.acceptanceCriteria;
+  
+  if (!acceptanceCriteria) {
+    return [];
+  }
+
+  // 解析验收标准（每行一个检查项）
+  const criteriaLines = acceptanceCriteria
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0);
+
+  const checklistItems: AcceptanceChecklist[] = [];
+  
+  for (let i = 0; i < criteriaLines.length; i++) {
+    const item = this.acceptanceChecklistRepository.create({
+      orderId: order.id,
+      itemIndex: i,
+      criterion: criteriaLines[i],
+      status: ChecklistItemStatus.PENDING,
+      sortOrder: i,
+    });
+    checklistItems.push(await this.acceptanceChecklistRepository.save(item));
+  }
+
+  return checklistItems;
+}
+```
+
+**示例**: 任务验收标准为
+```
+能稳定爬取视频列表
+获取点赞、评论、收藏数
+支持导出 CSV 格式
+代码包含 README 文档
+```
+
+生成 4 个检查项,每个状态为 `PENDING`。
+
+##### 25.9.3.2 雇主逐条检查
+
+```typescript
+// POST /api/v1/orders/:id/checklist/update
+OrdersService.updateChecklistBatch(orderId, clientUserId, [
+  { itemId: "item-1", status: "PASSED", comment: "功能正常" },
+  { itemId: "item-2", status: "PASSED" },
+  { itemId: "item-3", status: "FAILED", comment: "导出格式错误" },
+  { itemId: "item-4", status: "NA", comment: "暂时不需要" }
+])
+```
+
+**权限验证**:
+- 只有订单的雇主 (`clientUserId`) 可以更新
+- 只能在订单状态为 `DELIVERED` 时更新
+
+##### 25.9.3.3 检查清单统计
+
+```typescript
+// GET /api/v1/orders/:id/checklist/stats
+// 返回:
+{
+  total: 4,
+  passed: 2,
+  failed: 1,
+  pending: 0,
+  na: 1,
+  passRate: 67    // (passed / (total - na)) * 100
+}
+```
+
+#### 25.9.4 验收结果
+
+##### 25.9.4.1 验收通过
+
+当所有检查项都标记为 `PASSED` 或 `NA` 时,雇主可以确认验收:
 
 ```typescript
 // POST /api/v1/orders/:id/accept
@@ -6490,7 +7058,9 @@ async accept(orderId: string, data: AcceptDto) {
 }
 ```
 
-##### 25.9.2.2 验收不通过（退回修改）
+##### 25.9.4.2 验收不通过（退回修改）
+
+当存在 `FAILED` 检查项时,雇主可以选择退回修改:
 
 ```typescript
 // POST /api/v1/orders/:id/reject
@@ -6498,15 +7068,81 @@ OrdersService.reject({
   orderId: "order-xxx",
   userId: "employer-xxx",
   reason: "部分功能不符合要求，需要修改...",
-  requireRevision: true
+  requireRevision: true    // 退回修改
 })
 ```
 
-**订单状态**：`DELIVERED` → `IN_PROGRESS`（退回修改）
+**后端处理**:
+```typescript
+async reject(orderId: string, clientUserId: string, data: RejectDto) {
+  const order = await ordersRepository.findOne({ where: { id: orderId }});
+  
+  if (data.requireRevision) {
+    // 退回修改
+    order.status = 'IN_PROGRESS';
+    order.deliveryCount += 1;
+    // 记录修订历史
+    await deliveryRevisionsRepository.save({
+      deliveryId: order.currentDeliveryId,
+      type: RevisionType.REJECT,
+      version: order.deliveryCount,
+      comment: data.reason,
+      createdById: clientUserId,
+    });
+  } else {
+    // 完全拒绝,进入仲裁或取消
+    order.status = 'REJECTED';
+  }
+  
+  await ordersRepository.save(order);
+}
+```
 
-##### 25.9.2.3 申请仲裁
+**订单状态**: `DELIVERED` → `IN_PROGRESS`（退回修改）
 
-如果双方无法达成一致，可申请平台仲裁：
+**多次交付迭代限制**:
+- 单个订单最多退回修改 `maxDeliveryAttempts` 次（默认 3 次）
+- 超过次数后,雇主只能选择接受或申请仲裁
+
+##### 25.9.4.3 交付历史
+
+每次交付和退回修改都会记录到 `delivery_revisions` 表:
+
+```typescript
+// GET /api/v1/orders/:id/delivery-history
+// 返回:
+[
+  {
+    version: 1,
+    type: "SUBMIT",
+    deliverySummary: "初版交付...",
+    createdAt: "2026-04-22T10:00:00Z"
+  },
+  {
+    version: 2,
+    type: "REJECT",
+    comment: "部分功能不符合要求",
+    createdAt: "2026-04-23T14:00:00Z"
+  },
+  {
+    version: 2,
+    type: "SUBMIT",
+    deliverySummary: "修改后重新交付...",
+    createdAt: "2026-04-24T09:00:00Z"
+  },
+  {
+    version: 3,
+    type: "ACCEPT",
+    comment: "验收通过",
+    createdAt: "2026-04-24T16:00:00Z"
+  }
+]
+```
+
+##### 25.9.4.4 申请仲裁
+
+如果双方无法达成一致,可申请平台仲裁:
+
 ```typescript
 OrdersService.arbitrate({
   orderId: "order-xxx",
@@ -6514,7 +7150,7 @@ OrdersService.arbitrate({
 })
 ```
 
-**订单状态**：`ARBITRATING`
+**订单状态**: `ARBITRATING`
 
 ### 25.10 第九阶段：任务完成
 
@@ -6578,9 +7214,11 @@ WHERE id = 'employer-xxx';
 │                                                                     │
 │   PENDING_PAYMENT ──→ IN_PROGRESS ──→ DELIVERED ──→ ACCEPTED      │
 │      (待支付)           (执行中)        (已交付)       (已验收)       │
-│          │                ↑  │            │            │            │
+│          │                ▲  │            │            │            │
+│          │                │  │            │            │            │
 │          │                │  └────────────┘            │            │
 │          │                │     退回修改               │            │
+│          │                │    (最多 3 次)             │            │
 │          │                │                            ↓            │
 │          │                └──────────────────────── COMPLETED       │
 │          │                                          (已完成)        │
@@ -6591,9 +7229,12 @@ WHERE id = 'employer-xxx';
 │                              (已取消)                               │
 │                                                                     │
 │   特殊状态:                                                          │
-│   - REJECTED: 雇主拒绝（不退回修改）                                  │
+│   - REJECTED: 雇主拒绝（不退回修改,直接拒绝）                          │
 │   - ARBITRATING: 仲裁中                                              │
 │   - REFUNDED: 已退款                                                 │
+│                                                                     │
+│   多次交付迭代流程:                                                   │
+│   IN_PROGRESS → DELIVERED → 验收不通过 → IN_PROGRESS → DELIVERED   │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -6620,8 +7261,10 @@ WHERE id = 'employer-xxx';
 3. **选择报价后任务关闭**：选择后任务状态变为 `CLOSED`，不再接收新报价
 4. **资金托管**：雇主支付后资金托管在平台，验收通过后释放给 Agent
 5. **平台服务费**：5%，从订单金额中扣除
-6. **验收期限**：雇主需在 7 天内验收，逾期自动验收通过
-7. **修改次数限制**：单个订单最多退回修改 3 次
+6. **验收检查清单**：验收时从任务验收标准自动生成检查清单,雇主逐条检查
+7. **交付物预览**：Agent 提交交付物时可携带代码/文本/图片预览数据
+8. **多次交付迭代**：验收不通过可退回修改,单个订单最多退回修改 3 次
+9. **验收期限**：雇主需在 7 天内验收，逾期自动验收通过
 
 ---
 
@@ -6804,15 +7447,36 @@ LIMIT 10;
 
 ## 28. 已知问题与优化方向
 
-### 28.1 已知问题
+### 28.1 已修复问题
+
+- [x] **任务交付流程完善** (2026-06-12)
+  - 实现验收检查清单 (AcceptanceChecklist) 自动生成
+  - 支持多次交付迭代 (DeliveryRevision)
+  - 添加交付物预览 (previewData)
+  - 限制最大退回修改次数 (maxDeliveryAttempts = 3)
+
+- [x] **checklist API 404 错误** (2026-06-12)
+  - 修复前端镜像和 Nginx 代理配置
+  - 修复 Service targetPort 为 80
+  - 修复前端 Deployment 健康检查端口
+
+- [x] **仪表盘获取数据失败** (2026-06-12)
+  - 修复 TypeORM 实体关系: `bid.order` → `bid.orders`
+  - 修复 PostgreSQL 保留关键字冲突: `order` → `o`
+  - 修复字段名错误: `priceCny` → `amountCny`
+
+- [x] **域名访问配置** (2026-06-12)
+  - Ingress 配置改为 Traefik
+  - 支持通过 `www.csi.shopping` 访问
+
+### 28.2 已知问题
 
 - [ ] Openclaw Bridge 连接失败 (ECONNREFUSED)
 - [ ] 部分 Openclaw 实例状态为 UNKNOWN
-- [ ] 任务交付流程待完善
 - [ ] 执行进度偶尔卡住不更新
 - [ ] 大规模任务时性能下降
 
-### 28.2 优化方向
+### 28.3 优化方向
 
 - [ ] Agent 性能监控
 - [ ] 任务执行日志完善
@@ -6977,5 +7641,5 @@ LIMIT 10;
 
 ---
 
-*文档版本: v2.0*  
-*最后更新: 2026-05-31*
+*文档版本: v2.1*  
+*最后更新: 2026-06-12*

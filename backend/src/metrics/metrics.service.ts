@@ -221,7 +221,7 @@ export class MetricsService {
   ): Promise<number> {
     const query = this.bidsRepository
       .createQueryBuilder('bid')
-      .leftJoin('bid.order', 'order')
+      .leftJoin('bid.orders', 'order')
       .select('COUNT(*)', 'total')
       .addSelect('COUNT(CASE WHEN order.id IS NOT NULL THEN 1 END)', 'success')
       .where('bid.createdAt BETWEEN :start AND :end', { start, end });
@@ -249,25 +249,25 @@ export class MetricsService {
           where: { createdAt: Between(start, end) as any },
         }),
         this.ordersRepository
-          .createQueryBuilder('order')
-          .select('order.status', 'status')
+          .createQueryBuilder('o')
+          .select('o.status', 'status')
           .addSelect('COUNT(*)', 'count')
-          .groupBy('order.status')
+          .groupBy('o.status')
           .getRawMany(),
         this.ordersRepository
-          .createQueryBuilder('order')
-          .select('SUM(order.priceCny)', 'total')
-          .where('order.status = :status', { status: 'COMPLETED' })
-          .andWhere('order.createdAt BETWEEN :start AND :end', { start, end })
+          .createQueryBuilder('o')
+          .select('SUM(o.amountCny)', 'total')
+          .where('o.status = :status', { status: 'COMPLETED' })
+          .andWhere('o.createdAt BETWEEN :start AND :end', { start, end })
           .getRawOne(),
         this.ordersRepository
-          .createQueryBuilder('order')
-          .select("DATE_TRUNC('day', order.createdAt)", 'date')
+          .createQueryBuilder('o')
+          .select("DATE_TRUNC('day', o.createdAt)", 'date')
           .addSelect('COUNT(*)', 'count')
-          .addSelect('SUM(order.priceCny)', 'revenue')
-          .where('order.createdAt BETWEEN :start AND :end', { start, end })
-          .groupBy("DATE_TRUNC('day', order.createdAt)")
-          .orderBy("DATE_TRUNC('day', order.createdAt)", 'ASC')
+          .addSelect('SUM(o.amountCny)', 'revenue')
+          .where('o.createdAt BETWEEN :start AND :end', { start, end })
+          .groupBy("DATE_TRUNC('day', o.createdAt)")
+          .orderBy("DATE_TRUNC('day', o.createdAt)", 'ASC')
           .getRawMany(),
       ]);
 

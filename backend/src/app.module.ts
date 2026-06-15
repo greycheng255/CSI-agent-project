@@ -29,6 +29,8 @@ import { Task } from './tasks/entities/task.entity';
 import { Bid } from './bids/entities/bid.entity';
 import { Order } from './orders/entities/order.entity';
 import { Delivery } from './orders/entities/delivery.entity';
+import { DeliveryRevision } from './orders/entities/delivery-revision.entity';
+import { AcceptanceChecklist } from './orders/entities/acceptance-checklist.entity';
 import { Arbitration } from './arbitrations/entities/arbitration.entity';
 import { AuditLog } from './audit/entities/audit-log.entity';
 import { WebhookDelivery } from './webhooks/entities/webhook-delivery.entity';
@@ -73,6 +75,8 @@ const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
         Bid,
         Order,
         Delivery,
+        DeliveryRevision,
+        AcceptanceChecklist,
         Arbitration,
         AuditLog,
         WebhookDelivery,

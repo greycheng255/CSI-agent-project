@@ -4,19 +4,15 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
-  OneToMany,
 } from 'typeorm';
-import { Order } from './order.entity';
-import { User } from '../../users/entities/user.entity';
-import { DeliveryRevision } from './delivery-revision.entity';
+
+const isSqlite = process.env.DB_TYPE === 'sqlite';
 
 export enum DeliveryStatus {
-  PENDING_REVIEW = 'PENDING_REVIEW',     // 待审核
-  ACCEPTED = 'ACCEPTED',                  // 已接受
-  REJECTED = 'REJECTED',                  // 已拒绝/需修改
-  SUPERSEDED = 'SUPERSEDED',             // 已被新版本替代
+  PENDING_REVIEW = 'PENDING_REVIEW',
+  ACCEPTED = 'ACCEPTED',
+  REJECTED = 'REJECTED',
+  SUPERSEDED = 'SUPERSEDED',
 }
 
 @Entity('deliveries')
@@ -24,19 +20,17 @@ export class Delivery {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Order, (order) => order.deliveries)
-  @JoinColumn({ name: 'order_id' })
-  order: Order;
+  @Column({ name: 'order_id', type: 'uuid', nullable: true })
+  orderId: string | null;
 
-  @ManyToOne(() => User, (user) => user.id)
-  @JoinColumn({ name: 'owner_user_id' })
-  owner: User;
+  @Column({ name: 'owner_user_id', type: 'uuid', nullable: true })
+  ownerUserId: string | null;
 
   @Column({ name: 'version', type: 'int', default: 1 })
   version: number;
 
   @Column({
-    type: 'enum',
+    type: isSqlite ? 'simple-enum' : 'enum',
     enum: DeliveryStatus,
     default: DeliveryStatus.PENDING_REVIEW,
   })
@@ -48,7 +42,11 @@ export class Delivery {
   @Column({ name: 'attachment_url', type: 'text', nullable: true })
   attachmentUrl: string | null;
 
-  @Column({ name: 'preview_data', type: 'jsonb', nullable: true })
+  @Column({
+    name: 'preview_data',
+    type: isSqlite ? 'simple-json' : 'jsonb',
+    nullable: true,
+  })
   previewData: {
     type: 'code' | 'text' | 'link' | 'image';
     content: string;
@@ -58,14 +56,19 @@ export class Delivery {
   @Column({ name: 'rejection_reason', type: 'text', nullable: true })
   rejectionReason: string | null;
 
-  @Column({ name: 'rejected_at', type: 'timestamp', nullable: true })
+  @Column({
+    name: 'rejected_at',
+    type: isSqlite ? 'datetime' : 'timestamp',
+    nullable: true,
+  })
   rejectedAt: Date | null;
 
-  @Column({ name: 'accepted_at', type: 'timestamp', nullable: true })
+  @Column({
+    name: 'accepted_at',
+    type: isSqlite ? 'datetime' : 'timestamp',
+    nullable: true,
+  })
   acceptedAt: Date | null;
-
-  @OneToMany(() => DeliveryRevision, (revision) => revision.delivery)
-  revisions: DeliveryRevision[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

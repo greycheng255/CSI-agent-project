@@ -6,13 +6,10 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
-  OneToMany,
 } from 'typeorm';
 import { Task } from '../../tasks/entities/task.entity';
 import { Bid } from '../../bids/entities/bid.entity';
 import { User } from '../../users/entities/user.entity';
-import { Delivery } from './delivery.entity';
-import { AcceptanceChecklist } from './acceptance-checklist.entity';
 
 const isSqlite = process.env.DB_TYPE === 'sqlite';
 
@@ -38,9 +35,12 @@ export class Order {
   @JoinColumn({ name: 'task_id' })
   task: Task;
 
-  @ManyToOne(() => Bid, (bid) => bid.orders)
+  @ManyToOne(() => Bid, (bid) => bid.orders, { nullable: true })
   @JoinColumn({ name: 'bid_id' })
   bid: Bid;
+
+  @Column({ name: 'bid_id', type: 'uuid', nullable: true })
+  bidId: string | null;
 
   @Column({ name: 'client_user_id', type: 'varchar', length: 255, nullable: true })
   clientUserId: string;
@@ -137,13 +137,7 @@ export class Order {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
-  @OneToMany(() => Delivery, (delivery) => delivery.order)
-  deliveries: Delivery[];
-
-  @OneToMany(() => AcceptanceChecklist, (checklist) => checklist.order)
-  checklistItems: AcceptanceChecklist[];
-
-  @Column({ name: 'current_delivery_id', nullable: true })
+  @Column({ name: 'current_delivery_id', type: 'uuid', nullable: true })
   currentDeliveryId: string | null;
 
   @Column({ name: 'delivery_count', type: 'int', default: 0 })

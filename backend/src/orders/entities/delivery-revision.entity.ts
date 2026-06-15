@@ -3,11 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  ManyToOne,
-  JoinColumn,
 } from 'typeorm';
-import { Delivery } from './delivery.entity';
-import { User } from '../../users/entities/user.entity';
 
 export enum RevisionType {
   SUBMIT = 'SUBMIT',           // 初始提交
@@ -21,11 +17,7 @@ export class DeliveryRevision {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Delivery, (delivery) => delivery.revisions)
-  @JoinColumn({ name: 'delivery_id' })
-  delivery: Delivery;
-
-  @Column({ name: 'delivery_id' })
+  @Column({ name: 'delivery_id', type: 'uuid' })
   deliveryId: string;
 
   @Column({
@@ -46,11 +38,7 @@ export class DeliveryRevision {
   @Column({ name: 'comment', type: 'text', nullable: true })
   comment: string | null;
 
-  @ManyToOne(() => User, (user) => user.id)
-  @JoinColumn({ name: 'created_by' })
-  createdBy: User;
-
-  @Column({ name: 'created_by' })
+  @Column({ name: 'created_by_id', type: 'uuid' })
   createdById: string;
 
   @CreateDateColumn({ name: 'created_at' })

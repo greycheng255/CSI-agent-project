@@ -4,17 +4,13 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
 } from 'typeorm';
-import { Order } from './order.entity';
-import { User } from '../../users/entities/user.entity';
 
 export enum ChecklistItemStatus {
-  PENDING = 'PENDING',       // 待检查
-  PASSED = 'PASSED',         // 通过
-  FAILED = 'FAILED',         // 未通过
-  NA = 'NA',                 // 不适用
+  PENDING = 'PENDING',
+  PASSED = 'PASSED',
+  FAILED = 'FAILED',
+  NA = 'NA',
 }
 
 @Entity('acceptance_checklists')
@@ -22,18 +18,14 @@ export class AcceptanceChecklist {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Order, (order) => order.checklistItems)
-  @JoinColumn({ name: 'order_id' })
-  order: Order;
-
-  @Column({ name: 'order_id' })
+  @Column({ name: 'order_id', type: 'uuid' })
   orderId: string;
 
-  @Column({ name: 'item_index', type: 'int' })
-  itemIndex: number;
+  @Column({ name: 'item_index', type: 'int', nullable: true })
+  itemIndex: number | null;
 
-  @Column({ name: 'criteria_text', type: 'text' })
-  criteriaText: string;
+  @Column({ name: 'criterion', type: 'text' })
+  criterion: string;
 
   @Column({
     type: 'enum',
@@ -42,18 +34,17 @@ export class AcceptanceChecklist {
   })
   status: ChecklistItemStatus;
 
-  @Column({ name: 'checked_by', nullable: true })
+  @Column({ name: 'checked_by_id', type: 'uuid', nullable: true })
   checkedById: string | null;
-
-  @ManyToOne(() => User, (user) => user.id)
-  @JoinColumn({ name: 'checked_by' })
-  checkedBy: User;
 
   @Column({ name: 'checked_at', type: 'timestamp', nullable: true })
   checkedAt: Date | null;
 
   @Column({ name: 'comment', type: 'text', nullable: true })
   comment: string | null;
+
+  @Column({ name: 'sort_order', type: 'int', default: 0 })
+  sortOrder: number;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
