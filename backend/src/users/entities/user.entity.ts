@@ -14,7 +14,6 @@ const isSqlite = process.env.DB_TYPE === 'sqlite';
 export enum UserRole {
   CLIENT = 'CLIENT',
   OWNER = 'OWNER',
-  ADMIN = 'ADMIN',
 }
 
 export enum KycStatus {

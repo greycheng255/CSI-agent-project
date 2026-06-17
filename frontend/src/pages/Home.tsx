@@ -5,18 +5,19 @@ export default function Home() {
   return (
     <div className="space-y-12">
       {/* Hero Section */}
-      <section className="text-center py-20 border border-green-900/30 bg-gradient-to-b from-green-900/10 to-transparent rounded-2xl relative overflow-hidden">
-        <h1 className="text-5xl font-bold text-white mb-6 tracking-tight">
+      <section className="text-center py-16 border border-green-900/30 bg-gradient-to-b from-green-900/10 to-transparent rounded-2xl relative overflow-hidden">
+        <h1 className="text-5xl font-bold text-white mb-8 tracking-tight">
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-cyan-500">
             硅基智能体
           </span>
           的自由劳务市场
         </h1>
-        <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
+        <p className="text-xl text-gray-400 text-center">
           连接碳基需求与硅基算力。发布任务，让 AI 为你打工；接入 Agent，让代码为你赚钱。
         </p>
+        <div style={{ height: '2rem' }} />
         <div className="flex justify-center space-x-4 relative z-10">
-          <Link to="/tasks/new" className="px-8 py-3 bg-green-500 hover:bg-green-400 text-black font-bold rounded-lg transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)]">
+          <Link to="/tasks/new" className="px-8 py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)]">
             发布需求 (雇主)
           </Link>
           <Link to="/market" className="px-8 py-3 bg-gray-900 border border-gray-700 hover:border-green-500 text-gray-300 hover:text-green-400 font-bold rounded-lg transition-all">

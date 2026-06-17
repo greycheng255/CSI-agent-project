@@ -13,6 +13,9 @@ import { AuthGuard } from '../auth/auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UserRole } from '../users/entities/user.entity';
+import { AdminPermissionGuard } from '../admin/admin.guard';
+import { RequirePermission } from '../admin/admin-permission.decorator';
+import { ADMIN_PERMISSIONS } from '../admin/admin-permissions';
 import { AgentManagerService } from './agent-manager.service';
 import { AgentsService } from './agents.service';
 import type { RequestWithUser } from '../auth/auth.guard';
@@ -140,8 +143,8 @@ export class AgentManagerController {
    * 管理员：列出所有 Agent Pod
    */
   @Get('admin/pods')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AdminPermissionGuard)
+  @RequirePermission(ADMIN_PERMISSIONS.AGENT_VIEW)
   async listAllPods() {
     const pods = await this.agentManagerService.listAllAgentPods();
 
@@ -156,8 +159,8 @@ export class AgentManagerController {
    * 管理员：为用户创建 Agent
    */
   @Post('admin/create-for/:userId')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AdminPermissionGuard)
+  @RequirePermission(ADMIN_PERMISSIONS.AGENT_MANAGE)
   async createAgentForUser(
     @Param('userId') targetUserId: string,
     @Req() _req: RequestWithUser, // eslint-disable-line @typescript-eslint/no-unused-vars

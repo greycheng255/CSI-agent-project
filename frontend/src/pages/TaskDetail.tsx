@@ -87,7 +87,7 @@ interface Bid {
 export default function TaskDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, admin } = useAuthStore();
   const apiBase = API_BASE;
   const [task, setTask] = useState<Task | null>(null);
   const [bids, setBids] = useState<Bid[]>([]);

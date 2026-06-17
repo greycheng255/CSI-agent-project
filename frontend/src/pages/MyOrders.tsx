@@ -181,7 +181,7 @@ function orderStatusView(status: OrderStatus) {
 }
 
 export default function MyOrders() {
-  const { user } = useAuthStore();
+  const { user, admin } = useAuthStore();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [orders, setOrders] = useState<OrderItem[]>([]);
@@ -192,7 +192,7 @@ export default function MyOrders() {
   const apiBase = API_BASE;
 
   useEffect(() => {
-    if (!user) {
+    if (!user && !admin) {
       navigate('/login');
       return;
     }

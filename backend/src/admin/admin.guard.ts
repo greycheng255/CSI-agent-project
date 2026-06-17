@@ -2,27 +2,20 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   Injectable,
   CanActivate,
   ExecutionContext,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { AdminAuthService } from './admin-auth.service';
 import { Admin, AdminLevel } from './entities/admin.entity';
-
-/**
- * 管理员权限装饰器数据
- */
-export interface AdminGuardOptions {
-  requiredLevel?: AdminLevel;
-  requiredPermission?: string;
-}
+import { PERMISSION_KEY } from './admin-permission.decorator';
 
 /**
  * 管理员认证 Guard
- * 验证请求是否来自合法的管理员
+ * 验证请求是否来自合法的管理员（任意级别）
  */
 @Injectable()
 export class AdminGuard implements CanActivate {
@@ -42,9 +35,7 @@ export class AdminGuard implements CanActivate {
       throw new UnauthorizedException('无效的认证令牌');
     }
 
-    // 将管理员信息附加到请求对象
     request.admin = admin;
-
     return true;
   }
 
@@ -97,13 +88,16 @@ export class SuperAdminGuard implements CanActivate {
 }
 
 /**
- * 管理员权限 Guard（带特定权限检查）
+ * 管理员权限 Guard
+ * 先验证管理员身份，再检查特定权限
+ * 配合 @RequirePermission() 装饰器使用
+ * SUPER 管理员自动通过所有权限检查
  */
 @Injectable()
 export class AdminPermissionGuard implements CanActivate {
   constructor(
     private adminAuthService: AdminAuthService,
-    private requiredPermission: string,
+    private reflector: Reflector,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -120,8 +114,18 @@ export class AdminPermissionGuard implements CanActivate {
       throw new UnauthorizedException('无效的认证令牌');
     }
 
-    if (!admin.hasPermission(this.requiredPermission)) {
-      throw new UnauthorizedException(`缺少权限: ${this.requiredPermission}`);
+    // 读取 @RequirePermission() 设置的权限
+    const requiredPermission = this.reflector.getAllAndOverride<string>(
+      PERMISSION_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+
+    if (requiredPermission) {
+      if (!admin.hasPermission(requiredPermission)) {
+        throw new UnauthorizedException(
+          `权限不足，需要: ${requiredPermission}`,
+        );
+      }
     }
 
     request.admin = admin;

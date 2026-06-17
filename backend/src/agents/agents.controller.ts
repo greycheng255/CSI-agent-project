@@ -51,7 +51,7 @@ export class AgentsController {
 
   @Post()
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Roles(UserRole.OWNER)
   create(@Body() body: CreateAgentDto, @Req() req: RequestWithUser) {
     // 自动从 JWT 获取当前用户 ID 作为 ownerId
     const ownerId = req.user?.id;
@@ -155,7 +155,7 @@ export class AgentsController {
 
   @Get(':id/api-keys')
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Roles(UserRole.OWNER)
   async listApiKeys(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Req() req: RequestWithUser,
@@ -164,7 +164,7 @@ export class AgentsController {
     if (!agent) {
       throw new BadRequestException('Agent not found');
     }
-    if (req.user?.role !== UserRole.ADMIN && agent.owner?.id !== req.user?.id) {
+    if (agent.owner?.id !== req.user?.id) {
       throw new ForbiddenException('Only the agent owner can manage api keys');
     }
     const keys = await this.agentsService.listApiKeys(id);
@@ -179,7 +179,7 @@ export class AgentsController {
 
   @Post(':id/api-keys')
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Roles(UserRole.OWNER)
   async createApiKey(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() body: CreateApiKeyBody,
@@ -189,7 +189,7 @@ export class AgentsController {
     if (!agent) {
       throw new BadRequestException('Agent not found');
     }
-    if (req.user?.role !== UserRole.ADMIN && agent.owner?.id !== req.user?.id) {
+    if (agent.owner?.id !== req.user?.id) {
       throw new ForbiddenException('Only the agent owner can manage api keys');
     }
     const name = typeof body.name === 'string' ? body.name : undefined;
@@ -198,7 +198,7 @@ export class AgentsController {
 
   @Post(':id/api-keys/:keyId/revoke')
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Roles(UserRole.OWNER)
   async revokeApiKey(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Param('keyId', new ParseUUIDPipe({ version: '4' })) keyId: string,
@@ -208,7 +208,7 @@ export class AgentsController {
     if (!agent) {
       throw new BadRequestException('Agent not found');
     }
-    if (req.user?.role !== UserRole.ADMIN && agent.owner?.id !== req.user?.id) {
+    if (agent.owner?.id !== req.user?.id) {
       throw new ForbiddenException('Only the agent owner can manage api keys');
     }
     return this.agentsService.revokeApiKey({ agentId: id, keyId });
@@ -266,7 +266,7 @@ export class AgentsController {
    */
   @Post(':id/payment')
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Roles(UserRole.OWNER)
   async updatePayment(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() body: UpdatePaymentBody,
@@ -276,7 +276,7 @@ export class AgentsController {
     if (!agent) {
       throw new BadRequestException('Agent not found');
     }
-    if (req.user?.role !== UserRole.ADMIN && agent.owner?.id !== req.user?.id) {
+    if (agent.owner?.id !== req.user?.id) {
       throw new ForbiddenException(
         'Only the agent owner can update payment info',
       );
@@ -293,7 +293,7 @@ export class AgentsController {
    */
   @Get(':id/payment')
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.OWNER)
   async getPayment(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ) {
@@ -313,7 +313,7 @@ export class AgentsController {
    */
   @Post(':id/health-check')
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Roles(UserRole.OWNER)
   async healthCheck(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Req() req: RequestWithUser,
@@ -322,7 +322,7 @@ export class AgentsController {
     if (!agent) {
       throw new BadRequestException('Agent not found');
     }
-    if (req.user?.role !== UserRole.ADMIN && agent.owner?.id !== req.user?.id) {
+    if (agent.owner?.id !== req.user?.id) {
       throw new ForbiddenException(
         'Only the agent owner can perform health check',
       );
@@ -335,7 +335,7 @@ export class AgentsController {
    */
   @Get(':id/health')
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Roles(UserRole.OWNER)
   async getHealthStatus(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Req() req: RequestWithUser,
@@ -344,7 +344,7 @@ export class AgentsController {
     if (!agent) {
       throw new BadRequestException('Agent not found');
     }
-    if (req.user?.role !== UserRole.ADMIN && agent.owner?.id !== req.user?.id) {
+    if (agent.owner?.id !== req.user?.id) {
       throw new ForbiddenException(
         'Only the agent owner can view health status',
       );
@@ -357,7 +357,7 @@ export class AgentsController {
    */
   @Post(':id/openclaw-url')
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Roles(UserRole.OWNER)
   async updateOpenclawUrl(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() body: { openclawUrl: string },
@@ -367,7 +367,7 @@ export class AgentsController {
     if (!agent) {
       throw new BadRequestException('Agent not found');
     }
-    if (req.user?.role !== UserRole.ADMIN && agent.owner?.id !== req.user?.id) {
+    if (agent.owner?.id !== req.user?.id) {
       throw new ForbiddenException(
         'Only the agent owner can update openclaw url',
       );
@@ -383,7 +383,7 @@ export class AgentsController {
    */
   @Post(':id/update-agent-id')
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.OWNER)
   async updateAgentId(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() body: { newId: string },

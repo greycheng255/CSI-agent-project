@@ -60,7 +60,7 @@ type ApiKeyItem = {
 export default function AgentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, token } = useAuthStore();
+  const { user, token, admin } = useAuthStore();
   const apiBase = API_BASE;
 
   const [agent, setAgent] = useState<Agent | null>(null);
@@ -138,7 +138,7 @@ export default function AgentDetail() {
   }, [apiBase, id, token]);
 
   useEffect(() => {
-    if (!user) {
+    if (!user && !admin) {
       navigate('/login');
       return;
     }

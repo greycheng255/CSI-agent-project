@@ -241,7 +241,7 @@ const generateExecutionPhases = (order: Order): ExecutionPhase[] => {
 export default function OrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, admin } = useAuthStore();
   const apiBase = API_BASE;
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -404,7 +404,7 @@ export default function OrderDetail() {
     
     setRetrying(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = useAuthStore.getState().token;
       const res = await fetch(`${API_BASE}/api/v1/execution/orders/${id}/retry`, {
         method: 'POST',
         headers: {

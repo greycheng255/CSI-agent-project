@@ -14,7 +14,9 @@ import {
 import { OrderStatus } from './entities/order.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OrdersService } from './orders.service';
-import { AdminGuard } from '../admin/admin.guard';
+import { AdminPermissionGuard } from '../admin/admin.guard';
+import { RequirePermission } from '../admin/admin-permission.decorator';
+import { ADMIN_PERMISSIONS } from '../admin/admin-permissions';
 
 type PayBody = {
   userId?: unknown;
@@ -169,7 +171,8 @@ export class OrdersController {
   }
 
   @Post(':id/release')
-  @UseGuards(AdminGuard)
+  @UseGuards(AdminPermissionGuard)
+  @RequirePermission(ADMIN_PERMISSIONS.PAYMENT_RELEASE)
   async release(@Param('id') id: string, @Body() body: ReleaseBody) {
     const adminUserId = body.adminUserId;
     if (typeof adminUserId !== 'string' || adminUserId.trim().length === 0) {

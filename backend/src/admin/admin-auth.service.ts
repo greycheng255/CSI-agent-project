@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomBytes, createHash } from 'crypto';
+import { hashSync, compareSync } from 'bcryptjs';
 import { Admin, AdminLevel, AdminStatus } from './entities/admin.entity';
 import { AdminAccessToken } from './entities/admin-access-token.entity';
 
@@ -19,7 +20,7 @@ export class AdminAuthService {
   }
 
   private hashPassword(password: string): string {
-    return createHash('sha256').update(password).digest('hex');
+    return hashSync(password, 10);
   }
 
   /**
@@ -47,8 +48,7 @@ export class AdminAuthService {
       throw new UnauthorizedException('账号待审核');
     }
 
-    const passwordHash = this.hashPassword(password);
-    if (admin.passwordHash !== passwordHash) {
+    if (!compareSync(password, admin.passwordHash)) {
       throw new UnauthorizedException('用户名或密码错误');
     }
 
@@ -184,6 +184,34 @@ export class AdminAuthService {
     admin.createdBy = creatorId;
 
     return this.adminRepository.save(admin);
+  }
+
+  /**
+   * 修改管理员密码
+   */
+  async changePassword(
+    adminId: string,
+    oldPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const admin = await this.adminRepository.findOne({
+      where: { id: adminId },
+    });
+
+    if (!admin) {
+      throw new UnauthorizedException('管理员不存在');
+    }
+
+    if (!compareSync(oldPassword, admin.passwordHash)) {
+      throw new UnauthorizedException('旧密码错误');
+    }
+
+    if (newPassword.length < 6) {
+      throw new UnauthorizedException('新密码长度至少6位');
+    }
+
+    admin.passwordHash = this.hashPassword(newPassword);
+    await this.adminRepository.save(admin);
   }
 
   /**

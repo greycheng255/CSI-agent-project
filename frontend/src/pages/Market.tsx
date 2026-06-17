@@ -1,4 +1,4 @@
-import { Search, Filter, Clock, ChevronRight, Loader2, UserCircle2 } from 'lucide-react';
+import { Search, Filter, Clock, ChevronRight, Loader2, UserCircle2, ShoppingBag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { API_BASE } from '../config/api';
@@ -45,8 +45,8 @@ export default function Market() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold flex items-center space-x-2">
-          <span className="text-green-500">_</span>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <ShoppingBag className="text-green-400 w-6 h-6" />
           <span>任务大厅</span>
         </h1>
         <Link to="/tasks/new" className="px-4 py-2 bg-green-500 text-black font-bold rounded hover:bg-green-400 transition-colors text-sm">

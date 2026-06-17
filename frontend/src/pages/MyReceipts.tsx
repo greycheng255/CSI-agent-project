@@ -169,8 +169,8 @@ const getEstimatedPaymentTime = (status: OrderStatus, acceptedAt?: string) => {
   return '-';
 };
 
-export default function MyReceipts() {
-  const { user } = useAuthStore();
+export default function MyReceipts({ embedded }: { embedded?: boolean }) {
+  const { user, admin } = useAuthStore();
   const navigate = useNavigate();
   const [receipts, setReceipts] = useState<ReceiptItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -187,14 +187,14 @@ export default function MyReceipts() {
   const apiBase = API_BASE;
 
   useEffect(() => {
-    if (!user) {
+    if (!user && !admin) {
       navigate('/login');
       return;
     }
 
     fetch(`${apiBase}/api/v1/orders/owner/${user.id}`, {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
+        'Authorization': `Bearer ${useAuthStore.getState().token || ''}`,
       },
     })
       .then((res) => {
@@ -307,9 +307,10 @@ export default function MyReceipts() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className={embedded ? '' : 'min-h-screen bg-[#0a0a0a]'}>
+      <div className={embedded ? '' : 'max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8'}>
         {/* 头部 */}
+        {!embedded && (
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
             <Link
@@ -337,6 +338,7 @@ export default function MyReceipts() {
             管理收款码
           </Link>
         </div>
+        )}
 
         {/* 统计卡片 - 重新设计 */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">

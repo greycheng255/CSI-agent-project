@@ -39,6 +39,7 @@ import { AgentApiKey } from './agents/entities/agent-api-key.entity';
 import { Payment } from './payment/entities/payment.entity';
 import { Payout } from './payment/entities/payout.entity';
 import { UserPaymentCode } from './payment/entities/user-payment-code.entity';
+import { UserBalance, BalanceRecord, Withdrawal } from './payment/entities/balance.entity';
 import { PlatformPaymentCode } from './payment/entities/platform-payment-code.entity';
 import { OrderPayment } from './payment/entities/order-payment.entity';
 import {
@@ -93,6 +94,10 @@ const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
         // 管理员相关实体
         Admin,
         AdminAccessToken,
+        // 余额相关实体
+        UserBalance,
+        BalanceRecord,
+        Withdrawal,
       ],
       synchronize: process.env.DB_SYNC !== 'false',
     }),

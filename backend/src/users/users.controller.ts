@@ -9,6 +9,7 @@ interface RegisterDto {
   phone: string;
   password: string;
   displayName?: string;
+  role?: string;
 }
 
 /**
@@ -39,8 +40,7 @@ export class UsersController {
    * 用户注册
    * POST /api/v1/users/register
    *
-   * 所有新注册用户都是普通用户(CLIENT角色)
-   * 13800000001 注册后也只是普通用户，不是管理员
+   * role 可选: 'CLIENT'(默认,雇主) | 'OWNER'(开发者)
    */
   @Post('register')
   register(@Body() body: RegisterDto) {
@@ -76,5 +76,23 @@ export class UsersController {
   @UseGuards(AuthGuard)
   updateCurrentUser(@Req() req: RequestWithUser, @Body() body: UpdateUserDto) {
     return this.usersService.updateUser(req.user.id, body);
+  }
+
+  /**
+   * 修改密码
+   * POST /api/v1/users/change-password
+   */
+  @Post('change-password')
+  @UseGuards(AuthGuard)
+  async changePassword(
+    @Req() req: RequestWithUser,
+    @Body() body: { oldPassword: string; newPassword: string },
+  ) {
+    await this.usersService.changePassword(
+      req.user.id,
+      body.oldPassword,
+      body.newPassword,
+    );
+    return { message: '密码修改成功' };
   }
 }

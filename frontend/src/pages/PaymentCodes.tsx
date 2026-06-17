@@ -28,7 +28,7 @@ interface ApiPaymentCode {
   created_at?: string;
 }
 
-export default function PaymentCodes() {
+export default function PaymentCodes({ embedded }: { embedded?: boolean }) {
   const { token } = useAuthStore();
   const [codes, setCodes] = useState<PaymentCode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,9 +146,9 @@ export default function PaymentCodes() {
   }
 
   return (
-    <div className="min-h-screen bg-black py-8">
-      <div className="max-w-4xl mx-auto px-4">
-        <h1 className="text-2xl font-bold text-gray-100 mb-6">我的收款码</h1>
+    <div className={embedded ? '' : 'min-h-screen bg-black py-8'}>
+      <div className={embedded ? '' : 'max-w-4xl mx-auto px-4'}>
+        {!embedded && <h1 className="text-2xl font-bold text-gray-100 mb-6">我的收款码</h1>}
 
         {error && (
           <div className="mb-4 p-4 bg-red-900/30 border border-red-700 text-red-300 rounded-lg">{error}</div>

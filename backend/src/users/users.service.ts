@@ -10,7 +10,7 @@ import { Repository } from 'typeorm';
 import { User, KycStatus, UserRole } from './entities/user.entity';
 import { AuthService } from '../auth/auth.service';
 import { AgentManagerService } from '../agents/agent-manager.service';
-import { createHash } from 'crypto';
+import { hashSync, compareSync } from 'bcryptjs';
 
 type AuthDto = {
   phone: string;
@@ -22,6 +22,7 @@ type RegisterDto = {
   phone: string;
   password: string;
   displayName?: string;
+  role?: string;
 };
 
 @Injectable()
@@ -37,7 +38,11 @@ export class UsersService {
   ) {}
 
   private hashPassword(password: string): string {
-    return createHash('sha256').update(password).digest('hex');
+    return hashSync(password, 10);
+  }
+
+  private verifyPassword(password: string, hash: string): boolean {
+    return compareSync(password, hash);
   }
 
   /**
@@ -71,13 +76,17 @@ export class UsersService {
       throw new UnauthorizedException('该手机号已注册');
     }
 
-    // 创建新用户 - 所有用户默认为 CLIENT 角色
+    // 解析角色，默认为 CLIENT
+    const roleValue =
+      data.role === 'OWNER' ? UserRole.OWNER : UserRole.CLIENT;
+
+    // 创建新用户
     const user = this.usersRepository.create({
       phone: data.phone,
       passwordHash: this.hashPassword(data.password),
       displayName: data.displayName || `用户${data.phone.slice(-4)}`,
       kycStatus: KycStatus.NONE,
-      role: UserRole.CLIENT, // 所有新用户都是普通用户
+      role: roleValue,
     });
 
     await this.usersRepository.save(user);
@@ -133,7 +142,7 @@ export class UsersService {
         passwordHash: this.hashPassword(data.password),
         displayName: `用户${data.phone.slice(-4)}`,
         kycStatus: KycStatus.NONE,
-        role: UserRole.CLIENT, // 所有用户都是 CLIENT
+        role: UserRole.CLIENT,
       });
       await this.usersRepository.save(user);
       this.logger.log(`自动创建用户: ${user.id} (${user.phone})`);
@@ -151,8 +160,7 @@ export class UsersService {
       }
     } else {
       // 验证密码
-      const passwordHash = this.hashPassword(data.password);
-      if (user.passwordHash !== passwordHash) {
+      if (!this.verifyPassword(data.password, user.passwordHash)) {
         throw new UnauthorizedException('密码错误');
       }
     }
@@ -188,6 +196,7 @@ export class UsersService {
     return {
       id: user.id,
       phone: user.phone,
+      email: user.email,
       displayName: user.displayName,
       kycStatus: user.kycStatus,
       role: user.role,
@@ -213,6 +222,9 @@ export class UsersService {
     if (data.displayName) {
       user.displayName = data.displayName;
     }
+    if (data.email !== undefined) {
+      user.email = data.email;
+    }
 
     await this.usersRepository.save(user);
 
@@ -225,5 +237,33 @@ export class UsersService {
         role: user.role,
       },
     };
+  }
+
+  /**
+   * 修改用户密码
+   */
+  async changePassword(
+    userId: string,
+    oldPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('用户不存在');
+    }
+
+    if (!this.verifyPassword(oldPassword, user.passwordHash)) {
+      throw new UnauthorizedException('旧密码错误');
+    }
+
+    if (newPassword.length < 6) {
+      throw new UnauthorizedException('新密码长度至少6位');
+    }
+
+    user.passwordHash = this.hashPassword(newPassword);
+    await this.usersRepository.save(user);
   }
 }

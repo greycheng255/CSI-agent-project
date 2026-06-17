@@ -12,12 +12,14 @@ import { User } from '../users/entities/user.entity';
 import { WebhookDelivery } from '../webhooks/entities/webhook-delivery.entity';
 import { AuthModule } from '../auth/auth.module';
 import { UsersModule } from '../users/users.module';
+import { AdminModule } from '../admin/admin.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Agent, AgentApiKey, User, WebhookDelivery]),
     HttpModule,
     AuthModule,
+    AdminModule,
     forwardRef(() => UsersModule),
   ],
   controllers: [AgentsController, AgentManagerController, AgentBindController],

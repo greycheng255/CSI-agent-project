@@ -38,7 +38,7 @@ type MarketTask = {
 };
 
 export default function AgentManagement() {
-  const { user } = useAuthStore();
+  const { user, admin } = useAuthStore();
   const navigate = useNavigate();
   const apiBase = API_BASE;
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -77,7 +77,7 @@ export default function AgentManagement() {
   const fetchAgents = useCallback(() => {
     if (!user?.id) return;
     setLoading(true);
-    const token = localStorage.getItem('token');
+    const token = useAuthStore.getState().token;
     fetch(`${apiBase}/api/v1/owner/agents/user/${user.id}`, {
       headers: token ? { 'Authorization': `Bearer ${token}` } : {}
     })
@@ -99,7 +99,7 @@ export default function AgentManagement() {
   const refreshAgentStatus = async (agentId: string) => {
     setRefreshingAgent(agentId);
     try {
-      const token = localStorage.getItem('token');
+      const token = useAuthStore.getState().token;
       const res = await fetch(`${apiBase}/api/v1/owner/agents/${agentId}/status`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
@@ -120,7 +120,7 @@ export default function AgentManagement() {
   const performHealthCheck = async (agentId: string) => {
     setHealthCheckingAgent(agentId);
     try {
-      const token = localStorage.getItem('token');
+      const token = useAuthStore.getState().token;
       const res = await fetch(`${apiBase}/api/v1/owner/agents/${agentId}/health-check`, {
         method: 'POST',
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
@@ -165,7 +165,7 @@ export default function AgentManagement() {
   };
 
   useEffect(() => {
-    if (!user) {
+    if (!user && !admin) {
       navigate('/login');
       return;
     }
@@ -175,7 +175,7 @@ export default function AgentManagement() {
   const handleCreateAgent = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('token');
+      const token = useAuthStore.getState().token;
       const res = await fetch(`${apiBase}/api/v1/owner/agents`, {
         method: 'POST',
         headers: {
@@ -283,7 +283,7 @@ export default function AgentManagement() {
         <div>
           <h1 className="text-2xl font-bold flex items-center space-x-2">
             <Bot className="text-purple-500 w-6 h-6" />
-            <span>硅基劳动力管理 (Agent Console)</span>
+            <span>Agent 管理</span>
           </h1>
           <p className="text-gray-500 mt-2 text-sm">在这里注册并管理您的 AI Agent，让它们接入平台自动接单赚取法币。</p>
         </div>
@@ -447,10 +447,10 @@ export default function AgentManagement() {
             <h3 className="text-sm font-bold text-gray-300 mb-2">步骤 1：获取 OWNER_TOKEN</h3>
             <div className="bg-black p-4 rounded-lg border border-gray-800 text-sm text-gray-300 overflow-x-auto">
               <pre>
-{`# 使用开发者账号登录获取 Token (默认: 13900000002 / 123456)
+{`# 使用开发者账号登录获取 Token
 curl -X POST http://122.51.51.177:30001/api/v1/users/login \\
   -H "Content-Type: application/json" \\
-  -d '{"phone": "13900000002", "password": "123456"}'`}
+  -d '{"phone": "你的手机号", "password": "你的密码"}'`}
               </pre>
             </div>
             <p className="text-xs text-gray-500 mt-2">
@@ -523,7 +523,7 @@ spec:
           <div className="mt-6 p-4 bg-yellow-900/10 border border-yellow-700/30 rounded-lg">
             <h3 className="text-sm font-bold text-yellow-400 mb-2">关键配置</h3>
             <ul className="text-xs text-gray-400 space-y-1">
-              <li>• 开发者账号: <span className="text-gray-300">13900000002 / 123456</span></li>
+              <li>• 开发者账号: <span className="text-gray-300">注册时选择"我是开发者"即可</span></li>
               <li>• Webhook 端口: <span className="text-gray-300">8080</span></li>
               <li>• 所需角色: <span className="text-gray-300">OWNER (开发者)</span></li>
             </ul>

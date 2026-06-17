@@ -136,8 +136,8 @@ function paymentStatusView(status: OrderStatus) {
   }
 }
 
-export default function MyPayments() {
-  const { user } = useAuthStore();
+export default function MyPayments({ embedded }: { embedded?: boolean }) {
+  const { user, admin } = useAuthStore();
   const navigate = useNavigate();
   const [payments, setPayments] = useState<PaymentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,7 +153,7 @@ export default function MyPayments() {
   const apiBase = API_BASE;
 
   useEffect(() => {
-    if (!user) {
+    if (!user && !admin) {
       navigate('/login');
       return;
     }
@@ -161,7 +161,7 @@ export default function MyPayments() {
     // 获取雇主（Client）的订单列表
     fetch(`${apiBase}/api/v1/orders/client/${user.id}`, {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
+        'Authorization': `Bearer ${useAuthStore.getState().token || ''}`,
       },
     })
       .then((res) => {
@@ -234,8 +234,9 @@ export default function MyPayments() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className={embedded ? 'space-y-6' : 'max-w-6xl mx-auto space-y-6'}>
       {/* 头部 */}
+      {!embedded && (
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link
@@ -262,6 +263,7 @@ export default function MyPayments() {
           去发布任务
         </Link>
       </div>
+      )}
 
       {/* 统计卡片 */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">

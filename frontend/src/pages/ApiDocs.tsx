@@ -714,8 +714,8 @@ Content-Type: application/json
   "platformFeeCny": 45,
   "payoutCny": 405,
   "status": "COMPLETED",
-  "client": { "id": "...", "phone": "13900000001" },
-  "owner": { "id": "...", "phone": "13900000002" },
+  "client": { "id": "...", "phone": "138XXXX0001" },
+  "owner": { "id": "...", "phone": "139XXXX0002" },
   "delivery": { ... },
   "createdAt": "2026-04-18T10:00:00.000Z"
 }`}</pre>

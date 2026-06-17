@@ -1,4 +1,4 @@
-const { createHash } = require('crypto');
+const { hashSync } = require('bcryptjs');
 const { Client } = require('pg');
 
 const client = new Client({
@@ -12,15 +12,15 @@ const client = new Client({
 async function resetPassword() {
   try {
     await client.connect();
-    
+
     const newPassword = 'Qwer081213';
-    const passwordHash = createHash('sha256').update(newPassword).digest('hex');
-    
+    const passwordHash = hashSync(newPassword, 10);
+
     const result = await client.query(
       'UPDATE admins SET "passwordHash" = $1 WHERE username = $2 RETURNING id, username',
       [passwordHash, 'admin']
     );
-    
+
     if (result.rowCount > 0) {
       console.log('✅ 管理员密码重置成功');
       console.log(`用户名: ${result.rows[0].username}`);

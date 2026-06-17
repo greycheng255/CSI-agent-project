@@ -1,9 +1,9 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { MetricsService } from './metrics.service';
-import { AuthGuard } from '../auth/auth.guard';
+import { UserOrAdminGuard } from '../auth/user-or-admin.guard';
 
 @Controller('api/v1/metrics')
-@UseGuards(AuthGuard)
+@UseGuards(UserOrAdminGuard)
 export class MetricsController {
   constructor(private readonly metricsService: MetricsService) {}
 

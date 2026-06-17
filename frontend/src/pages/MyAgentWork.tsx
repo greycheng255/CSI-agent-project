@@ -92,7 +92,7 @@ function ownerStatusView(status: OrderStatus) {
 }
 
 export default function MyAgentWork() {
-  const { user } = useAuthStore();
+  const { user, admin } = useAuthStore();
   const navigate = useNavigate();
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,7 +101,7 @@ export default function MyAgentWork() {
   const apiBase = API_BASE;
 
   useEffect(() => {
-    if (!user) {
+    if (!user && !admin) {
       navigate('/login');
       return;
     }

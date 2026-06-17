@@ -7,12 +7,13 @@ import { useAuthStore, type User, type Admin } from '../store/authStore';
 export async function registerUser(
   phone: string,
   password: string,
-  displayName?: string
+  displayName?: string,
+  role?: string,
 ): Promise<{ user: User; token: string }> {
   const response = await fetch(`${API_BASE}/api/v1/users/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone, password, displayName }),
+    body: JSON.stringify({ phone, password, displayName, role }),
   });
 
   if (!response.ok) {

@@ -1,5 +1,5 @@
-import { Outlet, Link, useNavigate } from 'react-router-dom';
-import { Terminal, UserCircle, LogOut, FileText, Gavel, QrCode, DollarSign, CreditCard, TrendingUp, Shield, BarChart3 } from 'lucide-react';
+import { Outlet, Link, NavLink, useNavigate } from 'react-router-dom';
+import { Terminal, UserCircle, LogOut, FileText, Gavel, QrCode, DollarSign, CreditCard, TrendingUp, Shield, BarChart3, Users, Bot, Package, ClipboardList } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 export default function MainLayout() {
@@ -7,11 +7,13 @@ export default function MainLayout() {
   const navigate = useNavigate();
 
   const handleAdminLogout = () => {
+    if (!window.confirm('确定要退出管理员登录吗？')) return;
     adminLogout();
-    navigate('/admin/login');
+    navigate('/login');
   };
 
   const handleLogout = () => {
+    if (!window.confirm('确定要退出登录吗？')) return;
     logout();
     navigate('/');
   };
@@ -25,51 +27,60 @@ export default function MainLayout() {
             <span className="font-bold text-lg tracking-wider">PROJECT GENESIS</span>
           </Link>
           
-          <nav className="flex items-center space-x-6">
-            <Link to="/market" className="hover:text-green-400 transition-colors">任务大厅</Link>
-            <Link to="/tasks/new" className="hover:text-green-400 transition-colors">发布任务</Link>
-            <Link to="/dashboard" className="flex items-center space-x-1 text-gray-400 hover:text-green-400 transition-colors">
-              <BarChart3 className="w-4 h-4" />
+          <nav className="flex items-center space-x-4 text-sm whitespace-nowrap">
+            <NavLink to="/market" className={({ isActive }) => `transition-colors flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'hover:text-green-400'}`}>任务大厅</NavLink>
+            <NavLink to="/tasks/new" className={({ isActive }) => `transition-colors flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'hover:text-green-400'}`}>发布任务</NavLink>
+            <NavLink to="/dashboard" className={({ isActive }) => `flex items-center gap-1 transition-colors flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-400 hover:text-green-400'}`}>
+              <BarChart3 className="w-3.5 h-3.5" />
               <span>仪表盘</span>
-            </Link>
-            <Link to="/api-docs" className="flex items-center space-x-1 text-gray-400 hover:text-green-400 transition-colors">
-              <FileText className="w-4 h-4" />
+            </NavLink>
+            <NavLink to="/api-docs" className={({ isActive }) => `flex items-center gap-1 transition-colors flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-400 hover:text-green-400'}`}>
+              <FileText className="w-3.5 h-3.5" />
               <span>API文档</span>
-            </Link>
-            <div className="w-px h-4 bg-gray-700"></div>
+            </NavLink>
+            <div className="w-px h-4 bg-gray-700 flex-shrink-0"></div>
             
             {/* 管理员登录状态 - 只显示管理员菜单 */}
             {admin && !user ? (
-              <div className="flex items-center space-x-4">
-                <Link
+              <div className="flex items-center gap-3">
+                <NavLink
                   to="/admin/arbitrations"
-                  className="text-sm text-yellow-400 hover:text-yellow-300 transition-colors flex items-center gap-1"
+                  className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-yellow-400 hover:text-green-400'}`}
                 >
                   <Gavel className="w-4 h-4" />
                   仲裁后台
-                </Link>
-                <Link
+                </NavLink>
+                <NavLink
                   to="/admin/release"
-                  className="text-sm text-yellow-400 hover:text-yellow-300 transition-colors flex items-center gap-1"
+                  className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-yellow-400 hover:text-green-400'}`}
                 >
                   <DollarSign className="w-4 h-4" />
                   放款管理
-                </Link>
-                <Link
+                </NavLink>
+                <NavLink
                   to="/admin/platform-codes"
-                  className="text-sm text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1"
+                  className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-cyan-400 hover:text-green-400'}`}
                 >
                   <QrCode className="w-4 h-4" />
                   平台收款码
-                </Link>
+                </NavLink>
+                {admin.level === 'SUPER' && (
+                  <NavLink
+                    to="/admin/accounts"
+                    className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-yellow-400 hover:text-green-400'}`}
+                  >
+                    <Users className="w-4 h-4" />
+                    管理员管理
+                  </NavLink>
+                )}
                 <div className="w-px h-4 bg-gray-700"></div>
-                <div className="flex items-center space-x-2 text-yellow-400">
+                <Link to="/me" className="flex items-center space-x-2 text-yellow-400 hover:text-yellow-300 transition-colors">
                   <Shield className="w-5 h-5" />
                   <span className="text-sm">{admin.displayName || admin.username}</span>
                   <span className="px-1.5 py-0.5 bg-yellow-500/10 text-yellow-400 text-[10px] rounded border border-yellow-500/20">
                     {admin.level === 'SUPER' ? '超级管理员' : admin.level === 'OPERATOR' ? '运营' : '管理员'}
                   </span>
-                </div>
+                </Link>
                 <button
                   onClick={handleAdminLogout}
                   className="text-gray-500 hover:text-red-400 transition-colors"
@@ -79,68 +90,35 @@ export default function MainLayout() {
               </div>
             ) : user ? (
               /* 普通用户登录状态 */
-              <div className="flex items-center space-x-4">
-                <Link to="/owner/agents" className="text-sm text-purple-400 hover:text-purple-300 transition-colors">
-                  我的 Agent
-                </Link>
-                <Link to="/owner/payment-codes" className="text-sm text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1">
-                  <QrCode className="w-4 h-4" />
-                  收款码
-                </Link>
-                <Link to="/owner/receipts" className="text-sm text-green-400 hover:text-green-300 transition-colors flex items-center gap-1">
-                  <DollarSign className="w-4 h-4" />
-                  收款记录
-                </Link>
-                <Link to="/owner/bids" className="text-sm text-orange-400 hover:text-orange-300 transition-colors flex items-center gap-1">
-                  <TrendingUp className="w-4 h-4" />
-                  我的报价
-                </Link>
-                <Link to="/orders/claimed" className="text-sm text-gray-300 hover:text-green-400 transition-colors">
-                  我承接的订单
-                </Link>
-                <Link to="/orders/mine" className="text-sm text-gray-300 hover:text-green-400 transition-colors">
-                  我发布的任务
-                </Link>
-                <Link to="/orders/payments" className="text-sm text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1">
-                  <CreditCard className="w-4 h-4" />
-                  支付记录
-                </Link>
-                {admin && (
+              <div className="flex items-center gap-3">
+                {user.role === 'OWNER' && (
                   <>
-                    <Link
-                      to="/admin/arbitrations"
-                      className="text-sm text-yellow-400 hover:text-yellow-300 transition-colors flex items-center gap-1"
-                    >
-                      <Gavel className="w-4 h-4" />
-                      仲裁后台
-                    </Link>
-                    <Link
-                      to="/admin/release"
-                      className="text-sm text-yellow-400 hover:text-yellow-300 transition-colors flex items-center gap-1"
-                    >
-                      <DollarSign className="w-4 h-4" />
-                      放款管理
-                    </Link>
-                    <Link
-                      to="/admin/platform-codes"
-                      className="text-sm text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1"
-                    >
-                      <QrCode className="w-4 h-4" />
-                      平台收款码
-                    </Link>
-                    <button
-                      onClick={handleAdminLogout}
-                      className="text-sm text-red-400 hover:text-red-300 transition-colors flex items-center gap-1"
-                    >
-                      <Shield className="w-4 h-4" />
-                      退出管理
-                    </button>
+                    <NavLink to="/owner/agents" className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-gray-400 hover:text-green-400'}`}>
+                      <Bot className="w-4 h-4" />
+                      我的Agent
+                    </NavLink>
+                    <NavLink to="/owner/bids" className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-gray-400 hover:text-green-400'}`}>
+                      <TrendingUp className="w-4 h-4" />
+                      我的报价
+                    </NavLink>
+                    <NavLink to="/orders/claimed" className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-gray-400 hover:text-green-400'}`}>
+                      <Package className="w-4 h-4" />
+                      我的接单
+                    </NavLink>
                   </>
                 )}
+                <NavLink to="/orders/mine" className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-gray-400 hover:text-green-400'}`}>
+                  <ClipboardList className="w-4 h-4" />
+                  我的任务
+                </NavLink>
+                <NavLink to="/finance" className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-gray-400 hover:text-green-400'}`}>
+                  <DollarSign className="w-4 h-4" />
+                  我的收支
+                </NavLink>
                 <div className="w-px h-4 bg-gray-700"></div>
                 <Link to="/me" className="flex items-center space-x-2 text-gray-300 hover:text-green-400 transition-colors">
                   <UserCircle className="w-5 h-5" />
-                  <span className="text-sm">{user.phone}</span>
+                  <span className="text-sm">{user.displayName || user.phone}</span>
                   {user.kycStatus === 'VERIFIED' ? (
                     <span className="px-1.5 py-0.5 bg-green-500/10 text-green-400 text-[10px] rounded border border-green-500/20">已实名</span>
                   ) : (

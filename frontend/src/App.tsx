@@ -6,9 +6,8 @@ import Market from './pages/Market';
 import NewTask from './pages/NewTask';
 import TaskDetail from './pages/TaskDetail';
 import OrderDetail from './pages/OrderDetail';
-import Login from './pages/Login';
+import UnifiedLogin from './pages/UnifiedLogin';
 import Register from './pages/Register';
-import AdminLogin from './pages/AdminLogin';
 import AgentManagement from './pages/AgentManagement';
 import AgentDetail from './pages/AgentDetail';
 import AdminArbitrations from './pages/AdminArbitrations';
@@ -23,13 +22,14 @@ import MyReceipts from './pages/MyReceipts';
 import MyPayments from './pages/MyPayments';
 import MyBids from './pages/MyBids';
 import Profile from './pages/Profile';
+import AdminAccounts from './pages/AdminAccounts';
+import FinanceManagement from './pages/FinanceManagement';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Admin Login - 独立布局 */}
-        <Route path="/admin/login" element={<AdminLogin />} />
+        {/* 统一登录页 - 已移除独立的 /admin/login */}
         
         <Route path="/" element={<MainLayout />}>
           <Route index element={<Home />} />
@@ -42,11 +42,13 @@ function App() {
           <Route path="orders/payments" element={<MyPayments />} />
           <Route path="orders/:id" element={<OrderDetail />} />
           <Route path="orders/:orderId/pay" element={<OrderPayment />} />
-          <Route path="login" element={<Login />} />
+          <Route path="login" element={<UnifiedLogin />} />
           <Route path="register" element={<Register />} />
           <Route path="api-docs" element={<ApiDocs />} />
           <Route path="me" element={<Profile />} />
           
+          <Route path="finance" element={<FinanceManagement />} />
+
           {/* Owner (Agent) Routes */}
           <Route path="owner/agents" element={<AgentManagement />} />
           <Route path="owner/agents/:id" element={<AgentDetail />} />
@@ -58,6 +60,7 @@ function App() {
           <Route path="admin/arbitrations" element={<AdminArbitrations />} />
           <Route path="admin/platform-codes" element={<AdminPlatformCodes />} />
           <Route path="admin/release" element={<AdminRelease />} />
+          <Route path="admin/accounts" element={<AdminAccounts />} />
         </Route>
       </Routes>
     </BrowserRouter>

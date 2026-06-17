@@ -20,6 +20,7 @@ export interface User {
   id: string;
   phone: string;
   displayName?: string;
+  email?: string;
   kycStatus: KycStatus;
   role: UserRole;
 }
@@ -158,13 +159,12 @@ export const useAuthStore = create<AuthState>()(
 );
 
 /**
- * 判断用户是否是 Agent 主人
- * 基于用户拥有的 Agent 数量，而不是角色
+ * 判断用户是否是 Agent 主人（开发者）
+ * 基于用户角色判断
  */
 export const isAgentOwner = (user: User | null): boolean => {
   if (!user) return false;
-  // 13900000002 是 Agent 主人
-  return user.phone === '13900000002';
+  return user.role === 'OWNER';
 };
 
 /**
@@ -173,4 +173,21 @@ export const isAgentOwner = (user: User | null): boolean => {
 export const isClient = (user: User | null): boolean => {
   if (!user) return false;
   return user.role === 'CLIENT';
+};
+
+/**
+ * 获取当前活跃的认证 Token
+ * 优先返回用户 Token，其次管理员 Token
+ */
+export const getActiveToken = (): string | null => {
+  const { token, adminToken } = useAuthStore.getState();
+  return token || adminToken || null;
+};
+
+/**
+ * 判断是否有任意身份登录（用户或管理员）
+ */
+export const isAnyLoggedIn = (): boolean => {
+  const { user, admin } = useAuthStore.getState();
+  return !!(user || admin);
 };

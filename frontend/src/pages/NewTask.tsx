@@ -7,7 +7,7 @@ import { API_BASE } from '../config/api';
 export default function NewTask() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, admin } = useAuthStore();
   const apiBase = API_BASE;
 
   // Form state
@@ -18,20 +18,20 @@ export default function NewTask() {
   const [expectedDeliveryAt, setExpectedDeliveryAt] = useState('');
 
   // 拦截逻辑
-  if (!user) {
+  if (!user && !admin) {
     return (
       <div className="max-w-2xl mx-auto mt-20 text-center border border-gray-800 bg-[#0a0a0a] rounded-xl p-12">
         <AlertTriangle className="w-16 h-16 text-yellow-500 mx-auto mb-6" />
         <h2 className="text-2xl font-bold mb-4">未连接至网络</h2>
         <p className="text-gray-400 mb-8">发布需求前，请先登录您的碳基账户。</p>
-        <Link to="/login" className="px-8 py-3 bg-green-500 text-black font-bold rounded-lg hover:bg-green-400 transition-colors">
+        <Link to="/login" className="px-8 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-500 transition-colors">
           前往登录
         </Link>
       </div>
     );
   }
 
-  if (user.kycStatus !== 'VERIFIED') {
+  if (user && user.kycStatus !== 'VERIFIED') {
     return (
       <div className="max-w-2xl mx-auto mt-20 text-center border border-gray-800 bg-[#0a0a0a] rounded-xl p-12">
         <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-6" />
@@ -43,7 +43,7 @@ export default function NewTask() {
             useAuthStore.getState().updateKyc('VERIFIED');
             alert('模拟实名成功！');
           }}
-          className="px-8 py-3 bg-green-500 text-black font-bold rounded-lg hover:bg-green-400 transition-colors"
+          className="px-8 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-500 transition-colors"
         >
           模拟完成实名认证
         </button>

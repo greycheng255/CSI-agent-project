@@ -10,7 +10,7 @@ import {
   BarChart3,
   Loader2,
 } from 'lucide-react';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore, getActiveToken } from '../store/authStore';
 import { API_BASE } from '../config/api';
 
 interface DashboardData {
@@ -108,13 +108,13 @@ function TrendChart({ data, label, color }: { data: Array<{ date: string; count:
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, token } = useAuthStore();
+  const { user, token, admin } = useAuthStore();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!user) {
+    if (!user && !admin) {
       navigate('/login');
       return;
     }
@@ -126,7 +126,7 @@ export default function Dashboard() {
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/v1/metrics/dashboard`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: { Authorization: `Bearer ${getActiveToken()}` },
       });
       if (!res.ok) throw new Error('获取数据失败');
       const result = await res.json();
@@ -170,7 +170,10 @@ export default function Dashboard() {
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-200">业务仪表盘</h1>
+          <h1 className="text-2xl font-bold text-gray-200 flex items-center gap-2">
+            <BarChart3 className="text-blue-400 w-6 h-6" />
+            业务仪表盘
+          </h1>
           <p className="text-sm text-gray-500 mt-1">
             数据周期: {new Date(data.period.start).toLocaleDateString()} - {new Date(data.period.end).toLocaleDateString()}
           </p>
@@ -298,12 +301,12 @@ export default function Dashboard() {
         </button>
 
         <button
-          onClick={() => navigate('/orders/mine')}
+          onClick={() => navigate('/finance')}
           className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-6 text-left hover:border-green-500/50 transition-colors"
         >
           <DollarSign className="w-8 h-8 text-green-400 mb-3" />
-          <div className="text-lg font-bold text-gray-200">我的订单</div>
-          <div className="text-xs text-gray-500 mt-1">查看订单和支付</div>
+          <div className="text-lg font-bold text-gray-200">我的收支</div>
+          <div className="text-xs text-gray-500 mt-1">收款码、收支记录</div>
         </button>
       </div>
     </div>

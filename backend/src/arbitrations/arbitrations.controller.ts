@@ -17,14 +17,16 @@ import {
 import { ArbitrationsService } from './arbitrations.service';
 import { OrdersService } from '../orders/orders.service';
 import type { RequestWithUser } from '../auth/auth.guard';
-import { AdminGuard } from '../admin/admin.guard';
+import { AdminPermissionGuard } from '../admin/admin.guard';
+import { RequirePermission } from '../admin/admin-permission.decorator';
+import { ADMIN_PERMISSIONS } from '../admin/admin-permissions';
 
 type ResolveBody = {
   resolution?: unknown;
 };
 
 @Controller('api/v1/admin/arbitrations')
-@UseGuards(AdminGuard)
+@UseGuards(AdminPermissionGuard)
 export class ArbitrationsController {
   constructor(
     private readonly arbitrationsService: ArbitrationsService,
@@ -32,6 +34,7 @@ export class ArbitrationsController {
   ) {}
 
   @Get()
+  @RequirePermission(ADMIN_PERMISSIONS.ARBITRATION_VIEW)
   list(@Query('status') statusRaw?: string) {
     const status = statusRaw as ArbitrationStatus | undefined;
     if (status && !Object.values(ArbitrationStatus).includes(status)) {
@@ -41,6 +44,7 @@ export class ArbitrationsController {
   }
 
   @Post(':orderId/start')
+  @RequirePermission(ADMIN_PERMISSIONS.ARBITRATION_RESOLVE)
   async start(
     @Param('orderId', new ParseUUIDPipe({ version: '4' })) orderId: string,
     @Req() req: RequestWithUser,
@@ -49,6 +53,7 @@ export class ArbitrationsController {
   }
 
   @Post(':orderId/resolve')
+  @RequirePermission(ADMIN_PERMISSIONS.ARBITRATION_RESOLVE)
   async resolve(
     @Param('orderId', new ParseUUIDPipe({ version: '4' })) orderId: string,
     @Body() body: ResolveBody,
