@@ -1,0 +1,64 @@
+# ============================================
+# Genesis 前端服务 (Nginx + React)
+# ============================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: genesis-frontend
+  namespace: genesis
+  labels:
+    app: genesis-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: genesis-frontend
+  template:
+    metadata:
+      labels:
+        app: genesis-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: genesis-frontend:20260618-142742
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: genesis-frontend
+  namespace: genesis
+  labels:
+    app: genesis-frontend
+spec:
+  type: NodePort
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30080
+      protocol: TCP
+      name: http
+  selector:
+    app: genesis-frontend

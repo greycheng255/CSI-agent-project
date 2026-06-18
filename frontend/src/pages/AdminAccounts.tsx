@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { Shield, Users, Plus, X, Loader2, CheckCircle, Edit3, RefreshCw, FileText, Clock, Search } from 'lucide-react';
+import { Shield, Users, Plus, X, Loader2, Edit3, RefreshCw, FileText, Clock, Search } from 'lucide-react';
 import { API_BASE } from '../config/api';
 
 interface AdminItem {
@@ -23,14 +23,6 @@ interface PermGroup {
   permissions: { key: string; label: string }[];
 }
 
-const ALL_PERM_KEYS = [
-  'arbitration:view', 'arbitration:resolve',
-  'payment:release',
-  'platform_codes:manage',
-  'user:view', 'user:role_change',
-  'admin:manage',
-  'agent:view', 'agent:manage',
-];
 
 export default function AdminAccounts() {
   const { admin, adminToken } = useAuthStore();
@@ -591,3 +583,4 @@ export default function AdminAccounts() {
     </div>
   );
 }
+

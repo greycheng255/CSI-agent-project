@@ -9,7 +9,6 @@ interface RegisterDto {
   phone: string;
   password: string;
   displayName?: string;
-  role?: string;
 }
 
 /**
@@ -39,8 +38,6 @@ export class UsersController {
   /**
    * 用户注册
    * POST /api/v1/users/register
-   *
-   * role 可选: 'CLIENT'(默认,雇主) | 'OWNER'(开发者)
    */
   @Post('register')
   register(@Body() body: RegisterDto) {

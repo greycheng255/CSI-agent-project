@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Loader2, 
@@ -170,7 +170,7 @@ const getEstimatedPaymentTime = (status: OrderStatus, acceptedAt?: string) => {
 };
 
 export default function MyReceipts({ embedded }: { embedded?: boolean }) {
-  const { user, admin } = useAuthStore();
+  const { user } = useAuthStore();
   const navigate = useNavigate();
   const [receipts, setReceipts] = useState<ReceiptItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -187,7 +187,7 @@ export default function MyReceipts({ embedded }: { embedded?: boolean }) {
   const apiBase = API_BASE;
 
   useEffect(() => {
-    if (!user && !admin) {
+    if (!user) {
       navigate('/login');
       return;
     }
@@ -557,3 +557,5 @@ export default function MyReceipts({ embedded }: { embedded?: boolean }) {
     </div>
   );
 }
+
+

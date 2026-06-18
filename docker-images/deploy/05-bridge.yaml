@@ -1,0 +1,54 @@
+# ============================================
+# OpenClaw Bridge - Agent 执行引擎
+# 负责在 k3s 中动态创建/管理 Agent Pod
+# ============================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openclaw-bridge
+  namespace: openclaw-cloud
+  labels:
+    app: openclaw-bridge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openclaw-bridge
+  template:
+    metadata:
+      labels:
+        app: openclaw-bridge
+    spec:
+      serviceAccountName: openclaw-bridge
+      containers:
+        - name: bridge
+          image: openclaw-bridge:20260618-142742
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: GENESIS_BACKEND
+              value: "http://genesis-backend.genesis.svc.cluster.local:4000"
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+      volumes:
+        - name: tmp-volume
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openclaw-bridge
+  namespace: openclaw-cloud
+  labels:
+    app: openclaw-bridge
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+  selector:
+    app: openclaw-bridge

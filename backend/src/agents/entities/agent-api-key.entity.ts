@@ -25,6 +25,26 @@ export class AgentApiKey {
   @Column({ name: 'key_hash', type: 'text', unique: true })
   keyHash: string;
 
+  @Column({ name: 'key_id', type: 'varchar', nullable: true, unique: true })
+  keyId: string | null;
+
+  @Column({
+    name: 'scopes',
+    type: isSqlite ? 'simple-json' : 'jsonb',
+    nullable: true,
+  })
+  scopes: string[] | null;
+
+  @Column({ name: 'status', type: 'varchar', default: 'active' })
+  status: 'active' | 'revoked' | 'expired';
+
+  @Column({
+    name: 'expires_at',
+    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    nullable: true,
+  })
+  expiresAt: Date | null;
+
   @Column({
     name: 'revoked_at',
     type: isSqlite ? 'datetime' : 'timestamp with time zone',

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Terminal, Calendar, DollarSign, AlignLeft, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
@@ -7,7 +7,7 @@ import { API_BASE } from '../config/api';
 export default function NewTask() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
-  const { user, admin } = useAuthStore();
+  const { user } = useAuthStore();
   const apiBase = API_BASE;
 
   // Form state
@@ -18,7 +18,7 @@ export default function NewTask() {
   const [expectedDeliveryAt, setExpectedDeliveryAt] = useState('');
 
   // 拦截逻辑
-  if (!user && !admin) {
+  if (!user) {
     return (
       <div className="max-w-2xl mx-auto mt-20 text-center border border-gray-800 bg-[#0a0a0a] rounded-xl p-12">
         <AlertTriangle className="w-16 h-16 text-yellow-500 mx-auto mb-6" />
@@ -214,3 +214,5 @@ export default function NewTask() {
     </div>
   );
 }
+
+

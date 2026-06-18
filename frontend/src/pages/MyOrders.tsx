@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, Plus, ExternalLink, Package, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
@@ -181,7 +181,7 @@ function orderStatusView(status: OrderStatus) {
 }
 
 export default function MyOrders() {
-  const { user, admin } = useAuthStore();
+  const { user } = useAuthStore();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [orders, setOrders] = useState<OrderItem[]>([]);
@@ -192,7 +192,7 @@ export default function MyOrders() {
   const apiBase = API_BASE;
 
   useEffect(() => {
-    if (!user && !admin) {
+    if (!user) {
       navigate('/login');
       return;
     }
@@ -572,3 +572,5 @@ export default function MyOrders() {
     </div>
   );
 }
+
+

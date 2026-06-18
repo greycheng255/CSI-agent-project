@@ -10,9 +10,6 @@ import {
   Logger,
 } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
-import { UserRole } from '../users/entities/user.entity';
 import { AdminPermissionGuard } from '../admin/admin.guard';
 import { RequirePermission } from '../admin/admin-permission.decorator';
 import { ADMIN_PERMISSIONS } from '../admin/admin-permissions';

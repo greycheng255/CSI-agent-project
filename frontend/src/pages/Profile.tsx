@@ -244,7 +244,7 @@ export default function Profile() {
       if (res.ok) {
         setEditMsg('保存成功');
         setUserEdit(false);
-        useAuthStore.getState().updateUser({ displayName: editName || user.displayName, email: editEmail || undefined });
+        useAuthStore.getState().updateUser({ displayName: editName || user?.displayName, email: editEmail || undefined });
       } else {
         const d = await res.json();
         setEditMsg(d.message || '保存失败');
@@ -321,7 +321,7 @@ export default function Profile() {
               <div>
                 <h2 className="text-xl font-semibold">{user.displayName || user.phone}</h2>
                 <p className="text-gray-500 text-sm">
-                  {user.role === 'OWNER' ? '开发者' : '客户'}
+                  用户
                   <span className="mx-2">·</span>
                   {user.kycStatus === 'VERIFIED'
                     ? <span className="text-green-400">已实名</span>

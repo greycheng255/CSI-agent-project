@@ -22,7 +22,7 @@ import { RequirePermission } from './admin-permission.decorator';
 import { Admin, AdminLevel } from './entities/admin.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, UserRole } from '../users/entities/user.entity';
+import { User } from '../users/entities/user.entity';
 import {
   ALL_ADMIN_PERMISSIONS,
   ADMIN_PERMISSION_GROUPS,
@@ -55,13 +55,6 @@ interface CreateAdminDto {
   displayName?: string;
   level?: AdminLevel;
   permissions?: string[];
-}
-
-/**
- * 修改用户角色请求
- */
-interface UpdateUserRoleDto {
-  role: UserRole;
 }
 
 /**
@@ -264,39 +257,6 @@ export class AdminController {
   }
 
   /**
-   * 修改用户角色
-   * POST /api/v1/admin/users/:userId/role
-   */
-  @Post('users/:userId/role')
-  @UseGuards(AdminPermissionGuard)
-  @RequirePermission(ADMIN_PERMISSIONS.USER_ROLE_CHANGE)
-  async updateUserRole(
-    @Param('userId') userId: string,
-    @Body() body: UpdateUserRoleDto,
-  ) {
-    const user = await this.usersRepository.findOne({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      throw new UnauthorizedException('用户不存在');
-    }
-
-    // 更新角色
-    user.role = body.role;
-    await this.usersRepository.save(user);
-
-    return {
-      message: '用户角色更新成功',
-      user: {
-        id: user.id,
-        phone: user.phone,
-        role: user.role,
-      },
-    };
-  }
-
-  /**
    * 获取操作日志
    * GET /api/v1/admin/audit-logs?page=1&limit=50&action=&entityType=&actorType=
    */
@@ -361,7 +321,6 @@ export class AdminController {
         'phone',
         'displayName',
         'email',
-        'role',
         'kycStatus',
         'createdAt',
       ],

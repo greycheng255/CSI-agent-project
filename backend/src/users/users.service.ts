@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, KycStatus, UserRole } from './entities/user.entity';
+import { User, KycStatus } from './entities/user.entity';
 import { AuthService } from '../auth/auth.service';
 import { AgentManagerService } from '../agents/agent-manager.service';
 import { hashSync, compareSync } from 'bcryptjs';
@@ -22,7 +22,6 @@ type RegisterDto = {
   phone: string;
   password: string;
   displayName?: string;
-  role?: string;
 };
 
 @Injectable()
@@ -47,8 +46,7 @@ export class UsersService {
 
   /**
    * 用户注册
-   * 所有新注册用户默认为 CLIENT 角色
-   * 13800000001 不再是管理员，只是一个普通用户
+   * 所有用户统一为普通用户，不再区分雇主/开发者
    */
   async register(data: RegisterDto) {
     // 参数校验
@@ -76,17 +74,12 @@ export class UsersService {
       throw new UnauthorizedException('该手机号已注册');
     }
 
-    // 解析角色，默认为 CLIENT
-    const roleValue =
-      data.role === 'OWNER' ? UserRole.OWNER : UserRole.CLIENT;
-
     // 创建新用户
     const user = this.usersRepository.create({
       phone: data.phone,
       passwordHash: this.hashPassword(data.password),
       displayName: data.displayName || `用户${data.phone.slice(-4)}`,
       kycStatus: KycStatus.NONE,
-      role: roleValue,
     });
 
     await this.usersRepository.save(user);
@@ -115,15 +108,13 @@ export class UsersService {
         id: user.id,
         phone: user.phone,
         displayName: user.displayName,
-        role: user.role,
       },
     };
   }
 
   /**
    * 用户登录
-   * 不再根据手机号自动分配角色，所有用户都是 CLIENT
-   * 13900000002 作为 Agent 主人，也是 CLIENT 角色，但拥有 Agent
+   * 所有用户统一处理，不再区分角色
    */
   async login(data: AuthDto) {
     if (typeof data.phone !== 'string' || typeof data.password !== 'string') {
@@ -135,29 +126,8 @@ export class UsersService {
       where: { phone: data.phone },
     });
 
-    // 如果用户不存在，自动创建（方便测试）
     if (!user) {
-      user = this.usersRepository.create({
-        phone: data.phone,
-        passwordHash: this.hashPassword(data.password),
-        displayName: `用户${data.phone.slice(-4)}`,
-        kycStatus: KycStatus.NONE,
-        role: UserRole.CLIENT,
-      });
-      await this.usersRepository.save(user);
-      this.logger.log(`自动创建用户: ${user.id} (${user.phone})`);
-
-      // 为新用户自动创建 Agent
-      if (this.agentManagerService) {
-        try {
-          const ownerToken = await this.authService.issueUserToken(user);
-          await this.agentManagerService.createAgentForUser(user, ownerToken);
-        } catch (error: unknown) {
-          const errorMessage =
-            error instanceof Error ? error.message : 'Unknown error';
-          this.logger.error(`Agent 创建失败: ${errorMessage}`);
-        }
-      }
+      throw new UnauthorizedException('手机号未注册');
     } else {
       // 验证密码
       if (!this.verifyPassword(data.password, user.passwordHash)) {
@@ -176,7 +146,6 @@ export class UsersService {
         phone: user.phone,
         displayName: user.displayName,
         kycStatus: user.kycStatus,
-        role: user.role,
       },
     };
   }
@@ -199,7 +168,6 @@ export class UsersService {
       email: user.email,
       displayName: user.displayName,
       kycStatus: user.kycStatus,
-      role: user.role,
       createdAt: user.createdAt,
     };
   }
@@ -234,7 +202,6 @@ export class UsersService {
         id: user.id,
         phone: user.phone,
         displayName: user.displayName,
-        role: user.role,
       },
     };
   }

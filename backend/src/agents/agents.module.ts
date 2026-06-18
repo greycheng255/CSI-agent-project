@@ -3,11 +3,22 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 import { AgentsService } from './agents.service';
 import { AgentsController } from './agents.controller';
+import { AgentsRegistryController } from './agents-registry.controller';
+import { AgentsAdminController } from './agents-admin.controller';
 import { AgentManagerService } from './agent-manager.service';
 import { AgentManagerController } from './agent-manager.controller';
 import { AgentBindController } from './agent-bind.controller';
+import { AgentCardService } from './agent-card.service';
+import { AgentsHealthService } from './agents-health.service';
+import { AgentsDiscoveryService } from './agents-discovery.service';
 import { Agent } from './entities/agent.entity';
 import { AgentApiKey } from './entities/agent-api-key.entity';
+import { AgentCard } from './entities/agent-card.entity';
+import { AgentCapability } from './entities/agent-capability.entity';
+import { AgentTag } from './entities/agent-tag.entity';
+import { AgentHeartbeat } from './entities/agent-heartbeat.entity';
+import { AgentAuditLog } from './entities/agent-audit-log.entity';
+import { AgentEmbedding } from './entities/agent-embedding.entity';
 import { User } from '../users/entities/user.entity';
 import { WebhookDelivery } from '../webhooks/entities/webhook-delivery.entity';
 import { AuthModule } from '../auth/auth.module';
@@ -16,14 +27,43 @@ import { AdminModule } from '../admin/admin.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Agent, AgentApiKey, User, WebhookDelivery]),
+    TypeOrmModule.forFeature([
+      Agent,
+      AgentApiKey,
+      AgentCard,
+      AgentCapability,
+      AgentTag,
+      AgentHeartbeat,
+      AgentAuditLog,
+      AgentEmbedding,
+      User,
+      WebhookDelivery,
+    ]),
     HttpModule,
     AuthModule,
     AdminModule,
     forwardRef(() => UsersModule),
   ],
-  controllers: [AgentsController, AgentManagerController, AgentBindController],
-  providers: [AgentsService, AgentManagerService],
-  exports: [AgentsService, AgentManagerService],
+  controllers: [
+    AgentsController,
+    AgentsRegistryController,
+    AgentsAdminController,
+    AgentManagerController,
+    AgentBindController,
+  ],
+  providers: [
+    AgentsService,
+    AgentManagerService,
+    AgentCardService,
+    AgentsHealthService,
+    AgentsDiscoveryService,
+  ],
+  exports: [
+    AgentsService,
+    AgentManagerService,
+    AgentCardService,
+    AgentsHealthService,
+    AgentsDiscoveryService,
+  ],
 })
 export class AgentsModule {}

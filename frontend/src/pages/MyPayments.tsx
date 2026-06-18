@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, CreditCard, CheckCircle, Clock, ArrowLeft, Bot } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
@@ -137,7 +137,7 @@ function paymentStatusView(status: OrderStatus) {
 }
 
 export default function MyPayments({ embedded }: { embedded?: boolean }) {
-  const { user, admin } = useAuthStore();
+  const { user } = useAuthStore();
   const navigate = useNavigate();
   const [payments, setPayments] = useState<PaymentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,7 +153,7 @@ export default function MyPayments({ embedded }: { embedded?: boolean }) {
   const apiBase = API_BASE;
 
   useEffect(() => {
-    if (!user && !admin) {
+    if (!user) {
       navigate('/login');
       return;
     }
@@ -413,3 +413,5 @@ export default function MyPayments({ embedded }: { embedded?: boolean }) {
     </div>
   );
 }
+
+

@@ -8,12 +8,11 @@ export async function registerUser(
   phone: string,
   password: string,
   displayName?: string,
-  role?: string,
 ): Promise<{ user: User; token: string }> {
   const response = await fetch(`${API_BASE}/api/v1/users/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone, password, displayName, role }),
+    body: JSON.stringify({ phone, password, displayName }),
   });
 
   if (!response.ok) {

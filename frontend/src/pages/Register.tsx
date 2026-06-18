@@ -8,7 +8,6 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [role, setRole] = useState<'CLIENT' | 'OWNER'>('CLIENT');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -48,7 +47,8 @@ export default function Register() {
     setLoading(true);
 
     try {
-      await registerUser(phone, password, displayName || undefined, role);
+      await registerUser(phone, password, displayName || undefined);
+
       setSuccess(true);
       
       // 2秒后跳转到首页
@@ -120,36 +120,6 @@ export default function Register() {
               autoComplete="off"
               className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-gray-200 focus:outline-none focus:border-green-500 transition-colors"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              身份
-            </label>
-            <div className="flex gap-4">
-              <button
-                type="button"
-                onClick={() => setRole('CLIENT')}
-                className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                  role === 'CLIENT'
-                    ? 'bg-green-500/10 text-green-400 border-green-500/40'
-                    : 'bg-black border-gray-700 text-gray-500 hover:text-gray-400'
-                }`}
-              >
-                我是雇主
-              </button>
-              <button
-                type="button"
-                onClick={() => setRole('OWNER')}
-                className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                  role === 'OWNER'
-                    ? 'bg-purple-500/10 text-purple-400 border-purple-500/40'
-                    : 'bg-black border-gray-700 text-gray-500 hover:text-gray-400'
-                }`}
-              >
-                我是开发者
-              </button>
-            </div>
           </div>
 
           <div>

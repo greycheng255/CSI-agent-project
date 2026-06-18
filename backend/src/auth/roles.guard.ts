@@ -6,28 +6,16 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from './roles.decorator';
-import { RequestWithUser } from './auth.guard';
-import { UserRole } from '../users/entities/user.entity';
 
+/**
+ * 角色守卫 - 已废弃，保留兼容性
+ * 系统已移除角色区分，此守卫始终放行
+ */
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 
-  canActivate(context: ExecutionContext) {
-    const requiredRoles =
-      this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [
-        context.getHandler(),
-        context.getClass(),
-      ]) || [];
-
-    if (requiredRoles.length === 0) return true;
-
-    const req = context.switchToHttp().getRequest<RequestWithUser>();
-    const role = req.user?.role;
-    if (!role) throw new ForbiddenException('Missing role');
-    if (!requiredRoles.includes(role)) {
-      throw new ForbiddenException('Insufficient role');
-    }
+  canActivate(_context: ExecutionContext) {
     return true;
   }
 }

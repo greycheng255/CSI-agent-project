@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { Bot, Plus, Activity, Settings, ExternalLink, Code2, Terminal, DollarSign, RefreshCw } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_BASE } from '../config/api';
+import { CreateAgentForm } from '../components/agents/CreateAgentForm';
+import { AgentStatusBadge } from '../components/agents/AgentStatusBadge';
 
 type AgentStatus = 'ONLINE' | 'OFFLINE';
 type OpenclawStatus = 'CONNECTED' | 'DISCONNECTED' | 'UNKNOWN';
@@ -18,6 +20,14 @@ type Agent = {
   owner?: {
     phone?: string;
   };
+  agentType?: string;
+  approvalStatus?: string;
+  runtimeStatus?: string;
+  endpointUrl?: string | null;
+  healthUrl?: string | null;
+  pricingModel?: string | null;
+  basePrice?: number | null;
+  currency?: string | null;
   openclawUrl?: string;
   openclawStatus?: OpenclawStatus;
   lastHealthCheckAt?: string;
@@ -47,9 +57,6 @@ export default function AgentManagement() {
   // 创建 Agent 表单
   const [showCreate, setShowCreate] = useState(false);
   const [showApiGuide, setShowApiGuide] = useState(false);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [webhookUrl, setWebhookUrl] = useState('');
 
   const [showBid, setShowBid] = useState(false);
   const [bidAgent, setBidAgent] = useState<Agent | null>(null);
@@ -171,41 +178,6 @@ export default function AgentManagement() {
     }
     fetchAgents();
   }, [fetchAgents, navigate, user]);
-
-  const handleCreateAgent = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const token = useAuthStore.getState().token;
-      const res = await fetch(`${apiBase}/api/v1/owner/agents`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name,
-          description,
-          webhookUrl,
-        }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to create agent');
-      }
-
-      alert('硅基劳动力注册成功！');
-      setShowCreate(false);
-      setName('');
-      setDescription('');
-      setWebhookUrl('');
-      fetchAgents();
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : '请检查网络';
-      alert('创建失败: ' + errorMessage);
-    }
-  };
-
   const openBidModal = async (agent: Agent) => {
     setBidAgent(agent);
     setShowBid(true);
@@ -537,29 +509,14 @@ spec:
       )}
 
       {showCreate && (
-        <div className="border border-purple-900/50 bg-purple-900/10 rounded-xl p-6 mb-8">
-          <h2 className="text-lg font-bold text-purple-400 mb-4">注册新的硅基劳动力</h2>
-          <form onSubmit={handleCreateAgent} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Agent 名称</label>
-                <input required value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Openclaw-01" className="w-full bg-black border border-gray-700 rounded px-3 py-2 focus:border-purple-500 outline-none text-sm" />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Webhook URL (接收平台派单)</label>
-                <input required value={webhookUrl} onChange={e=>setWebhookUrl(e.target.value)} placeholder="https://your-server.com/webhook" className="w-full bg-black border border-gray-700 rounded px-3 py-2 focus:border-purple-500 outline-none text-sm" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">能力描述</label>
-              <input value={description} onChange={e=>setDescription(e.target.value)} placeholder="擅长 Python 爬虫与数据清洗..." className="w-full bg-black border border-gray-700 rounded px-3 py-2 focus:border-purple-500 outline-none text-sm" />
-            </div>
-            <div className="flex justify-end space-x-3 pt-2">
-              <button type="button" onClick={()=>setShowCreate(false)} className="px-4 py-2 text-gray-400 hover:text-white text-sm">取消</button>
-              <button type="submit" className="px-6 py-2 bg-purple-500 text-black font-bold rounded hover:bg-purple-400 text-sm">提交注册</button>
-            </div>
-          </form>
-        </div>
+        <CreateAgentForm
+          onCancel={() => setShowCreate(false)}
+          onCreated={() => {
+            alert('Agent 已提交审核，当前状态：待审核。管理员审核通过后才会进入智能体广场。');
+            setShowCreate(false);
+            fetchAgents();
+          }}
+        />
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -582,6 +539,8 @@ spec:
                 </div>
               </div>
               <div className="flex items-center space-x-2">
+                <AgentStatusBadge type="approval" value={agent.approvalStatus} />
+                <AgentStatusBadge type="runtime" value={agent.runtimeStatus} />
                 <button
                   onClick={() => performHealthCheck(agent.id)}
                   disabled={healthCheckingAgent === agent.id}
@@ -665,6 +624,14 @@ spec:
               )}
               
               <p className="text-sm text-gray-500 line-clamp-2">{agent.description}</p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <AgentStatusBadge type="agentType" value={agent.agentType} />
+                {agent.basePrice != null && (
+                  <span className="px-2 py-1 bg-gray-800/50 rounded text-xs text-gray-300">
+                    {agent.currency || 'CNY'} {agent.basePrice}
+                  </span>
+                )}
+              </div>
               {Array.isArray(agent.skills) && agent.skills.length > 0 && (
                 <div className="flex flex-wrap gap-2 pt-1">
                   {agent.skills.slice(0, 8).map((s) => (
@@ -711,3 +678,4 @@ spec:
     </div>
   );
 }
+

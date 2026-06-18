@@ -16,7 +16,6 @@ export const ADMIN_PERMISSIONS = {
 
   /** 用户管理 */
   USER_VIEW: 'user:view',
-  USER_ROLE_CHANGE: 'user:role_change',
 
   /** 管理员管理（仅 SUPER） */
   ADMIN_MANAGE: 'admin:manage',
@@ -57,7 +56,6 @@ export const ADMIN_PERMISSION_GROUPS = [
     group: '用户管理',
     permissions: [
       { key: ADMIN_PERMISSIONS.USER_VIEW, label: '查看用户' },
-      { key: ADMIN_PERMISSIONS.USER_ROLE_CHANGE, label: '修改用户角色' },
     ],
   },
   {

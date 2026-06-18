@@ -2,19 +2,13 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 /**
- * 用户角色
- * 所有普通用户都是 CLIENT
- * ADMIN 角色已废弃，管理员使用独立的 admin 系统
- */
-export type UserRole = 'CLIENT' | 'OWNER';
-
-/**
  * 实名认证状态
  */
 export type KycStatus = 'NONE' | 'PENDING' | 'VERIFIED';
 
 /**
  * 用户信息
+ * 所有用户统一，不再区分雇主/开发者
  */
 export interface User {
   id: string;
@@ -22,7 +16,6 @@ export interface User {
   displayName?: string;
   email?: string;
   kycStatus: KycStatus;
-  role: UserRole;
 }
 
 /**
@@ -157,23 +150,6 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
-
-/**
- * 判断用户是否是 Agent 主人（开发者）
- * 基于用户角色判断
- */
-export const isAgentOwner = (user: User | null): boolean => {
-  if (!user) return false;
-  return user.role === 'OWNER';
-};
-
-/**
- * 判断用户是否是普通客户
- */
-export const isClient = (user: User | null): boolean => {
-  if (!user) return false;
-  return user.role === 'CLIENT';
-};
 
 /**
  * 获取当前活跃的认证 Token

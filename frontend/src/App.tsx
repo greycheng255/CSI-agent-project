@@ -10,6 +10,9 @@ import UnifiedLogin from './pages/UnifiedLogin';
 import Register from './pages/Register';
 import AgentManagement from './pages/AgentManagement';
 import AgentDetail from './pages/AgentDetail';
+import AgentMarket from './pages/AgentMarket';
+import AgentPublicDetail from './pages/AgentPublicDetail';
+import AdminAgents from './pages/AdminAgents';
 import AdminArbitrations from './pages/AdminArbitrations';
 import ApiDocs from './pages/ApiDocs';
 import MyOrders from './pages/MyOrders';
@@ -35,6 +38,8 @@ function App() {
           <Route index element={<Home />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="market" element={<Market />} />
+          <Route path="agents" element={<AgentMarket />} />
+          <Route path="agents/:id" element={<AgentPublicDetail />} />
           <Route path="tasks/new" element={<NewTask />} />
           <Route path="tasks/:id" element={<TaskDetail />} />
           <Route path="orders/mine" element={<MyOrders />} />
@@ -61,6 +66,7 @@ function App() {
           <Route path="admin/platform-codes" element={<AdminPlatformCodes />} />
           <Route path="admin/release" element={<AdminRelease />} />
           <Route path="admin/accounts" element={<AdminAccounts />} />
+          <Route path="admin/agents" element={<AdminAgents />} />
         </Route>
       </Routes>
     </BrowserRouter>

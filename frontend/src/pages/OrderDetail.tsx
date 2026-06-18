@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef } from 'react';
+﻿import { useCallback, useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ShieldCheck, Loader2, CheckCircle2, Camera, Clock, AlertCircle, FileText, ChevronDown, ChevronUp, MessageSquare, RefreshCw } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
@@ -241,7 +241,7 @@ const generateExecutionPhases = (order: Order): ExecutionPhase[] => {
 export default function OrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, admin } = useAuthStore();
+  const { user } = useAuthStore();
   const apiBase = API_BASE;
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -1095,3 +1095,4 @@ export default function OrderDetail() {
     </div>
   );
 }
+

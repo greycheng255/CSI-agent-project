@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp,
@@ -108,7 +108,7 @@ function TrendChart({ data, label, color }: { data: Array<{ date: string; count:
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, token, admin } = useAuthStore();
+  const { user, admin } = useAuthStore();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -312,3 +312,4 @@ export default function Dashboard() {
     </div>
   );
 }
+

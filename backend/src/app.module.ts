@@ -36,6 +36,12 @@ import { AuditLog } from './audit/entities/audit-log.entity';
 import { WebhookDelivery } from './webhooks/entities/webhook-delivery.entity';
 import { AccessToken } from './auth/entities/access-token.entity';
 import { AgentApiKey } from './agents/entities/agent-api-key.entity';
+import { AgentAuditLog } from './agents/entities/agent-audit-log.entity';
+import { AgentCapability } from './agents/entities/agent-capability.entity';
+import { AgentCard } from './agents/entities/agent-card.entity';
+import { AgentEmbedding } from './agents/entities/agent-embedding.entity';
+import { AgentHeartbeat } from './agents/entities/agent-heartbeat.entity';
+import { AgentTag } from './agents/entities/agent-tag.entity';
 import { Payment } from './payment/entities/payment.entity';
 import { Payout } from './payment/entities/payout.entity';
 import { UserPaymentCode } from './payment/entities/user-payment-code.entity';
@@ -83,6 +89,12 @@ const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
         WebhookDelivery,
         AccessToken,
         AgentApiKey,
+        AgentAuditLog,
+        AgentCapability,
+        AgentCard,
+        AgentEmbedding,
+        AgentHeartbeat,
+        AgentTag,
         Payment,
         Payout,
         UserPaymentCode,
@@ -99,7 +111,7 @@ const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
         BalanceRecord,
         Withdrawal,
       ],
-      synchronize: process.env.DB_SYNC !== 'false',
+      synchronize: process.env.DB_SYNC === 'true',
     }),
     UsersModule,
     AgentsModule,

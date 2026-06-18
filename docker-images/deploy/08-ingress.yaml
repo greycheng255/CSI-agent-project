@@ -1,0 +1,23 @@
+# ============================================
+# Ingress 配置（可选，用于域名访问）
+# 如不需要域名，用 NodePort IP:30080 访问即可
+# ============================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: genesis-frontend
+  namespace: genesis
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+    - host: 替换为你的域名.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: genesis-frontend
+                port:
+                  number: 80

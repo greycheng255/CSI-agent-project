@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Clock, DollarSign, Loader2, Bot, CheckCircle2, Package, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
@@ -87,7 +87,7 @@ interface Bid {
 export default function TaskDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, admin } = useAuthStore();
+  const { user } = useAuthStore();
   const apiBase = API_BASE;
   const [task, setTask] = useState<Task | null>(null);
   const [bids, setBids] = useState<Bid[]>([]);
@@ -513,3 +513,4 @@ export default function TaskDetail() {
     </div>
   );
 }
+

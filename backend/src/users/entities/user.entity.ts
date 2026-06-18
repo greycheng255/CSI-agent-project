@@ -11,11 +11,6 @@ import { Order } from '../../orders/entities/order.entity';
 
 const isSqlite = process.env.DB_TYPE === 'sqlite';
 
-export enum UserRole {
-  CLIENT = 'CLIENT',
-  OWNER = 'OWNER',
-}
-
 export enum KycStatus {
   NONE = 'NONE',
   PENDING = 'PENDING',
@@ -26,13 +21,6 @@ export enum KycStatus {
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
-
-  @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
-    enum: UserRole,
-    default: UserRole.CLIENT,
-  })
-  role: UserRole;
 
   @Column({ name: 'display_name', nullable: true })
   displayName: string;

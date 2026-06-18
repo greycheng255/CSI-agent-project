@@ -4,26 +4,49 @@ import {
   Logger,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Agent, AgentStatus, OpenclawStatus } from './entities/agent.entity';
+import {
+  Agent,
+  AgentApprovalStatus,
+  AgentRuntimeStatus,
+  AgentStatus,
+  AgentType,
+  OpenclawStatus,
+} from './entities/agent.entity';
 import { AgentApiKey } from './entities/agent-api-key.entity';
+import { AgentAuditLog } from './entities/agent-audit-log.entity';
 import { User } from '../users/entities/user.entity';
 import { WebhookDelivery } from '../webhooks/entities/webhook-delivery.entity';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { AgentCardJson, AgentCardService } from './agent-card.service';
+import { AgentsHealthService } from './agents-health.service';
 
 type CreateAgentDto = {
   name: string;
   description?: string;
   webhookUrl?: string;
   skills?: string[];
+  domains?: string[];
+  tags?: string[];
   podName?: string;
   externalId?: string;
   agentMode?: 'kubernetes' | 'external';
+  agentType?: AgentType;
+  cardUrl?: string;
+  cardJson?: AgentCardJson;
+  endpointUrl?: string;
+  healthUrl?: string;
+  authType?: 'bearer' | 'api_key' | 'signature' | 'mtls' | 'none';
+  pricingModel?: string;
+  basePrice?: number;
+  currency?: string;
+  contactEmail?: string;
 };
 
 @Injectable()
@@ -39,7 +62,11 @@ export class AgentsService {
     private usersRepository: Repository<User>,
     @InjectRepository(WebhookDelivery)
     private webhookDeliveriesRepository: Repository<WebhookDelivery>,
+    @InjectRepository(AgentAuditLog)
+    private agentAuditLogsRepository: Repository<AgentAuditLog>,
     private httpService: HttpService,
+    private agentCardService: AgentCardService,
+    private agentsHealthService: AgentsHealthService,
   ) {}
 
   /**
@@ -71,6 +98,21 @@ export class AgentsService {
       webhookUrl: data.webhookUrl,
       owner: owner,
       status: AgentStatus.ONLINE, // 默认上线
+      approvalStatus: AgentApprovalStatus.PENDING_REVIEW,
+      runtimeStatus: AgentRuntimeStatus.ONLINE,
+      agentType:
+        data.agentType ||
+        (data.agentMode === 'external'
+          ? AgentType.SELF_HOSTED
+          : AgentType.PLATFORM_MANAGED),
+      cardUrl: data.cardUrl || null,
+      endpointUrl: data.endpointUrl || data.webhookUrl || null,
+      healthUrl: data.healthUrl || null,
+      authType: data.authType || 'bearer',
+      pricingModel: data.pricingModel || 'quote',
+      basePrice: data.basePrice ?? null,
+      currency: data.currency || 'CNY',
+      contactEmail: data.contactEmail || null,
       podName: data.podName,
       externalId: data.externalId,
       agentMode: data.agentMode || 'kubernetes',
@@ -88,7 +130,87 @@ export class AgentsService {
           : undefined,
     });
 
-    return this.agentsRepository.save(agent);
+    const saved = await this.agentsRepository.save(agent);
+    const card =
+      data.cardJson ||
+      this.agentCardService.buildPlatformCard({
+        name: data.name,
+        description: data.description,
+        agentType: saved.agentType,
+        endpointUrl: saved.endpointUrl || undefined,
+        webhookUrl: saved.webhookUrl || undefined,
+        healthUrl: saved.healthUrl || undefined,
+        authType: saved.authType,
+        domains: data.domains,
+        skills: data.skills,
+        pricingModel: saved.pricingModel,
+        currency: saved.currency,
+        minimumPrice: saved.basePrice || undefined,
+        tags: data.tags,
+      });
+
+    await this.agentCardService.saveActiveCard({
+      agent: saved,
+      card,
+      source: data.cardJson ? 'manual' : 'platform',
+    });
+    await this.agentCardService.replaceExtractedMetadata(saved, card);
+    await this.writeAudit(saved, owner, 'register', null, {
+      approvalStatus: saved.approvalStatus,
+      runtimeStatus: saved.runtimeStatus,
+    });
+
+    return this.findOneWithDetails(saved.id);
+  }
+
+  async registerExternal(data: CreateAgentDto, ownerId: string) {
+    const owner = await this.usersRepository.findOne({ where: { id: ownerId } });
+    if (!owner) throw new NotFoundException('Owner not found');
+
+    const card = data.cardJson || (data.cardUrl ? await this.agentCardService.fetchCard(data.cardUrl) : null);
+    if (!card) {
+      throw new BadRequestException('cardUrl or cardJson is required');
+    }
+    this.agentCardService.validate(card);
+
+    const agent = this.agentsRepository.create({
+      name: card.name || data.name,
+      description: card.description || data.description,
+      webhookUrl: card.endpoints?.webhook || card.endpoints?.callback || data.webhookUrl,
+      owner,
+      skills: this.extractSkillNames(card),
+      status: AgentStatus.OFFLINE,
+      approvalStatus: AgentApprovalStatus.PENDING_REVIEW,
+      runtimeStatus: AgentRuntimeStatus.UNKNOWN,
+      agentType: AgentType.SELF_HOSTED,
+      agentMode: 'external',
+      externalId: card.agent_id || data.externalId,
+      cardUrl: data.cardUrl || null,
+      endpointUrl: card.endpoints?.task || data.endpointUrl || null,
+      healthUrl: card.endpoints?.health || data.healthUrl || null,
+      authType: (card.auth?.type as Agent['authType']) || data.authType || 'bearer',
+      pricingModel: card.pricing?.model || data.pricingModel || 'quote',
+      basePrice: card.pricing?.minimum_price ?? data.basePrice ?? null,
+      currency: card.pricing?.currency || data.currency || 'CNY',
+      contactEmail: card.provider?.contact_email || data.contactEmail || null,
+      version: card.version || '1.0.0',
+      metadata: card.metadata || null,
+    });
+
+    const saved = await this.agentsRepository.save(agent);
+    await this.agentCardService.saveActiveCard({
+      agent: saved,
+      card,
+      source: data.cardUrl ? 'remote_fetch' : 'manual',
+      fetchedAt: data.cardUrl ? new Date() : null,
+    });
+    await this.agentCardService.replaceExtractedMetadata(saved, card);
+    await this.writeAudit(saved, owner, 'register_external', null, {
+      approvalStatus: saved.approvalStatus,
+      cardUrl: saved.cardUrl,
+    });
+
+    return this.findOneWithDetails(saved.id);
   }
 
   /**
@@ -210,6 +332,13 @@ export class AgentsService {
     return this.agentsRepository.findOne({ where: { id } });
   }
 
+  async findOneWithDetails(id: string) {
+    return this.agentsRepository.findOne({
+      where: { id },
+      relations: ['owner', 'cards', 'capabilities', 'tags'],
+    });
+  }
+
   async findOneWithOwner(id: string) {
     return this.agentsRepository.findOne({
       where: { id },
@@ -268,6 +397,9 @@ export class AgentsService {
             ? params.name.trim()
             : null,
         keyHash,
+        keyId: `ak_${randomBytes(8).toString('hex')}`,
+        scopes: ['*'],
+        status: 'active',
         revokedAt: null,
         lastUsedAt: null,
       }),
@@ -275,6 +407,7 @@ export class AgentsService {
 
     return {
       id: row.id,
+      keyId: row.keyId,
       name: row.name,
       apiKey: plain,
       createdAt: row.createdAt,
@@ -289,6 +422,7 @@ export class AgentsService {
     if (!row) throw new NotFoundException('API key not found');
     if (!row.revokedAt) {
       row.revokedAt = new Date();
+      row.status = 'revoked';
       await this.agentApiKeysRepository.save(row);
     }
     return { id: row.id, revokedAt: row.revokedAt };
@@ -302,6 +436,8 @@ export class AgentsService {
     });
     if (!row) return null;
     if (row.revokedAt) return null;
+    if (row.status !== 'active') return null;
+    if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return null;
     row.lastUsedAt = new Date();
     await this.agentApiKeysRepository.save(row);
     return row.agent || null;
@@ -312,21 +448,19 @@ export class AgentsService {
    * 成功时重置连续失败计数，保持 ONLINE
    */
   async heartbeat(agentId: string) {
-    const agent = await this.findOne(agentId);
-    if (!agent) throw new NotFoundException('Agent not found');
+    return this.agentsHealthService.recordHeartbeat(agentId);
+  }
 
-    agent.status = AgentStatus.ONLINE;
-    agent.lastHeartbeatAt = new Date();
-    agent.consecutiveFailures = 0; // 重置失败计数
-
-    await this.agentsRepository.save(agent);
-
-    return {
-      success: true,
-      agentId: agent.id,
-      status: agent.status,
-      timestamp: agent.lastHeartbeatAt,
-    };
+  async heartbeatWithPayload(
+    agentId: string,
+    body?: {
+      status?: string;
+      latencyMs?: number;
+      load?: number;
+      metadata?: Record<string, unknown>;
+    },
+  ) {
+    return this.agentsHealthService.recordHeartbeat(agentId, body);
   }
 
   /**
@@ -342,6 +476,7 @@ export class AgentsService {
     // 连续 2 次失败则标记为 OFFLINE
     if (agent.consecutiveFailures >= 2) {
       agent.status = AgentStatus.OFFLINE;
+      agent.runtimeStatus = AgentRuntimeStatus.OFFLINE;
     }
 
     await this.agentsRepository.save(agent);
@@ -372,6 +507,7 @@ export class AgentsService {
       agentId: agent.id,
       name: agent.name,
       status: isOnline ? AgentStatus.ONLINE : AgentStatus.OFFLINE,
+      runtimeStatus: agent.runtimeStatus,
       lastHeartbeatAt: agent.lastHeartbeatAt,
       heartbeatIntervalMs: agent.heartbeatIntervalMs,
     };
@@ -394,6 +530,7 @@ export class AgentsService {
     // 更新超时的 Agent
     for (const agent of offlineAgents) {
       agent.status = AgentStatus.OFFLINE;
+      agent.runtimeStatus = AgentRuntimeStatus.OFFLINE;
       await this.agentsRepository.save(agent);
     }
 
@@ -408,10 +545,96 @@ export class AgentsService {
 
     for (const agent of neverHeartbeatAgents) {
       agent.status = AgentStatus.OFFLINE;
+      agent.runtimeStatus = AgentRuntimeStatus.OFFLINE;
       await this.agentsRepository.save(agent);
     }
 
-    return offlineAgents.length + neverHeartbeatAgents.length;
+    const newStatusChanges = await this.agentsHealthService.refreshTimeoutStatuses();
+
+    return offlineAgents.length + neverHeartbeatAgents.length + newStatusChanges;
+  }
+
+  async approve(agentId: string, reviewerId?: string, comment?: string) {
+    const agent = await this.findOne(agentId);
+    if (!agent) throw new NotFoundException('Agent not found');
+    const before = {
+      approvalStatus: agent.approvalStatus,
+      runtimeStatus: agent.runtimeStatus,
+    };
+    agent.approvalStatus = AgentApprovalStatus.APPROVED;
+    agent.approvedAt = new Date();
+    if (agent.lastHeartbeatAt) {
+      agent.runtimeStatus = AgentRuntimeStatus.ONLINE;
+      agent.status = AgentStatus.ONLINE;
+    }
+    const saved = await this.agentsRepository.save(agent);
+    await this.writeAudit(saved, null, 'approve', before, {
+      approvalStatus: saved.approvalStatus,
+      reviewerId,
+      comment,
+    });
+    return saved;
+  }
+
+  async reject(agentId: string, reviewerId?: string, comment?: string) {
+    const agent = await this.findOne(agentId);
+    if (!agent) throw new NotFoundException('Agent not found');
+    const before = { approvalStatus: agent.approvalStatus };
+    agent.approvalStatus = AgentApprovalStatus.REJECTED;
+    agent.runtimeStatus = AgentRuntimeStatus.UNKNOWN;
+    agent.status = AgentStatus.OFFLINE;
+    const saved = await this.agentsRepository.save(agent);
+    await this.writeAudit(saved, null, 'reject', before, {
+      approvalStatus: saved.approvalStatus,
+      reviewerId,
+      comment,
+    });
+    return saved;
+  }
+
+  async enable(agentId: string, actorId?: string) {
+    const agent = await this.findOne(agentId);
+    if (!agent) throw new NotFoundException('Agent not found');
+    const before = { approvalStatus: agent.approvalStatus, isActive: agent.isActive };
+    agent.isActive = true;
+    if (agent.approvalStatus === AgentApprovalStatus.DISABLED) {
+      agent.approvalStatus = AgentApprovalStatus.APPROVED;
+    }
+    const saved = await this.agentsRepository.save(agent);
+    await this.writeAudit(saved, null, 'enable', before, { actorId });
+    return saved;
+  }
+
+  async disable(agentId: string, actorId?: string) {
+    const agent = await this.findOne(agentId);
+    if (!agent) throw new NotFoundException('Agent not found');
+    const before = {
+      approvalStatus: agent.approvalStatus,
+      runtimeStatus: agent.runtimeStatus,
+      isActive: agent.isActive,
+    };
+    agent.isActive = false;
+    agent.approvalStatus = AgentApprovalStatus.DISABLED;
+    agent.runtimeStatus = AgentRuntimeStatus.OFFLINE;
+    agent.status = AgentStatus.OFFLINE;
+    const saved = await this.agentsRepository.save(agent);
+    await this.writeAudit(saved, null, 'disable', before, { actorId });
+    return saved;
+  }
+
+  async listPendingReview() {
+    return this.agentsRepository.find({
+      where: { approvalStatus: AgentApprovalStatus.PENDING_REVIEW },
+      relations: ['owner', 'cards', 'capabilities', 'tags'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async listAllForAdmin() {
+    return this.agentsRepository.find({
+      relations: ['owner', 'cards', 'capabilities', 'tags'],
+      order: { createdAt: 'DESC' },
+    });
   }
 
   /**
@@ -601,5 +824,29 @@ export class AgentsService {
       newId,
       message: 'Agent ID updated successfully',
     };
+  }
+
+  private extractSkillNames(card: AgentCardJson) {
+    return (card.capabilities?.skills || [])
+      .map((skill) => (typeof skill === 'string' ? skill : skill.name || ''))
+      .filter(Boolean);
+  }
+
+  private async writeAudit(
+    agent: Agent | null,
+    actor: User | null,
+    action: string,
+    beforeValue: Record<string, unknown> | null,
+    afterValue: Record<string, unknown> | null,
+  ) {
+    await this.agentAuditLogsRepository.save(
+      this.agentAuditLogsRepository.create({
+        agent,
+        actor,
+        action,
+        beforeValue,
+        afterValue,
+      }),
+    );
   }
 }

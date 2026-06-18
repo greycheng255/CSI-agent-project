@@ -1,5 +1,5 @@
 import { Outlet, Link, NavLink, useNavigate } from 'react-router-dom';
-import { Terminal, UserCircle, LogOut, FileText, Gavel, QrCode, DollarSign, CreditCard, TrendingUp, Shield, BarChart3, Users, Bot, Package, ClipboardList } from 'lucide-react';
+import { Terminal, UserCircle, LogOut, FileText, Gavel, QrCode, DollarSign, TrendingUp, Shield, BarChart3, Users, Bot, Package, ClipboardList } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 export default function MainLayout() {
@@ -28,6 +28,7 @@ export default function MainLayout() {
           </Link>
           
           <nav className="flex items-center space-x-4 text-sm whitespace-nowrap">
+            <NavLink to="/agents" className={({ isActive }) => `transition-colors flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'hover:text-green-400'}`}>智能体广场</NavLink>
             <NavLink to="/market" className={({ isActive }) => `transition-colors flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'hover:text-green-400'}`}>任务大厅</NavLink>
             <NavLink to="/tasks/new" className={({ isActive }) => `transition-colors flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'hover:text-green-400'}`}>发布任务</NavLink>
             <NavLink to="/dashboard" className={({ isActive }) => `flex items-center gap-1 transition-colors flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-400 hover:text-green-400'}`}>
@@ -43,6 +44,13 @@ export default function MainLayout() {
             {/* 管理员登录状态 - 只显示管理员菜单 */}
             {admin && !user ? (
               <div className="flex items-center gap-3">
+                <NavLink
+                  to="/admin/agents"
+                  className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-yellow-400 hover:text-green-400'}`}
+                >
+                  <Bot className="w-4 h-4" />
+                  Agent审核
+                </NavLink>
                 <NavLink
                   to="/admin/arbitrations"
                   className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-yellow-400 hover:text-green-400'}`}
@@ -91,22 +99,18 @@ export default function MainLayout() {
             ) : user ? (
               /* 普通用户登录状态 */
               <div className="flex items-center gap-3">
-                {user.role === 'OWNER' && (
-                  <>
-                    <NavLink to="/owner/agents" className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-gray-400 hover:text-green-400'}`}>
-                      <Bot className="w-4 h-4" />
-                      我的Agent
-                    </NavLink>
-                    <NavLink to="/owner/bids" className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-gray-400 hover:text-green-400'}`}>
-                      <TrendingUp className="w-4 h-4" />
-                      我的报价
-                    </NavLink>
-                    <NavLink to="/orders/claimed" className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-gray-400 hover:text-green-400'}`}>
-                      <Package className="w-4 h-4" />
-                      我的接单
-                    </NavLink>
-                  </>
-                )}
+                <NavLink to="/owner/agents" className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-gray-400 hover:text-green-400'}`}>
+                  <Bot className="w-4 h-4" />
+                  我的Agent
+                </NavLink>
+                <NavLink to="/owner/bids" className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-gray-400 hover:text-green-400'}`}>
+                  <TrendingUp className="w-4 h-4" />
+                  我的报价
+                </NavLink>
+                <NavLink to="/orders/claimed" className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-gray-400 hover:text-green-400'}`}>
+                  <Package className="w-4 h-4" />
+                  我的接单
+                </NavLink>
                 <NavLink to="/orders/mine" className={({ isActive }) => `text-sm transition-colors flex items-center gap-1 flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-gray-400 hover:text-green-400'}`}>
                   <ClipboardList className="w-4 h-4" />
                   我的任务

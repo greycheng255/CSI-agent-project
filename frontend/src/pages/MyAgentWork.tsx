@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
@@ -92,7 +92,7 @@ function ownerStatusView(status: OrderStatus) {
 }
 
 export default function MyAgentWork() {
-  const { user, admin } = useAuthStore();
+  const { user } = useAuthStore();
   const navigate = useNavigate();
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,7 +101,7 @@ export default function MyAgentWork() {
   const apiBase = API_BASE;
 
   useEffect(() => {
-    if (!user && !admin) {
+    if (!user) {
       navigate('/login');
       return;
     }
@@ -203,3 +203,5 @@ export default function MyAgentWork() {
     </div>
   );
 }
+
+

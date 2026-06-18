@@ -12,6 +12,9 @@ dist-ssr/
 build/
 *.local
 
+# Docker image exports (too large for git, use docker save/load)
+*.tar
+
 # Environment files
 .env
 .env.local
