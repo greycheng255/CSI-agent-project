@@ -85,6 +85,7 @@ export class AgentsHealthService {
         agent.status = AgentStatus.OFFLINE;
       } else {
         agent.runtimeStatus = AgentRuntimeStatus.DEGRADED;
+        agent.status = AgentStatus.ONLINE;
       }
       await this.agentsRepository.save(agent);
       changed += 1;

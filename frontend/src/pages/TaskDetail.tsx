@@ -1,9 +1,10 @@
 ﻿import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Clock, DollarSign, Loader2, Bot, CheckCircle2, Package, ExternalLink, CheckCircle, XCircle } from 'lucide-react';
+import { Clock, DollarSign, Loader2, Bot, CheckCircle2, Package, ExternalLink, CheckCircle, XCircle, Gauge, Hourglass } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
 import { BidDetailPanel } from '../components/BidDetailPanel';
+import { formatShanghaiDateTime } from '../utils/date';
 
 interface Task {
   id: string;
@@ -15,6 +16,9 @@ interface Task {
   status: string;
   createdAt?: string;
   client?: { id: string; phone?: string };
+  tags?: string[] | null;
+  skillsRequired?: string[] | null;
+  attachmentUrls?: string[] | null;
 }
 
 interface Order {
@@ -47,6 +51,11 @@ interface Bid {
   agent?: Agent;
   pricingModel?: string | null;
   createdAt?: string;
+  status?: 'submitted' | 'accepted' | 'rejected' | 'expired' | 'withdrawn';
+  confidenceScore?: number;
+  estimatedHours?: number | null;
+  riskNotes?: string | null;
+  rankScore?: number;
   pricingMeta?: {
     scores?: {
       relevance?: number;
@@ -97,6 +106,29 @@ export default function TaskDetail() {
   const [expandedBidId, setExpandedBidId] = useState<string | null>(null);
   const canSelectBid = !!user && !!task?.client?.id && user.id === task.client.id && task.status === 'OPEN' && !order;
 
+  const bidStatusView = (status?: Bid['status']) => {
+    switch (status) {
+      case 'accepted':
+        return { label: '已中标', cls: 'bg-green-500/10 text-green-400 border-green-500/20' };
+      case 'rejected':
+        return { label: '未中标', cls: 'bg-gray-800 text-gray-400 border-gray-700' };
+      case 'expired':
+        return { label: '已过期', cls: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' };
+      case 'withdrawn':
+        return { label: '已撤回', cls: 'bg-red-500/10 text-red-400 border-red-500/20' };
+      case 'submitted':
+      default:
+        return { label: '待选择', cls: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
+    }
+  };
+
+  const fetchBids = async (taskId: string) => {
+    const res = await fetch(`${apiBase}/api/v1/tasks/${taskId}/bids`);
+    if (!res.ok) throw new Error('获取报价失败');
+    const data = await res.json();
+    setBids(Array.isArray(data) ? data : []);
+  };
+
   // 获取任务订单
   const fetchTaskOrder = async (taskId: string) => {
     try {
@@ -119,27 +151,11 @@ export default function TaskDetail() {
     if (!id) return;
     Promise.all([
       fetch(`${apiBase}/api/v1/tasks/${id}`).then(r => r.json()),
-      fetch(`${apiBase}/api/v1/agent/bids/task/${id}`).then(r => r.json()),
+      fetch(`${apiBase}/api/v1/tasks/${id}/bids`).then(r => r.json()),
     ])
     .then(([taskData, bidsData]: [Task, Bid[]]) => {
       setTask(taskData || null);
-      // 按 Agent ID 去重，只保留每个 Agent 的最新报价
-      const uniqueBids = Array.isArray(bidsData)
-        ? Object.values(
-            bidsData.reduce((acc, bid) => {
-              const agentId = bid.agent?.id;
-              if (!agentId) return acc;
-              // 如果该 Agent 已有报价，保留创建时间更新的
-              const currentCreatedAt = bid.createdAt || new Date(0).toISOString();
-              const existingCreatedAt = acc[agentId]?.createdAt || new Date(0).toISOString();
-              if (!acc[agentId] || new Date(currentCreatedAt) > new Date(existingCreatedAt)) {
-                acc[agentId] = bid;
-              }
-              return acc;
-            }, {} as Record<string, Bid>)
-          )
-        : [];
-      setBids(uniqueBids as Bid[]);
+      setBids(Array.isArray(bidsData) ? bidsData : []);
       // 获取任务订单
       fetchTaskOrder(id);
       setLoading(false);
@@ -156,27 +172,7 @@ export default function TaskDetail() {
     const status = task?.status;
     if (status !== 'OPEN') return;
     const timer = setInterval(() => {
-      fetch(`${apiBase}/api/v1/agent/bids/task/${id}`)
-        .then((r) => r.json())
-        .then((data: Bid[]) => {
-          // 按 Agent ID 去重，只保留每个 Agent 的最新报价
-          const uniqueBids = Array.isArray(data)
-            ? Object.values(
-                data.reduce((acc, bid) => {
-                  const agentId = bid.agent?.id;
-                  if (!agentId) return acc;
-                  const currentCreatedAt = bid.createdAt || new Date(0).toISOString();
-                  const existingCreatedAt = acc[agentId]?.createdAt || new Date(0).toISOString();
-                  if (!acc[agentId] || new Date(currentCreatedAt) > new Date(existingCreatedAt)) {
-                    acc[agentId] = bid;
-                  }
-                  return acc;
-                }, {} as Record<string, Bid>)
-              )
-            : [];
-          setBids(uniqueBids as Bid[]);
-          })
-          .catch(() => {});
+      fetchBids(id).catch(() => {});
     }, 3000);
     return () => clearInterval(timer);
   }, [apiBase, id, task?.status]);
@@ -279,7 +275,7 @@ export default function TaskDetail() {
                 </span>
                 {order.acceptedAt && (
                   <span className="text-gray-400">
-                    完成时间：<span className="text-gray-300">{new Date(order.acceptedAt).toLocaleString()}</span>
+                    完成时间：<span className="text-gray-300">{formatShanghaiDateTime(order.acceptedAt)}</span>
                   </span>
                 )}
               </div>
@@ -298,6 +294,43 @@ export default function TaskDetail() {
             <h3 className="text-sm font-bold text-gray-400 mb-2 border-b border-gray-800 pb-2">详细描述</h3>
             <p className="text-gray-300 font-mono text-sm whitespace-pre-wrap">{task.description}</p>
           </div>
+          {((task.tags && task.tags.length > 0) || (task.skillsRequired && task.skillsRequired.length > 0)) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {task.tags && task.tags.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-bold text-gray-400 mb-2 border-b border-gray-800 pb-2">任务标签</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {task.tags.map((tag) => (
+                      <span key={tag} className="px-2 py-1 bg-gray-800/70 rounded text-xs text-gray-300">{tag}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {task.skillsRequired && task.skillsRequired.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-bold text-gray-400 mb-2 border-b border-gray-800 pb-2">所需能力</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {task.skillsRequired.map((skill) => (
+                      <span key={skill} className="px-2 py-1 bg-green-500/10 text-green-400 rounded text-xs">{skill}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {task.attachmentUrls && task.attachmentUrls.length > 0 && (
+            <div>
+              <h3 className="text-sm font-bold text-gray-400 mb-2 border-b border-gray-800 pb-2">附件</h3>
+              <div className="space-y-2">
+                {task.attachmentUrls.map((url) => (
+                  <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-green-400 hover:text-green-300 flex items-center gap-2">
+                    <ExternalLink className="w-4 h-4" />
+                    {url}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
           <div>
             <h3 className="text-sm font-bold text-gray-400 mb-2 border-b border-gray-800 pb-2 flex items-center">
               <CheckCircle2 className="w-4 h-4 mr-2" /> 验收标准
@@ -313,22 +346,22 @@ export default function TaskDetail() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
               <div>
                 <span className="text-gray-500 block mb-1">发布时间</span>
-                <span className="text-gray-300">{new Date(task.createdAt || Date.now()).toLocaleString()}</span>
+                <span className="text-gray-300">{formatShanghaiDateTime(task.createdAt)}</span>
               </div>
               <div>
                 <span className="text-gray-500 block mb-1">期望交付</span>
-                <span className="text-gray-300">{task.expectedDeliveryAt ? new Date(task.expectedDeliveryAt).toLocaleString() : '未指定'}</span>
+                <span className="text-gray-300">{formatShanghaiDateTime(task.expectedDeliveryAt)}</span>
               </div>
               {order?.deliveredAt && (
                 <div>
                   <span className="text-gray-500 block mb-1">实际交付</span>
-                  <span className="text-green-400">{new Date(order.deliveredAt).toLocaleString()}</span>
+                  <span className="text-green-400">{formatShanghaiDateTime(order.deliveredAt)}</span>
                 </div>
               )}
               {order?.acceptedAt && (
                 <div>
                   <span className="text-gray-500 block mb-1">验收通过</span>
-                  <span className="text-green-400">{new Date(order.acceptedAt).toLocaleString()}</span>
+                  <span className="text-green-400">{formatShanghaiDateTime(order.acceptedAt)}</span>
                 </div>
               )}
             </div>
@@ -371,18 +404,18 @@ export default function TaskDetail() {
               </div>
               <div>
                 <span className="text-gray-500">创建时间：</span>
-                <span className="text-gray-300">{new Date(order.createdAt).toLocaleString()}</span>
+                <span className="text-gray-300">{formatShanghaiDateTime(order.createdAt)}</span>
               </div>
               {order.deliveredAt && (
                 <div>
                   <span className="text-gray-500">交付时间：</span>
-                  <span className="text-gray-300">{new Date(order.deliveredAt).toLocaleString()}</span>
+                  <span className="text-gray-300">{formatShanghaiDateTime(order.deliveredAt)}</span>
                 </div>
               )}
               {order.acceptedAt && (
                 <div>
                   <span className="text-gray-500">验收时间：</span>
-                  <span className="text-gray-300">{new Date(order.acceptedAt).toLocaleString()}</span>
+                  <span className="text-gray-300">{formatShanghaiDateTime(order.acceptedAt)}</span>
                 </div>
               )}
             </div>
@@ -461,6 +494,10 @@ export default function TaskDetail() {
         ) : (
           <div className="space-y-4">
             {bids.map((bid) => (
+              (() => {
+                const statusView = bidStatusView(bid.status);
+                const canSelectThisBid = canSelectBid && (bid.status || 'submitted') === 'submitted';
+                return (
               <div
                 key={bid.id}
                 className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 hover:border-green-500/30 transition-colors"
@@ -472,10 +509,29 @@ export default function TaskDetail() {
                       {bid.agent?.name || 'Unknown Agent'}
                     </span>
                     <span className="text-xs text-gray-500 font-mono">ID: {bid.agent?.id ? bid.agent.id.slice(0, 8) : '--------'}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded border ${statusView.cls}`}>{statusView.label}</span>
+                    {bid.rankScore !== undefined && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                        排名分 {Math.round(bid.rankScore)}
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm text-gray-400 font-mono bg-black p-3 rounded border border-gray-800 mt-2">
                     {bid.planSummary}
                   </p>
+                  <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-400">
+                    <span className="flex items-center gap-1">
+                      <Gauge className="w-3.5 h-3.5" />
+                      置信度 {Math.round((bid.confidenceScore ?? 0.5) * 100)}%
+                    </span>
+                    {bid.estimatedHours !== null && bid.estimatedHours !== undefined && (
+                      <span className="flex items-center gap-1">
+                        <Hourglass className="w-3.5 h-3.5" />
+                        预估 {bid.estimatedHours} 小时
+                      </span>
+                    )}
+                    {bid.riskNotes && <span className="text-yellow-400">风险: {bid.riskNotes}</span>}
+                  </div>
                   <div className="mt-3">
                     <button
                       type="button"
@@ -497,14 +553,16 @@ export default function TaskDetail() {
                   {canSelectBid && (
                     <button
                       onClick={() => handleSelectBid(bid.id)}
-                      disabled={selectingBidId === bid.id}
+                      disabled={selectingBidId === bid.id || !canSelectThisBid}
                       className="w-full px-4 py-2 bg-green-500 text-black font-bold rounded hover:bg-green-400 transition-colors disabled:opacity-50 flex justify-center items-center"
                     >
-                      {selectingBidId === bid.id ? <Loader2 className="w-4 h-4 animate-spin" /> : '选择该报价'}
+                      {selectingBidId === bid.id ? <Loader2 className="w-4 h-4 animate-spin" /> : canSelectThisBid ? '选择该报价' : '不可选择'}
                     </button>
                   )}
                 </div>
               </div>
+                );
+              })()
             ))}
           </div>
         )}

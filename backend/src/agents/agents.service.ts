@@ -7,7 +7,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan } from 'typeorm';
+import { Repository } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import {
@@ -18,7 +18,7 @@ import {
   AgentType,
   OpenclawStatus,
 } from './entities/agent.entity';
-import { AgentApiKey } from './entities/agent-api-key.entity';
+import { AgentCredential } from './entities/agent-credential.entity';
 import { AgentAuditLog } from './entities/agent-audit-log.entity';
 import { User } from '../users/entities/user.entity';
 import { WebhookDelivery } from '../webhooks/entities/webhook-delivery.entity';
@@ -56,8 +56,8 @@ export class AgentsService {
   constructor(
     @InjectRepository(Agent)
     private agentsRepository: Repository<Agent>,
-    @InjectRepository(AgentApiKey)
-    private agentApiKeysRepository: Repository<AgentApiKey>,
+    @InjectRepository(AgentCredential)
+    private agentCredentialsRepository: Repository<AgentCredential>,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     @InjectRepository(WebhookDelivery)
@@ -369,7 +369,7 @@ export class AgentsService {
   }
 
   async listApiKeys(agentId: string) {
-    return this.agentApiKeysRepository.find({
+    return this.agentCredentialsRepository.find({
       where: { agent: { id: agentId } },
       order: { createdAt: 'DESC' },
       take: 50,
@@ -388,15 +388,15 @@ export class AgentsService {
     if (!agent) throw new NotFoundException('Agent not found');
 
     const plain = randomBytes(32).toString('base64url');
-    const keyHash = this.hashKey(plain);
-    const row = await this.agentApiKeysRepository.save(
-      this.agentApiKeysRepository.create({
+    const secretHash = this.hashKey(plain);
+    const row = await this.agentCredentialsRepository.save(
+      this.agentCredentialsRepository.create({
         agent,
         name:
           typeof params.name === 'string' && params.name.trim().length > 0
             ? params.name.trim()
             : null,
-        keyHash,
+        secretHash,
         keyId: `ak_${randomBytes(8).toString('hex')}`,
         scopes: ['*'],
         status: 'active',
@@ -415,7 +415,7 @@ export class AgentsService {
   }
 
   async revokeApiKey(params: { agentId: string; keyId: string }) {
-    const row = await this.agentApiKeysRepository.findOne({
+    const row = await this.agentCredentialsRepository.findOne({
       where: { id: params.keyId, agent: { id: params.agentId } },
       relations: ['agent'],
     });
@@ -423,15 +423,15 @@ export class AgentsService {
     if (!row.revokedAt) {
       row.revokedAt = new Date();
       row.status = 'revoked';
-      await this.agentApiKeysRepository.save(row);
+      await this.agentCredentialsRepository.save(row);
     }
     return { id: row.id, revokedAt: row.revokedAt };
   }
 
   async validateAgentApiKey(plain: string) {
-    const keyHash = this.hashKey(plain);
-    const row = await this.agentApiKeysRepository.findOne({
-      where: { keyHash },
+    const secretHash = this.hashKey(plain);
+    const row = await this.agentCredentialsRepository.findOne({
+      where: { secretHash },
       relations: ['agent'],
     });
     if (!row) return null;
@@ -439,7 +439,7 @@ export class AgentsService {
     if (row.status !== 'active') return null;
     if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return null;
     row.lastUsedAt = new Date();
-    await this.agentApiKeysRepository.save(row);
+    await this.agentCredentialsRepository.save(row);
     return row.agent || null;
   }
 
@@ -517,41 +517,7 @@ export class AgentsService {
    * 批量检查并更新超时 Agent 状态
    */
   async checkOfflineAgents(): Promise<number> {
-    const timeoutThreshold = new Date(Date.now() - 60000); // 60 秒超时
-
-    // 查找状态为 ONLINE 但心跳超时的 Agent
-    const offlineAgents = await this.agentsRepository.find({
-      where: {
-        status: AgentStatus.ONLINE,
-        lastHeartbeatAt: LessThan(timeoutThreshold),
-      },
-    });
-
-    // 更新超时的 Agent
-    for (const agent of offlineAgents) {
-      agent.status = AgentStatus.OFFLINE;
-      agent.runtimeStatus = AgentRuntimeStatus.OFFLINE;
-      await this.agentsRepository.save(agent);
-    }
-
-    // 查找状态为 ONLINE 但从未发送过心跳的 Agent
-    const neverHeartbeatAgents = await this.agentsRepository.find({
-      where: {
-        status: AgentStatus.ONLINE,
-
-        lastHeartbeatAt: null as any,
-      },
-    });
-
-    for (const agent of neverHeartbeatAgents) {
-      agent.status = AgentStatus.OFFLINE;
-      agent.runtimeStatus = AgentRuntimeStatus.OFFLINE;
-      await this.agentsRepository.save(agent);
-    }
-
-    const newStatusChanges = await this.agentsHealthService.refreshTimeoutStatuses();
-
-    return offlineAgents.length + neverHeartbeatAgents.length + newStatusChanges;
+    return this.agentsHealthService.refreshTimeoutStatuses();
   }
 
   async approve(agentId: string, reviewerId?: string, comment?: string) {
@@ -593,8 +559,11 @@ export class AgentsService {
   }
 
   async enable(agentId: string, actorId?: string) {
-    const agent = await this.findOne(agentId);
+    const agent = await this.findOneWithOwner(agentId);
     if (!agent) throw new NotFoundException('Agent not found');
+    if (actorId && agent.owner?.id !== actorId) {
+      throw new ForbiddenException('Only the agent owner can enable it');
+    }
     const before = { approvalStatus: agent.approvalStatus, isActive: agent.isActive };
     agent.isActive = true;
     if (agent.approvalStatus === AgentApprovalStatus.DISABLED) {
@@ -605,9 +574,12 @@ export class AgentsService {
     return saved;
   }
 
-  async disable(agentId: string, actorId?: string) {
-    const agent = await this.findOne(agentId);
+  async disable(agentId: string, actorId?: string, enforceOwner = true) {
+    const agent = await this.findOneWithOwner(agentId);
     if (!agent) throw new NotFoundException('Agent not found');
+    if (enforceOwner && actorId && agent.owner?.id !== actorId) {
+      throw new ForbiddenException('Only the agent owner can disable it');
+    }
     const before = {
       approvalStatus: agent.approvalStatus,
       runtimeStatus: agent.runtimeStatus,

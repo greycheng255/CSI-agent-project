@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Body,
   Param,
   Query,
@@ -16,10 +17,17 @@ type CreateTaskDto = {
   budgetCny: number;
   expectedDeliveryAt?: string;
   clientUserId?: string;
+  tags?: string[];
+  skillsRequired?: string[];
+  attachmentUrls?: string[];
 };
 
 type SelectBidDto = {
   bidId: string;
+  userId: string;
+};
+
+type UpdateTaskDto = Partial<CreateTaskDto> & {
   userId: string;
 };
 
@@ -62,9 +70,36 @@ export class TasksController {
     return this.tasksService.findByClient(clientId);
   }
 
+  @Get('my')
+  findMy(@Query('clientId') clientId: string) {
+    if (!clientId) {
+      throw new BadRequestException('clientId is required');
+    }
+    return this.tasksService.findByClient(clientId);
+  }
+
+  @Put(':id')
+  updateTask(@Param('id') id: string, @Body() body: UpdateTaskDto) {
+    return this.tasksService.updateTask(id, body);
+  }
+
+  @Post(':id/close')
+  closeTask(
+    @Param('id') id: string,
+    @Body() body: { userId?: string },
+    @Query('userId') queryUserId?: string,
+  ) {
+    return this.tasksService.closeTask(id, body.userId || queryUserId || '');
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.tasksService.findOne(id);
+  }
+
+  @Get(':id/bids')
+  findBids(@Param('id') id: string) {
+    return this.tasksService.findBids(id);
   }
 
   @Post(':id/select-bid')

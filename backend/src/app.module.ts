@@ -1,3 +1,21 @@
+import { existsSync, readFileSync } from 'fs';
+import { resolve } from 'path';
+
+const envPath = resolve(process.cwd(), '.env');
+if (existsSync(envPath)) {
+  for (const line of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const separator = trimmed.indexOf('=');
+    if (separator <= 0) continue;
+    const key = trimmed.slice(0, separator).trim();
+    const value = trimmed.slice(separator + 1).trim().replace(/^["']|["']$/g, '');
+    process.env[key] ??= value;
+  }
+}
+
+process.env.TZ ??= process.env.APP_TIME_ZONE || 'Asia/Shanghai';
+
 // 首先设置 DB_TYPE 环境变量，确保实体文件能正确检测数据库类型
 const isSqliteEnv = process.env.DATABASE_PATH || !process.env.DB_HOST;
 if (isSqliteEnv) {
@@ -35,7 +53,7 @@ import { Arbitration } from './arbitrations/entities/arbitration.entity';
 import { AuditLog } from './audit/entities/audit-log.entity';
 import { WebhookDelivery } from './webhooks/entities/webhook-delivery.entity';
 import { AccessToken } from './auth/entities/access-token.entity';
-import { AgentApiKey } from './agents/entities/agent-api-key.entity';
+import { AgentCredential } from './agents/entities/agent-credential.entity';
 import { AgentAuditLog } from './agents/entities/agent-audit-log.entity';
 import { AgentCapability } from './agents/entities/agent-capability.entity';
 import { AgentCard } from './agents/entities/agent-card.entity';
@@ -74,6 +92,9 @@ const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
             username: process.env.DB_USER || 'genesis_user',
             password: process.env.DB_PASSWORD || 'genesis_password',
             database: process.env.DB_NAME || 'genesis_db',
+            extra: {
+              options: `-c timezone=${process.env.APP_TIME_ZONE || 'Asia/Shanghai'}`,
+            },
           }),
       entities: [
         User,
@@ -88,7 +109,7 @@ const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
         AuditLog,
         WebhookDelivery,
         AccessToken,
-        AgentApiKey,
+        AgentCredential,
         AgentAuditLog,
         AgentCapability,
         AgentCard,

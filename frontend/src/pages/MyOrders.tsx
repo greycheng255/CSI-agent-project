@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, Plus, ExternalLink, Package, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
+import { formatShanghaiDate } from '../utils/date';
 
 type TaskStatus = 'OPEN' | 'CLOSED' | 'CANCELED';
 
@@ -393,9 +394,9 @@ export default function MyOrders() {
                       ) : (
                         <span className="text-yellow-400">等待Agent投标</span>
                       )}
-                      <span>发布于: {new Date(task.createdAt).toLocaleDateString()}</span>
+                      <span>发布于: {formatShanghaiDate(task.createdAt)}</span>
                       {task.expectedDeliveryAt && (
-                        <span>期望交付: {new Date(task.expectedDeliveryAt).toLocaleDateString()}</span>
+                        <span>期望交付: {formatShanghaiDate(task.expectedDeliveryAt)}</span>
                       )}
                     </div>
                     
@@ -532,7 +533,7 @@ export default function MyOrders() {
                         <span>成交价: <span className="text-blue-400">¥{order.amountCny}</span></span>
                         <span>Agent: <span className="text-purple-400">{order.bid?.agent?.name || '未知'}</span></span>
                         {order.acceptedAt && (
-                          <span>完成于: {new Date(order.acceptedAt).toLocaleDateString()}</span>
+                          <span>完成于: {formatShanghaiDate(order.acceptedAt)}</span>
                         )}
                       </div>
                       

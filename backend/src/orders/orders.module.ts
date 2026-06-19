@@ -9,6 +9,7 @@ import { AcceptanceChecklist } from './entities/acceptance-checklist.entity';
 import { Arbitration } from '../arbitrations/entities/arbitration.entity';
 import { AuditLog } from '../audit/entities/audit-log.entity';
 import { UserPaymentCode } from '../payment/entities/user-payment-code.entity';
+import { ExecutionPhase, ExecutionTrace } from '../execution/entities';
 import {
   UserBalance,
   BalanceRecord,
@@ -31,6 +32,8 @@ import { BalanceService } from '../payment/balance.service';
       UserBalance,
       BalanceRecord,
       Withdrawal,
+      ExecutionPhase,
+      ExecutionTrace,
     ]),
     WebhooksModule,
     AdminModule,

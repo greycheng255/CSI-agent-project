@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   NotFoundException,
   BadRequestException,
@@ -7,13 +7,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Task, TaskStatus } from './entities/task.entity';
 import { Order, OrderStatus } from '../orders/entities/order.entity';
-import { Bid } from '../bids/entities/bid.entity';
-import { Agent, AgentStatus } from '../agents/entities/agent.entity';
+import { Bid, BidStatus } from '../bids/entities/bid.entity';
+import { Agent } from '../agents/entities/agent.entity';
 import { User } from '../users/entities/user.entity';
 import {
   WebhookDelivery,
   WebhookDeliveryStatus,
 } from '../webhooks/entities/webhook-delivery.entity';
+import { TasksMatchingService } from './tasks-matching.service';
+import { BidsRankingService } from '../bids/bids-ranking.service';
 
 export type TaskSearchFilters = {
   keyword?: string;
@@ -32,10 +34,25 @@ type CreateTaskDto = {
   budgetCny: number;
   expectedDeliveryAt?: string;
   clientUserId?: string;
+  tags?: string[];
+  skillsRequired?: string[];
+  attachmentUrls?: string[];
 };
 
 type SelectBidDto = {
   bidId: string;
+  userId: string;
+};
+
+type UpdateTaskDto = {
+  title?: string;
+  description?: string;
+  acceptanceCriteria?: string;
+  budgetCny?: number;
+  expectedDeliveryAt?: string | null;
+  tags?: string[];
+  skillsRequired?: string[];
+  attachmentUrls?: string[];
   userId: string;
 };
 
@@ -54,7 +71,22 @@ export class TasksService {
     private usersRepository: Repository<User>,
     @InjectRepository(WebhookDelivery)
     private webhookDeliveriesRepository: Repository<WebhookDelivery>,
+    private tasksMatchingService: TasksMatchingService,
+    private bidsRankingService: BidsRankingService,
   ) {}
+
+  private normalizeList(values?: unknown) {
+    if (!Array.isArray(values)) return null;
+    const normalized = Array.from(
+      new Set(
+        values
+          .filter((value): value is string => typeof value === 'string')
+          .map((value) => value.trim())
+          .filter(Boolean),
+      ),
+    );
+    return normalized.length > 0 ? normalized : null;
+  }
 
   private async sendWebhookWithRetry(deliveryId: string) {
     const delivery = await this.webhookDeliveriesRepository.findOne({
@@ -117,11 +149,8 @@ export class TasksService {
   }
 
   private async notifyAgents(task: Task) {
-    const agents = await this.agentsRepository.find({
-      where: { status: AgentStatus.ONLINE },
-    });
-
-    const targetAgents = agents.filter(
+    const matchedAgents = await this.tasksMatchingService.matchTask(task, 10);
+    const targetAgents = matchedAgents.filter(
       (a) => typeof a.webhookUrl === 'string' && a.webhookUrl.length > 0,
     );
 
@@ -136,6 +165,8 @@ export class TasksService {
               event: 'TASK_OPEN',
               taskId: task.id,
               taskDetails: task,
+              matchScore: a.matchScore,
+              matchedReasons: a.matchedReasons,
             },
             status: WebhookDeliveryStatus.PENDING,
             attempts: 0,
@@ -164,6 +195,9 @@ export class TasksService {
       acceptanceCriteria: data.acceptanceCriteria,
       budgetCny: data.budgetCny,
       expectedDeliveryAt: data.expectedDeliveryAt,
+      tags: this.normalizeList(data.tags),
+      skillsRequired: this.normalizeList(data.skillsRequired),
+      attachmentUrls: this.normalizeList(data.attachmentUrls),
       status: TaskStatus.OPEN,
       client: client || undefined,
       clientUserId: data.clientUserId || undefined,
@@ -179,7 +213,6 @@ export class TasksService {
       .leftJoinAndSelect('task.client', 'client')
       .where('task.status = :status', { status: TaskStatus.OPEN });
 
-    // 关键词搜索
     if (filters?.keyword) {
       qb.andWhere(
         '(task.title LIKE :keyword OR task.description LIKE :keyword)',
@@ -187,55 +220,74 @@ export class TasksService {
       );
     }
 
-    // 预算范围筛选
     if (filters?.minBudget !== undefined) {
-      qb.andWhere('task.budgetCny >= :minBudget', {
-        minBudget: filters.minBudget,
-      });
+      qb.andWhere('task.budgetCny >= :minBudget', { minBudget: filters.minBudget });
     }
     if (filters?.maxBudget !== undefined) {
-      qb.andWhere('task.budgetCny <= :maxBudget', {
-        maxBudget: filters.maxBudget,
-      });
+      qb.andWhere('task.budgetCny <= :maxBudget', { maxBudget: filters.maxBudget });
     }
 
-    // 排序
+    // 标签过滤走 SQL（PostgreSQL array overlap）
+    if (filters?.tags && filters.tags.length > 0) {
+      qb.andWhere('task.tags && :tags', { tags: filters.tags });
+    }
+
     switch (filters?.sortBy) {
-      case 'budget_desc':
-        qb.orderBy('task.budgetCny', 'DESC');
-        break;
-      case 'budget_asc':
-        qb.orderBy('task.budgetCny', 'ASC');
-        break;
-      case 'newest':
-      default:
-        qb.orderBy('task.createdAt', 'DESC');
-        break;
+      case 'budget_desc': qb.orderBy('task.budgetCny', 'DESC'); break;
+      case 'budget_asc': qb.orderBy('task.budgetCny', 'ASC'); break;
+      default: qb.orderBy('task.createdAt', 'DESC'); break;
     }
 
-    // 分页
     const page = filters?.page || 1;
     const limit = filters?.limit || 20;
     qb.skip((page - 1) * limit).take(limit);
 
     const [tasks, total] = await qb.getManyAndCount();
+    if (tasks.length === 0) {
+      return { data: [], pagination: { page, limit, total, totalPages: 0 } };
+    }
 
-    // 为了前端展示，补充一些 Mock 数据
-    const tasksWithMeta = tasks.map((task) => ({
-      ...task,
-      bidsCount: Math.floor(Math.random() * 10),
-      latestBid: Math.floor(task.budgetCny * 0.8),
-      tags: ['AI', '开发'], // TODO: 实体增加 tags 字段
-    }));
+    const taskIds = tasks.map((t) => t.id);
+
+    // 批量查询：一次拿所有 task 的报价数和最低报价
+    const bidStats = await this.bidsRepository
+      .createQueryBuilder('bid')
+      .select('bid.task_id', 'taskId')
+      .addSelect('COUNT(bid.id)', 'count')
+      .addSelect('MIN(bid.priceCny)', 'minPrice')
+      .where('bid.task_id IN (:...taskIds)', { taskIds })
+      .andWhere('bid.status = :status', { status: BidStatus.SUBMITTED })
+      .groupBy('bid.task_id')
+      .getRawMany<{ taskId: string; count: string; minPrice: string | null }>();
+
+    const bidMap = new Map<string, { count: number; minPrice: number | null }>();
+    for (const row of bidStats) {
+      bidMap.set(row.taskId, { count: parseInt(row.count, 10), minPrice: row.minPrice ? Number(row.minPrice) : null });
+    }
+
+    // 批量查询：一次拿所有 task 的匹配 Agent 数
+    const agentCount = await this.agentsRepository
+      .createQueryBuilder('agent')
+      .select('COUNT(agent.id)', 'cnt')
+      .where('agent.approvalStatus = :approved', { approved: 'approved' })
+      .andWhere('agent.isActive = :active', { active: true })
+      .andWhere('agent.runtimeStatus IN (:...statuses)', { statuses: ['online', 'degraded'] })
+      .getRawOne<{ cnt: string }>();
+    const totalAgents = parseInt(agentCount?.cnt || '0', 10);
+
+    const tasksWithMeta = tasks.map((task) => {
+      const stats = bidMap.get(task.id);
+      return {
+        ...task,
+        bidsCount: stats?.count ?? 0,
+        latestBid: stats?.minPrice ?? null,
+        matchedAgents: totalAgents,
+      };
+    });
 
     return {
       data: tasksWithMeta,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
 
@@ -254,8 +306,80 @@ export class TasksService {
     });
   }
 
+  private getTaskClientId(task: Task) {
+    return task.client?.id || task.clientUserId;
+  }
+
+  private assertTaskOwner(task: Task, userId: string) {
+    const taskClientId = this.getTaskClientId(task);
+    if (!taskClientId) {
+      throw new BadRequestException('Task has no publisher');
+    }
+    if (userId !== taskClientId) {
+      throw new BadRequestException('Only the task publisher can update this task');
+    }
+  }
+
+  async updateTask(id: string, data: UpdateTaskDto) {
+    if (!data.userId) throw new BadRequestException('userId is required');
+    const task = await this.tasksRepository.findOne({
+      where: { id },
+      relations: ['client'],
+    });
+    if (!task) throw new NotFoundException('Task not found');
+    this.assertTaskOwner(task, data.userId);
+    if (task.status !== TaskStatus.OPEN) {
+      throw new BadRequestException('Only open tasks can be updated');
+    }
+
+    if (data.title !== undefined) task.title = data.title;
+    if (data.description !== undefined) task.description = data.description;
+    if (data.acceptanceCriteria !== undefined) {
+      task.acceptanceCriteria = data.acceptanceCriteria;
+    }
+    if (data.budgetCny !== undefined) task.budgetCny = data.budgetCny;
+    if (data.expectedDeliveryAt !== undefined) {
+      task.expectedDeliveryAt = data.expectedDeliveryAt
+        ? new Date(data.expectedDeliveryAt)
+        : null;
+    }
+    if (data.tags !== undefined) task.tags = this.normalizeList(data.tags);
+    if (data.skillsRequired !== undefined) {
+      task.skillsRequired = this.normalizeList(data.skillsRequired);
+    }
+    if (data.attachmentUrls !== undefined) {
+      task.attachmentUrls = this.normalizeList(data.attachmentUrls);
+    }
+
+    const saved = await this.tasksRepository.save(task);
+    return this.findOne(saved.id);
+  }
+
+  async closeTask(id: string, userId: string) {
+    if (!userId) throw new BadRequestException('userId is required');
+    const task = await this.tasksRepository.findOne({
+      where: { id },
+      relations: ['client'],
+    });
+    if (!task) throw new NotFoundException('Task not found');
+    this.assertTaskOwner(task, userId);
+    if (task.status !== TaskStatus.OPEN) return task;
+
+    task.status = TaskStatus.CLOSED;
+    const saved = await this.tasksRepository.save(task);
+    await this.bidsRepository
+      .createQueryBuilder()
+      .update(Bid)
+      .set({ status: BidStatus.REJECTED })
+      .where('task_id = :taskId', { taskId: task.id })
+      .andWhere('status = :status', { status: BidStatus.SUBMITTED })
+      .execute();
+
+    return saved;
+  }
+
   async selectBid(id: string, data: SelectBidDto) {
-    // 1. 验证 Task
+    // 1. 楠岃瘉 Task
     const task = await this.tasksRepository.findOne({
       where: { id },
       relations: ['client'],
@@ -265,15 +389,21 @@ export class TasksService {
       throw new BadRequestException('Task is not open for bidding');
     }
 
-    // 2. 验证 Bid
+    // 2. 楠岃瘉 Bid
     const bid = await this.bidsRepository.findOne({
       where: { id: data.bidId },
-      relations: ['agent', 'agent.owner'],
+      relations: ['task', 'agent', 'agent.owner'],
     });
     if (!bid) throw new NotFoundException('Bid not found');
+    if (bid.task?.id && bid.task.id !== task.id) {
+      throw new BadRequestException('Bid does not belong to this task');
+    }
+    if (bid.status !== BidStatus.SUBMITTED) {
+      throw new BadRequestException('Bid is not selectable');
+    }
 
-    // 3. 验证 Client (Employer)
-    // 支持 client 关联或 clientUserId 字段
+    // 3. 楠岃瘉 Client (Employer)
+    // 鏀寔 client 鍏宠仈鎴?clientUserId 瀛楁
     const taskClientId = task.client?.id || task.clientUserId;
     if (!taskClientId) {
       throw new BadRequestException('Task has no publisher');
@@ -285,7 +415,7 @@ export class TasksService {
       where: { id: taskClientId },
     });
 
-    // 4. 生成订单 (Order)
+    // 4. 鐢熸垚璁㈠崟 (Order)
     const order = this.ordersRepository.create({
       task: task,
       bid: bid,
@@ -294,20 +424,41 @@ export class TasksService {
       ownerUserId: bid.agent?.owner?.id,
       owner: bid.agent?.owner || undefined,
       amountCny: bid.priceCny,
-      platformFeeRate: 0.05, // 5% 服务费
+      platformFeeRate: 0.05, // 5% 鏈嶅姟璐?
       status: OrderStatus.PENDING_PAYMENT,
     });
     const savedOrder = await this.ordersRepository.save(order);
 
-    // [追踪点] 订单创建
+    // [杩借釜鐐筣 璁㈠崟鍒涘缓
     console.log(
-      `[ORDER-FLOW] 订单创建 | orderId=${savedOrder.id} | taskId=${task.id} | bidId=${bid.id} | amount=${savedOrder.amountCny}`,
+      `[ORDER-FLOW] 璁㈠崟鍒涘缓 | orderId=${savedOrder.id} | taskId=${task.id} | bidId=${bid.id} | amount=${savedOrder.amountCny}`,
     );
 
-    // 5. 更新任务状态
-    task.status = TaskStatus.CLOSED; // 或流转到下一个状态
+    // 5. 鏇存柊浠诲姟鐘舵€?
+    task.status = TaskStatus.CLOSED; // 鎴栨祦杞埌涓嬩竴涓姸鎬?
     await this.tasksRepository.save(task);
 
+    bid.status = BidStatus.ACCEPTED;
+    await this.bidsRepository.save(bid);
+    await this.bidsRepository
+      .createQueryBuilder()
+      .update(Bid)
+      .set({ status: BidStatus.REJECTED })
+      .where('task_id = :taskId', { taskId: task.id })
+      .andWhere('id != :bidId', { bidId: bid.id })
+      .andWhere('status = :status', { status: BidStatus.SUBMITTED })
+      .execute();
+
     return savedOrder;
+  }
+
+  async findBids(id: string) {
+    const task = await this.findOne(id);
+    if (!task) throw new NotFoundException('Task not found');
+    const bids = await this.bidsRepository.find({
+      where: { task: { id } },
+      relations: ['agent', 'agent.owner', 'task'],
+    });
+    return this.bidsRankingService.rank(bids);
   }
 }

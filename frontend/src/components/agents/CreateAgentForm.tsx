@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { CheckCircle2, FileJson, Link2, Loader2, Server } from 'lucide-react';
 import { registerAgent, registerExternalAgent } from '../../api/agentsApi';
 import type { Agent } from '../../types/agent';
+import { AgentCardPreview, validateAgentCardForPreview } from './AgentCardPreview';
 
 type Mode = 'platform' | 'external';
 
@@ -36,6 +37,9 @@ export function CreateAgentForm({
 
   const [cardUrl, setCardUrl] = useState('');
   const [cardJsonText, setCardJsonText] = useState('');
+  const [cardUrlLoading, setCardUrlLoading] = useState(false);
+  const [cardUrlPreview, setCardUrlPreview] = useState<Record<string, unknown> | null>(null);
+  const [cardPreviewError, setCardPreviewError] = useState('');
 
   const parsedCard = useMemo(() => {
     if (!cardJsonText.trim()) return { ok: true, value: undefined as Record<string, unknown> | undefined };
@@ -73,15 +77,19 @@ export function CreateAgentForm({
           contactEmail: contactEmail.trim() || undefined,
         });
       } else {
-        if (!cardUrl.trim() && !parsedCard.value) {
+        const cardJson = parsedCard.value || cardUrlPreview || undefined;
+        if (!cardUrl.trim() && !cardJson) {
           throw new Error('Card URL 和 Card JSON 至少填写一个');
         }
         if (!parsedCard.ok) {
           throw new Error('Card JSON 格式错误，请修正后提交');
         }
+        if (cardJson && validateAgentCardForPreview(cardJson).length > 0) {
+          throw new Error('Agent Card 缺少必填字段，请补齐后提交');
+        }
         agent = await registerExternalAgent({
           cardUrl: cardUrl.trim() || undefined,
-          cardJson: parsedCard.value,
+          cardJson,
           contactEmail: contactEmail.trim() || undefined,
         });
       }
@@ -90,6 +98,26 @@ export function CreateAgentForm({
       setError(err instanceof Error ? err.message : '注册失败');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const fetchCardUrlPreview = async () => {
+    if (!cardUrl.trim()) {
+      setCardPreviewError('请先填写 Card URL');
+      return;
+    }
+    setCardUrlLoading(true);
+    setCardPreviewError('');
+    setCardUrlPreview(null);
+    try {
+      const response = await fetch(cardUrl.trim());
+      if (!response.ok) throw new Error(`Card URL 返回 HTTP ${response.status}`);
+      const data = (await response.json()) as Record<string, unknown>;
+      setCardUrlPreview(data);
+    } catch (err) {
+      setCardPreviewError(err instanceof Error ? err.message : 'Card URL 抓取失败');
+    } finally {
+      setCardUrlLoading(false);
     }
   };
 
@@ -164,7 +192,18 @@ export function CreateAgentForm({
       ) : (
         <div className="space-y-4">
           <Field label="Agent Card URL">
-            <input value={cardUrl} onChange={(e) => setCardUrl(e.target.value)} placeholder="https://example.com/agent-card.json" className="field-input" />
+            <div className="flex gap-2">
+              <input value={cardUrl} onChange={(e) => setCardUrl(e.target.value)} placeholder="https://example.com/agent-card.json" className="field-input" />
+              <button
+                type="button"
+                onClick={fetchCardUrlPreview}
+                disabled={cardUrlLoading}
+                className="inline-flex items-center gap-2 rounded border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:border-gray-500 disabled:opacity-50"
+              >
+                {cardUrlLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                预览
+              </button>
+            </div>
           </Field>
           <Field label="或粘贴 Agent Card JSON">
             <textarea
@@ -183,6 +222,10 @@ export function CreateAgentForm({
               {parsedCard.ok ? `JSON 可解析：${String(parsedCard.value?.name || '未命名 Agent')}` : parsedCard.message}
             </div>
           )}
+          <AgentCardPreview
+            card={(parsedCard.ok && parsedCard.value) || cardUrlPreview}
+            error={!parsedCard.ok ? parsedCard.message : cardPreviewError}
+          />
         </div>
       )}
 

@@ -15,6 +15,9 @@ export interface DeliveryRevision {
   version: number;
   deliveryText: string | null;
   attachmentUrl: string | null;
+  artifactUrls: string[] | null;
+  evidenceBundle: Record<string, unknown> | null;
+  commitHash: string | null;
   comment: string | null;
   createdById: string;
   createdAt: string;
@@ -34,6 +37,9 @@ export interface Delivery {
   status: DeliveryStatus;
   deliveryText: string | null;
   attachmentUrl: string | null;
+  artifactUrls: string[] | null;
+  evidenceBundle: Record<string, unknown> | null;
+  commitHash: string | null;
   previewData: PreviewData | null;
   rejectionReason: string | null;
   rejectedAt: string | null;

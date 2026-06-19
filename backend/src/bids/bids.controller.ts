@@ -22,6 +22,9 @@ type CreateBidBody = {
   pricingModel?: unknown;
   pricingMeta?: unknown;
   expiresAt?: unknown;
+  confidenceScore?: unknown;
+  estimatedHours?: unknown;
+  riskNotes?: unknown;
 };
 
 @Controller('api/v1/agent/bids')
@@ -120,6 +123,30 @@ export class BidsController {
       }
     }
 
+    const confidenceScoreRaw = body.confidenceScore;
+    const confidenceScore =
+      confidenceScoreRaw === undefined || confidenceScoreRaw === null
+        ? undefined
+        : Number(confidenceScoreRaw);
+    if (confidenceScore !== undefined && !Number.isFinite(confidenceScore)) {
+      throw new BadRequestException('confidenceScore must be a number');
+    }
+
+    const estimatedHoursRaw = body.estimatedHours;
+    const estimatedHours =
+      estimatedHoursRaw === undefined || estimatedHoursRaw === null
+        ? undefined
+        : Number(estimatedHoursRaw);
+    if (
+      estimatedHours !== undefined &&
+      (!Number.isFinite(estimatedHours) || !Number.isInteger(estimatedHours))
+    ) {
+      throw new BadRequestException('estimatedHours must be an integer');
+    }
+
+    const riskNotes =
+      typeof body.riskNotes === 'string' ? body.riskNotes : undefined;
+
     return this.bidsService.create({
       taskId,
       agentId,
@@ -129,6 +156,9 @@ export class BidsController {
       pricingModel,
       pricingMeta,
       expiresAt,
+      confidenceScore,
+      estimatedHours,
+      riskNotes,
     });
   }
 
@@ -208,16 +238,66 @@ export class BidsController {
       }
     }
 
+    const confidenceScoreRaw = body.confidenceScore;
+    const confidenceScore =
+      confidenceScoreRaw === undefined || confidenceScoreRaw === null
+        ? undefined
+        : Number(confidenceScoreRaw);
+    if (confidenceScore !== undefined && !Number.isFinite(confidenceScore)) {
+      throw new BadRequestException('confidenceScore must be a number');
+    }
+
+    const estimatedHoursRaw = body.estimatedHours;
+    const estimatedHours =
+      estimatedHoursRaw === undefined || estimatedHoursRaw === null
+        ? undefined
+        : Number(estimatedHoursRaw);
+    if (
+      estimatedHours !== undefined &&
+      (!Number.isFinite(estimatedHours) || !Number.isInteger(estimatedHours))
+    ) {
+      throw new BadRequestException('estimatedHours must be an integer');
+    }
+
+    const riskNotes =
+      typeof body.riskNotes === 'string' ? body.riskNotes : undefined;
+
     return this.bidsService.update(bidId, agentIdFromKey, {
       priceCny,
       planSummary,
       pricingModel,
       pricingMeta,
       expiresAt,
+      confidenceScore,
+      estimatedHours,
+      riskNotes,
     });
   }
 
   // 根据 taskId 和 agentId 更新报价（用于 Agent 重新报价）
+  @Post(':bidId/withdraw')
+  async withdraw(
+    @Param('bidId', new ParseUUIDPipe({ version: '4' })) bidId: string,
+    @Headers('authorization') authorization?: string,
+  ) {
+    let agentIdFromKey: string | undefined;
+    if (
+      typeof authorization === 'string' &&
+      authorization.startsWith('Bearer ')
+    ) {
+      const token = authorization.slice('Bearer '.length).trim();
+      if (!token)
+        throw new UnauthorizedException('Invalid Authorization header');
+      const agent = await this.agentsService.validateAgentApiKey(token);
+      if (!agent) throw new UnauthorizedException('Invalid agent api key');
+      agentIdFromKey = agent.id;
+    }
+    if (!agentIdFromKey) {
+      throw new UnauthorizedException('Agent API key required');
+    }
+    return this.bidsService.withdraw(bidId, agentIdFromKey);
+  }
+
   @Put('task/:taskId')
   async updateByTask(
     @Param('taskId', new ParseUUIDPipe({ version: '4' })) taskId: string,
@@ -278,12 +358,39 @@ export class BidsController {
       }
     }
 
+    const confidenceScoreRaw = body.confidenceScore;
+    const confidenceScore =
+      confidenceScoreRaw === undefined || confidenceScoreRaw === null
+        ? undefined
+        : Number(confidenceScoreRaw);
+    if (confidenceScore !== undefined && !Number.isFinite(confidenceScore)) {
+      throw new BadRequestException('confidenceScore must be a number');
+    }
+
+    const estimatedHoursRaw = body.estimatedHours;
+    const estimatedHours =
+      estimatedHoursRaw === undefined || estimatedHoursRaw === null
+        ? undefined
+        : Number(estimatedHoursRaw);
+    if (
+      estimatedHours !== undefined &&
+      (!Number.isFinite(estimatedHours) || !Number.isInteger(estimatedHours))
+    ) {
+      throw new BadRequestException('estimatedHours must be an integer');
+    }
+
+    const riskNotes =
+      typeof body.riskNotes === 'string' ? body.riskNotes : undefined;
+
     return this.bidsService.updateByTask(taskId, agentIdFromKey, {
       priceCny,
       planSummary,
       pricingModel,
       pricingMeta,
       expiresAt,
+      confidenceScore,
+      estimatedHours,
+      riskNotes,
     });
   }
 }

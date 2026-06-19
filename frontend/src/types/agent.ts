@@ -33,6 +33,7 @@ export interface AgentCardSummary {
   schemaVersion?: string;
   version?: string;
   cardJson?: Record<string, unknown>;
+  contentHash?: string;
   source?: string;
   isActive?: boolean;
   fetchedAt?: string | null;

@@ -71,13 +71,20 @@ export class BalanceService {
 
     return this.dataSource.transaction(async (manager) => {
       // 获取当前余额（加锁）
-      const balance = await manager.findOne(UserBalance, {
+      let balance = await manager.findOne(UserBalance, {
         where: { userId },
         lock: { mode: 'pessimistic_write' },
       });
 
       if (!balance) {
-        throw new NotFoundException('Balance not found');
+        balance = manager.create(UserBalance, {
+          userId,
+          availableCny: 0,
+          frozenCny: 0,
+          totalIncomeCny: 0,
+          totalWithdrawalCny: 0,
+        });
+        await manager.save(balance);
       }
 
       const beforeBalance = balance.availableCny;
@@ -119,13 +126,20 @@ export class BalanceService {
     }
 
     return this.dataSource.transaction(async (manager) => {
-      const balance = await manager.findOne(UserBalance, {
+      let balance = await manager.findOne(UserBalance, {
         where: { userId },
         lock: { mode: 'pessimistic_write' },
       });
 
       if (!balance) {
-        throw new NotFoundException('Balance not found');
+        balance = manager.create(UserBalance, {
+          userId,
+          availableCny: 0,
+          frozenCny: 0,
+          totalIncomeCny: 0,
+          totalWithdrawalCny: 0,
+        });
+        await manager.save(balance);
       }
 
       const beforeBalance = balance.availableCny;

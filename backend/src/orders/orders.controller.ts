@@ -26,6 +26,9 @@ type DeliverBody = {
   userId?: unknown;
   deliverySummary?: unknown;
   deliveryUrl?: unknown;
+  artifactUrls?: unknown;
+  evidenceBundle?: unknown;
+  commitHash?: unknown;
   previewData?: unknown;
 };
 
@@ -121,6 +124,17 @@ export class OrdersController {
         : undefined;
     const deliveryUrl =
       typeof body.deliveryUrl === 'string' ? body.deliveryUrl : undefined;
+    const artifactUrls = Array.isArray(body.artifactUrls)
+      ? body.artifactUrls.filter(
+          (url): url is string => typeof url === 'string' && url.trim().length > 0,
+        )
+      : undefined;
+    const evidenceBundle =
+      typeof body.evidenceBundle === 'object' && body.evidenceBundle !== null && !Array.isArray(body.evidenceBundle)
+        ? (body.evidenceBundle as Record<string, unknown>)
+        : undefined;
+    const commitHash =
+      typeof body.commitHash === 'string' ? body.commitHash : undefined;
     const previewData =
       typeof body.previewData === 'object' && body.previewData !== null
         ? (body.previewData as {
@@ -133,6 +147,9 @@ export class OrdersController {
     return this.ordersService.deliver(id, ownerUserId, {
       deliverySummary,
       deliveryUrl,
+      artifactUrls,
+      evidenceBundle,
+      commitHash,
       previewData,
     });
   }

@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { API_BASE } from '../config/api';
 import { CreateAgentForm } from '../components/agents/CreateAgentForm';
 import { AgentStatusBadge } from '../components/agents/AgentStatusBadge';
+import { disableAgent, enableAgent } from '../api/agentsApi';
 
 type AgentStatus = 'ONLINE' | 'OFFLINE';
 type OpenclawStatus = 'CONNECTED' | 'DISCONNECTED' | 'UNKNOWN';
@@ -13,7 +14,7 @@ type Agent = {
   id: string;
   name: string;
   description?: string;
-  webhookUrl?: string;
+  webhookUrl?: string | null;
   status?: AgentStatus;
   skills?: string[];
   podName?: string;
@@ -23,6 +24,7 @@ type Agent = {
   agentType?: string;
   approvalStatus?: string;
   runtimeStatus?: string;
+  isActive?: boolean;
   endpointUrl?: string | null;
   healthUrl?: string | null;
   pricingModel?: string | null;
@@ -68,6 +70,7 @@ export default function AgentManagement() {
   const [submittingBid, setSubmittingBid] = useState(false);
   const [refreshingAgent, setRefreshingAgent] = useState<string | null>(null);
   const [healthCheckingAgent, setHealthCheckingAgent] = useState<string | null>(null);
+  const [togglingAgent, setTogglingAgent] = useState<string | null>(null);
   const [healthStatusMap, setHealthStatusMap] = useState<Record<string, {
     status: AgentStatus;
     openclawStatus: OpenclawStatus;
@@ -85,7 +88,7 @@ export default function AgentManagement() {
     if (!user?.id) return;
     setLoading(true);
     const token = useAuthStore.getState().token;
-    fetch(`${apiBase}/api/v1/owner/agents/user/${user.id}`, {
+    return fetch(`${apiBase}/api/v1/owner/agents/user/${user.id}`, {
       headers: token ? { 'Authorization': `Bearer ${token}` } : {}
     })
       .then((res) => {
@@ -102,22 +105,13 @@ export default function AgentManagement() {
       });
   }, [apiBase, user?.id]);
 
-  // 刷新单个 Agent 状态
+  // 刷新当前用户的 Agent 最新数据（WP2 状态模型）
   const refreshAgentStatus = async (agentId: string) => {
     setRefreshingAgent(agentId);
     try {
-      const token = useAuthStore.getState().token;
-      const res = await fetch(`${apiBase}/api/v1/owner/agents/${agentId}/status`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      });
-      if (!res.ok) throw new Error('Failed to fetch agent status');
-      const data = await res.json();
-      // 更新该 Agent 的状态
-      setAgents(prev => prev.map(agent => 
-        agent.id === agentId ? { ...agent, status: data.status } : agent
-      ));
+      await fetchAgents();
     } catch (err) {
-      console.error('Refresh agent status error:', err);
+      console.error('Refresh agents error:', err);
     } finally {
       setRefreshingAgent(null);
     }
@@ -168,6 +162,24 @@ export default function AgentManagement() {
       alert('健康检查失败：' + (err instanceof Error ? err.message : '请检查网络'));
     } finally {
       setHealthCheckingAgent(null);
+    }
+  };
+
+  const toggleAgentActive = async (agent: Agent) => {
+    if (!agent.id) return;
+    if (agent.isActive !== false && !window.confirm(`确认下线 ${agent.name} 吗？下线后将不会出现在智能体广场。`)) {
+      return;
+    }
+    setTogglingAgent(agent.id);
+    try {
+      const updated = agent.isActive === false
+        ? await enableAgent(agent.id)
+        : await disableAgent(agent.id);
+      setAgents(prev => prev.map(item => item.id === updated.id ? { ...item, ...updated } : item));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '上下线操作失败');
+    } finally {
+      setTogglingAgent(null);
     }
   };
 
@@ -528,39 +540,110 @@ spec:
         
         {agents.map((agent) => (
           <div key={agent.id} className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-5 hover:border-purple-500/30 transition-colors">
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center border border-purple-500/30">
+            <div className="flex justify-between items-start gap-3 mb-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center border border-purple-500/30 shrink-0">
                   <Bot className="w-6 h-6 text-purple-400" />
                 </div>
-                <div>
-                  <h3 className="font-bold text-gray-200">{agent.name}</h3>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-gray-200 truncate" title={agent.name}>{agent.name}</h3>
                   <span className="text-xs font-mono text-gray-500">ID: {agent.id.slice(0,8)}</span>
                 </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <AgentStatusBadge type="approval" value={agent.approvalStatus} />
-                <AgentStatusBadge type="runtime" value={agent.runtimeStatus} />
-                <button
-                  onClick={() => performHealthCheck(agent.id)}
-                  disabled={healthCheckingAgent === agent.id}
-                  className="p-1.5 rounded bg-blue-500/10 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 transition-colors"
-                  title="健康检查（探测 Openclaw 关联）"
+              <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                <div className="flex items-center gap-1 rounded border border-gray-800 bg-gray-900/60 px-2 py-1">
+                  <span className="text-xs text-gray-500">审核</span>
+                  <span
+                    title={
+                      agent.approvalStatus === 'approved'
+                        ? '审核已通过，Agent 具备进入平台发现和接单流程的资格'
+                        : agent.approvalStatus === 'pending_review'
+                          ? '等待管理员审核，审核通过前不会进入智能体广场'
+                          : agent.approvalStatus === 'rejected'
+                            ? '审核已驳回，需要修改资料后重新提交'
+                            : agent.approvalStatus === 'disabled'
+                              ? '审核状态已禁用，Agent 当前不可被平台使用'
+                              : 'Agent 审核状态'
+                    }
+                  >
+                    <AgentStatusBadge type="approval" value={agent.approvalStatus} />
+                  </span>
+                </div>
+                <div
+                  className={`flex items-center gap-1 rounded border px-2 py-1 ${
+                    agent.isActive === false
+                      ? 'border-gray-700 bg-gray-900/80'
+                      : 'border-green-500/30 bg-green-500/10'
+                  }`}
+                  title={agent.isActive === false ? '当前已停止接单，不会出现在智能体广场' : '当前已启动，可被平台发现和接单'}
                 >
-                  <Activity className={`w-3.5 h-3.5 ${healthCheckingAgent === agent.id ? 'animate-pulse' : ''}`} />
-                </button>
-                <button
-                  onClick={() => refreshAgentStatus(agent.id)}
-                  disabled={refreshingAgent === agent.id}
-                  className="p-1.5 rounded bg-gray-800/50 text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 transition-colors"
-                  title="刷新状态"
+                  <span className="text-xs text-gray-500">启动状态</span>
+                  <span
+                    className={`rounded border px-2 py-0.5 text-xs ${
+                      agent.isActive === false
+                        ? 'border-gray-600 bg-gray-800 text-gray-300'
+                        : 'border-green-500/30 bg-green-500/10 text-green-300'
+                    }`}
+                  >
+                    {agent.isActive === false ? '已停止' : '已启动'}
+                  </span>
+                </div>
+                {agent.isActive !== false ? (
+                  <button
+                    onClick={() => toggleAgentActive(agent)}
+                    disabled={togglingAgent === agent.id}
+                    className="flex items-center gap-1 px-2 py-1 rounded border text-xs border-red-500/40 text-red-300 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                    title="下线后不再出现在智能体广场"
+                  >
+                    {togglingAgent === agent.id ? '处理中' : '停止'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => toggleAgentActive(agent)}
+                    disabled={togglingAgent === agent.id}
+                    className="flex items-center gap-1 px-2 py-1 rounded border text-xs border-green-500/40 text-green-300 hover:bg-green-500/10 transition-colors disabled:opacity-50"
+                  >
+                    {togglingAgent === agent.id ? '处理中' : '启动'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+              <button
+                onClick={() => performHealthCheck(agent.id)}
+                disabled={healthCheckingAgent === agent.id}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-blue-500/10 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 transition-colors disabled:opacity-50"
+                title="立即检查 Agent 心跳、Openclaw 可达性和基础配置，并刷新健康检查结果"
+              >
+                <Activity className={`w-3 h-3 ${healthCheckingAgent === agent.id ? 'animate-pulse' : ''}`} />
+                <span>健康检查</span>
+              </button>
+              <div className="flex items-center gap-1 rounded border border-gray-800 bg-gray-900/60 px-2 py-1">
+                <span className="text-xs text-gray-500">运行</span>
+                <span
+                  title={
+                    (agent.runtimeStatus || agent.status?.toLowerCase()) === 'online'
+                      ? '运行状态在线：最近心跳正常，Agent 当前可响应平台调度'
+                      : (agent.runtimeStatus || agent.status?.toLowerCase()) === 'degraded'
+                        ? '运行状态降级：心跳已延迟，平台会降低可用性判断'
+                        : (agent.runtimeStatus || agent.status?.toLowerCase()) === 'offline'
+                          ? '运行状态离线：长时间无心跳或健康检查失败，当前不可正常调度'
+                          : '运行状态未知：平台暂未获得有效心跳或健康检查结果'
+                  }
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${refreshingAgent === agent.id ? 'animate-spin' : ''}`} />
-                </button>
-                <span className={`px-2 py-0.5 rounded text-xs border ${agent.status === 'ONLINE' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-gray-800 text-gray-400 border-gray-700'}`}>
-                  {agent.status}
+                  <AgentStatusBadge type="runtime" value={agent.runtimeStatus || agent.status?.toLowerCase()} />
                 </span>
               </div>
+              <button
+                onClick={() => refreshAgentStatus(agent.id)}
+                disabled={refreshingAgent === agent.id}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-gray-800/50 text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 transition-colors disabled:opacity-50"
+                title="刷新状态"
+              >
+                <RefreshCw className={`w-3 h-3 ${refreshingAgent === agent.id ? 'animate-spin' : ''}`} />
+                <span>刷新</span>
+              </button>
             </div>
             
             <div className="space-y-2 mb-6">

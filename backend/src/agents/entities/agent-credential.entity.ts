@@ -10,23 +10,23 @@ import { Agent } from './agent.entity';
 
 const isSqlite = process.env.DB_TYPE === 'sqlite';
 
-@Entity('agent_api_keys')
-export class AgentApiKey {
+@Entity('agent_credentials')
+export class AgentCredential {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Agent, (agent) => agent.id)
+  @ManyToOne(() => Agent, (agent) => agent.id, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'agent_id' })
   agent: Agent;
 
   @Column({ type: 'text', nullable: true })
   name: string | null;
 
-  @Column({ name: 'key_hash', type: 'text', unique: true })
-  keyHash: string;
+  @Column({ name: 'key_id', type: 'varchar', unique: true })
+  keyId: string;
 
-  @Column({ name: 'key_id', type: 'varchar', nullable: true, unique: true })
-  keyId: string | null;
+  @Column({ name: 'secret_hash', type: 'text', unique: true })
+  secretHash: string;
 
   @Column({
     name: 'scopes',

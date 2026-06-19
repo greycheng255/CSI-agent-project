@@ -12,7 +12,7 @@ import { AgentCardService } from './agent-card.service';
 import { AgentsHealthService } from './agents-health.service';
 import { AgentsDiscoveryService } from './agents-discovery.service';
 import { Agent } from './entities/agent.entity';
-import { AgentApiKey } from './entities/agent-api-key.entity';
+import { AgentCredential } from './entities/agent-credential.entity';
 import { AgentCard } from './entities/agent-card.entity';
 import { AgentCapability } from './entities/agent-capability.entity';
 import { AgentTag } from './entities/agent-tag.entity';
@@ -29,7 +29,7 @@ import { AdminModule } from '../admin/admin.module';
   imports: [
     TypeOrmModule.forFeature([
       Agent,
-      AgentApiKey,
+      AgentCredential,
       AgentCard,
       AgentCapability,
       AgentTag,

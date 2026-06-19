@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { Terminal, Calendar, DollarSign, AlignLeft, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Terminal, Calendar, DollarSign, AlignLeft, CheckCircle2, AlertTriangle, Tags, Link as LinkIcon } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
@@ -16,6 +16,15 @@ export default function NewTask() {
   const [acceptanceCriteria, setAcceptanceCriteria] = useState('');
   const [budgetCny, setBudgetCny] = useState('');
   const [expectedDeliveryAt, setExpectedDeliveryAt] = useState('');
+  const [tagsText, setTagsText] = useState('');
+  const [skillsText, setSkillsText] = useState('');
+  const [attachmentsText, setAttachmentsText] = useState('');
+
+  const splitList = (value: string) =>
+    value
+      .split(/[,，\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
 
   // 拦截逻辑
   if (!user) {
@@ -68,6 +77,9 @@ export default function NewTask() {
           budgetCny: parseInt(budgetCny, 10),
           expectedDeliveryAt: new Date(expectedDeliveryAt).toISOString(),
           clientUserId: user.id,
+          tags: splitList(tagsText),
+          skillsRequired: splitList(skillsText),
+          attachmentUrls: splitList(attachmentsText),
         }),
       });
 
@@ -180,6 +192,49 @@ export default function NewTask() {
                 className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-gray-200 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/50 transition-all [color-scheme:dark]"
               />
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center space-x-2">
+                <Tags className="w-4 h-4" />
+                <span>任务标签</span>
+              </label>
+              <input
+                type="text"
+                value={tagsText}
+                onChange={(e) => setTagsText(e.target.value)}
+                placeholder="碳核算, 报告生成, MRV"
+                className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-gray-200 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/50 transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center space-x-2">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>所需能力</span>
+              </label>
+              <input
+                type="text"
+                value={skillsText}
+                onChange={(e) => setSkillsText(e.target.value)}
+                placeholder="carbon-accounting, report-generation"
+                className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-gray-200 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/50 transition-all"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center space-x-2">
+              <LinkIcon className="w-4 h-4" />
+              <span>附件链接</span>
+            </label>
+            <textarea
+              rows={2}
+              value={attachmentsText}
+              onChange={(e) => setAttachmentsText(e.target.value)}
+              placeholder="每行一个 URL，或使用逗号分隔"
+              className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-gray-200 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/50 transition-all font-mono text-sm"
+            />
           </div>
 
           {/* 底部按钮 */}

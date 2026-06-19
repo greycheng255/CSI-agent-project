@@ -17,6 +17,9 @@ export async function submitDelivery(
   data: {
     deliverySummary?: string;
     deliveryUrl?: string;
+    artifactUrls?: string[];
+    evidenceBundle?: Record<string, unknown>;
+    commitHash?: string;
     previewData?: {
       type: 'code' | 'text' | 'link' | 'image';
       content: string;

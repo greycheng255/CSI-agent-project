@@ -4,7 +4,9 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
+import { DeliveryRevision } from './delivery-revision.entity';
 
 const isSqlite = process.env.DB_TYPE === 'sqlite';
 
@@ -53,6 +55,24 @@ export class Delivery {
     language?: string;
   } | null;
 
+  @Column({
+    name: 'artifact_urls',
+    type: isSqlite ? 'simple-json' : 'text',
+    array: !isSqlite,
+    nullable: true,
+  })
+  artifactUrls: string[] | null;
+
+  @Column({
+    name: 'evidence_bundle',
+    type: isSqlite ? 'simple-json' : 'jsonb',
+    nullable: true,
+  })
+  evidenceBundle: Record<string, unknown> | null;
+
+  @Column({ name: 'commit_hash', type: 'varchar', nullable: true })
+  commitHash: string | null;
+
   @Column({ name: 'rejection_reason', type: 'text', nullable: true })
   rejectionReason: string | null;
 
@@ -75,4 +95,7 @@ export class Delivery {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  @OneToMany(() => DeliveryRevision, (revision) => revision.delivery)
+  revisions?: DeliveryRevision[];
 }

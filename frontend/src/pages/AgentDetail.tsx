@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Bot, ExternalLink, Loader2, Save, Key, Copy, Trash2, Wallet, Server, Link2, Cloud, Cpu, Activity, HeartPulse, RefreshCw, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
+import { CardSection } from '../components/agents/CardSection';
+import { disableAgent, enableAgent } from '../api/agentsApi';
 
 type AgentStatus = 'ONLINE' | 'OFFLINE';
 
@@ -10,7 +12,7 @@ type Agent = {
   id: string;
   name: string;
   description?: string;
-  webhookUrl?: string;
+  webhookUrl?: string | null;
   status?: AgentStatus;
   skills?: string[];
   paymentQrUrl?: string | null;
@@ -24,6 +26,32 @@ type Agent = {
   lastHeartbeatAt?: string | null;
   lastHealthCheckAt?: string | null;
   consecutiveFailures?: number;
+  agentType?: string;
+  approvalStatus?: string;
+  runtimeStatus?: string;
+  isActive?: boolean;
+  visibility?: string;
+  version?: string;
+  cardUrl?: string | null;
+  endpointUrl?: string | null;
+  healthUrl?: string | null;
+  authType?: string | null;
+  pricingModel?: string | null;
+  basePrice?: number | null;
+  currency?: string | null;
+  reputationScore?: number | null;
+  capabilities?: Array<{ id: string; capabilityType?: string; name: string; value?: Record<string, unknown> | null }>;
+  tags?: Array<{ id: string; tag?: string; name?: string; tagType?: string }>;
+  cards?: Array<{
+    id: string;
+    schemaVersion?: string;
+    version?: string;
+    cardJson?: Record<string, unknown>;
+    contentHash?: string;
+    source?: string;
+    isActive?: boolean;
+    fetchedAt?: string | null;
+  }>;
   healthCheckResult?: {
     agentOnline: boolean;
     openclawReachable: boolean;
@@ -73,6 +101,7 @@ export default function AgentDetail() {
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [togglingActive, setTogglingActive] = useState(false);
   const [skillsText, setSkillsText] = useState('');
 
   // 健康检查相关状态
@@ -102,6 +131,7 @@ export default function AgentDetail() {
     setLoading(true);
     Promise.all([
       fetch(`${apiBase}/api/v1/owner/agents/${id}`).then((r) => r.json()),
+      fetch(`${apiBase}/api/v1/agents/${id}`).then((r) => (r.ok ? r.json() : null)),
       fetch(`${apiBase}/api/v1/agent/bids/agent/${id}`).then((r) => r.json()),
       fetch(`${apiBase}/api/v1/owner/agents/${id}/webhook-deliveries`).then((r) => r.json()),
       token
@@ -111,13 +141,14 @@ export default function AgentDetail() {
         : Promise.resolve([]),
     ])
       .then(
-        ([agentData, bidsData, deliveryData, keysData]: [
+        ([agentData, wp2AgentData, bidsData, deliveryData, keysData]: [
           Agent,
+          Agent | null,
           BidItem[],
           WebhookDeliveryItem[],
           ApiKeyItem[],
         ]) => {
-        const a = agentData || null;
+        const a = agentData ? { ...agentData, ...(wp2AgentData || {}) } : wp2AgentData || null;
         setAgent(a);
         setSkillsText(Array.isArray(a?.skills) ? a.skills.join(',') : '');
         setPaymentQrUrl(a?.paymentQrUrl || '');
@@ -167,6 +198,25 @@ export default function AgentDetail() {
       alert('保存 skills 失败，请检查后端服务。');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleToggleActive = async () => {
+    if (!agent?.id) return;
+    if (agent.isActive !== false && !window.confirm(`确认下线 ${agent.name} 吗？下线后将不会出现在智能体广场。`)) {
+      return;
+    }
+    setTogglingActive(true);
+    try {
+      const updated = agent.isActive === false
+        ? await enableAgent(agent.id)
+        : await disableAgent(agent.id);
+      setAgent(prev => prev ? { ...prev, ...updated } : updated);
+      fetchHealthStatus();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '上下线操作失败');
+    } finally {
+      setTogglingActive(false);
     }
   };
 
@@ -323,6 +373,9 @@ export default function AgentDetail() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <span className={`px-2 py-0.5 rounded text-xs border ${agent.isActive === false ? 'bg-gray-800 text-gray-400 border-gray-700' : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20'}`}>
+              {agent.isActive === false ? '已下线' : '已启用'}
+            </span>
             <span
               className={`px-2 py-0.5 rounded text-xs border ${
                 agent.status === 'ONLINE'
@@ -332,6 +385,18 @@ export default function AgentDetail() {
             >
               {agent.status}
             </span>
+            <button
+              type="button"
+              onClick={handleToggleActive}
+              disabled={togglingActive || !token}
+              className={`px-3 py-1.5 rounded border text-sm transition-colors disabled:opacity-50 ${
+                agent.isActive === false
+                  ? 'border-green-500/40 text-green-300 hover:bg-green-500/10'
+                  : 'border-gray-700 text-gray-300 hover:bg-gray-800'
+              }`}
+            >
+              {togglingActive ? '处理中' : agent.isActive === false ? '上线 Agent' : '下线 Agent'}
+            </button>
           </div>
         </div>
 
@@ -550,6 +615,8 @@ export default function AgentDetail() {
           )}
         </div>
       </div>
+
+      <CardSection agent={agent} />
 
       <div className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-6">
         <div className="flex items-center justify-between gap-4">

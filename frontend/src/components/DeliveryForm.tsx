@@ -14,6 +14,9 @@ type PreviewType = 'code' | 'text' | 'link' | 'image';
 export default function DeliveryForm({ orderId, userId, onSuccess, onCancel }: DeliveryFormProps) {
   const [deliverySummary, setDeliverySummary] = useState('');
   const [deliveryUrl, setDeliveryUrl] = useState('');
+  const [artifactUrlsText, setArtifactUrlsText] = useState('');
+  const [evidenceBundleText, setEvidenceBundleText] = useState('');
+  const [commitHash, setCommitHash] = useState('');
   const [previewType, setPreviewType] = useState<PreviewType>('text');
   const [previewContent, setPreviewContent] = useState('');
   const [previewLanguage, setPreviewLanguage] = useState('');
@@ -24,7 +27,7 @@ export default function DeliveryForm({ orderId, userId, onSuccess, onCancel }: D
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!deliverySummary.trim() && !deliveryUrl.trim() && !previewContent.trim()) {
+    if (!deliverySummary.trim() && !deliveryUrl.trim() && !artifactUrlsText.trim() && !previewContent.trim()) {
       setError('请至少填写交付说明、附件链接或预览内容');
       return;
     }
@@ -40,10 +43,31 @@ export default function DeliveryForm({ orderId, userId, onSuccess, onCancel }: D
             language: previewType === 'code' ? previewLanguage : undefined,
           }
         : undefined;
+      const artifactUrls = artifactUrlsText
+        .split(/\r?\n/)
+        .map((url) => url.trim())
+        .filter(Boolean);
+      let evidenceBundle: Record<string, unknown> | undefined;
+      if (evidenceBundleText.trim()) {
+        try {
+          const parsed = JSON.parse(evidenceBundleText);
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new Error('invalid evidence bundle');
+          }
+          evidenceBundle = parsed as Record<string, unknown>;
+        } catch {
+          setError('证据包必须是合法 JSON 对象');
+          setSubmitting(false);
+          return;
+        }
+      }
 
       await submitDelivery(orderId, userId, {
         deliverySummary: deliverySummary || undefined,
         deliveryUrl: deliveryUrl || undefined,
+        artifactUrls: artifactUrls.length > 0 ? artifactUrls : undefined,
+        evidenceBundle,
+        commitHash: commitHash.trim() || undefined,
         previewData,
       });
 
@@ -137,6 +161,45 @@ export default function DeliveryForm({ orderId, userId, onSuccess, onCancel }: D
         </div>
 
         {/* 预览内容 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            交付材料链接列表
+          </label>
+          <textarea
+            value={artifactUrlsText}
+            onChange={(e) => setArtifactUrlsText(e.target.value)}
+            placeholder="每行一个链接，例如代码仓库、结果文件、报告地址"
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Commit Hash
+          </label>
+          <input
+            type="text"
+            value={commitHash}
+            onChange={(e) => setCommitHash(e.target.value)}
+            placeholder="例如 9f4d2a1 或完整提交哈希"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            证据包 JSON
+          </label>
+          <textarea
+            value={evidenceBundleText}
+            onChange={(e) => setEvidenceBundleText(e.target.value)}
+            placeholder='{"tests":["npm test"],"result":"passed","notes":"..."}'
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+          />
+        </div>
+
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="block text-sm font-medium text-gray-700">

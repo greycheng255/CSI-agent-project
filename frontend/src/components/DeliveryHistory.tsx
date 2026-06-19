@@ -165,6 +165,45 @@ export default function DeliveryHistory({ orderId }: DeliveryHistoryProps) {
                   )}
 
                   {/* 预览数据 */}
+                  {delivery.artifactUrls && delivery.artifactUrls.length > 0 && (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">交付材料</h4>
+                      <div className="space-y-2">
+                        {delivery.artifactUrls.map((url, urlIndex) => (
+                          <a
+                            key={`${delivery.id}-${urlIndex}`}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center px-3 py-2 bg-white border border-gray-300 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors break-all"
+                          >
+                            <FileText className="w-4 h-4 mr-2 flex-shrink-0" />
+                            <span className="flex-1">{url}</span>
+                            <ExternalLink className="w-3 h-3 ml-2 flex-shrink-0" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {delivery.commitHash && (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Commit Hash</h4>
+                      <code className="block bg-white p-3 rounded border text-gray-700 break-all">
+                        {delivery.commitHash}
+                      </code>
+                    </div>
+                  )}
+
+                  {delivery.evidenceBundle && (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">证据包</h4>
+                      <pre className="bg-white p-3 rounded border text-xs text-gray-700 overflow-x-auto">
+                        {JSON.stringify(delivery.evidenceBundle, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+
                   {delivery.previewData && (
                     <div className="mb-4">
                       <h4 className="text-sm font-medium text-gray-700 mb-2">预览</h4>

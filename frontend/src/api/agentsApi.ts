@@ -95,6 +95,20 @@ export async function listOwnerAgents(userId: string) {
   });
 }
 
+export async function enableAgent(id: string) {
+  return requestJson<Agent>(`/api/v1/agents/${id}/enable`, {
+    method: 'POST',
+    tokenKind: 'user',
+  });
+}
+
+export async function disableAgent(id: string) {
+  return requestJson<Agent>(`/api/v1/agents/${id}/disable`, {
+    method: 'POST',
+    tokenKind: 'user',
+  });
+}
+
 export async function listAdminAgents() {
   return requestJson<Agent[]>('/api/v1/admin/agents', { tokenKind: 'admin' });
 }

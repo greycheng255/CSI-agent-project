@@ -3,7 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { HttpService } from '@nestjs/axios';
 import { AgentsService } from './agents.service';
 import { Agent } from './entities/agent.entity';
-import { AgentApiKey } from './entities/agent-api-key.entity';
+import { AgentCredential } from './entities/agent-credential.entity';
 import { User } from '../users/entities/user.entity';
 import { WebhookDelivery } from '../webhooks/entities/webhook-delivery.entity';
 
@@ -17,7 +17,7 @@ describe('AgentsService', () => {
     create: jest.fn(),
   };
 
-  const mockAgentApiKeysRepository = {
+  const mockAgentCredentialsRepository = {
     findOne: jest.fn(),
     find: jest.fn(),
     save: jest.fn(),
@@ -50,8 +50,8 @@ describe('AgentsService', () => {
           useValue: mockAgentsRepository,
         },
         {
-          provide: getRepositoryToken(AgentApiKey),
-          useValue: mockAgentApiKeysRepository,
+          provide: getRepositoryToken(AgentCredential),
+          useValue: mockAgentCredentialsRepository,
         },
         {
           provide: getRepositoryToken(User),

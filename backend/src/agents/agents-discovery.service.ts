@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository } from 'typeorm';
+import { Brackets, In, Repository } from 'typeorm';
 import {
   Agent,
   AgentApprovalStatus,
@@ -30,32 +30,32 @@ export class AgentsDiscoveryService {
     const skills = this.toList(query.skills);
     const domains = this.toList(query.domains);
     const keyword = query.query?.trim();
+    const limit = Math.min(query.limit || 20, 100);
 
-    const qb = this.agentsRepository
+    // 步骤1: 只查 agent ID（不加 JOIN，避免笛卡尔积）
+    const idQb = this.agentsRepository
       .createQueryBuilder('agent')
-      .leftJoinAndSelect('agent.capabilities', 'capability')
-      .leftJoinAndSelect('agent.tags', 'tag')
-      .where('agent.approval_status = :approvalStatus', {
+      .select('agent.id', 'id')
+      .addSelect('agent.runtimeStatus')
+      .addSelect('agent.reputationScore')
+      .addSelect('agent.createdAt')
+      .where('agent.approvalStatus = :approvalStatus', {
         approvalStatus: AgentApprovalStatus.APPROVED,
       })
-      .andWhere('agent.is_active = :isActive', { isActive: true })
+      .andWhere('agent.isActive = :isActive', { isActive: true })
       .andWhere('agent.visibility = :visibility', { visibility: 'public' })
-      .andWhere('agent.runtime_status IN (:...runtimeStatuses)', {
-        runtimeStatuses: [
-          AgentRuntimeStatus.ONLINE,
-          AgentRuntimeStatus.DEGRADED,
-        ],
-      })
-      .distinct(true);
+      .andWhere('agent.runtimeStatus IN (:...runtimeStatuses)', {
+        runtimeStatuses: [AgentRuntimeStatus.ONLINE, AgentRuntimeStatus.DEGRADED],
+      });
 
     if (query.runtimeStatus) {
-      qb.andWhere('agent.runtime_status = :runtimeStatus', {
+      idQb.andWhere('agent.runtimeStatus = :runtimeStatus', {
         runtimeStatus: query.runtimeStatus,
       });
     }
 
     if (keyword) {
-      qb.andWhere(
+      idQb.andWhere(
         new Brackets((sub) => {
           sub
             .where('LOWER(agent.name) LIKE :keyword', {
@@ -63,51 +63,64 @@ export class AgentsDiscoveryService {
             })
             .orWhere('LOWER(agent.description) LIKE :keyword', {
               keyword: `%${keyword.toLowerCase()}%`,
-            })
-            .orWhere('LOWER(capability.name) LIKE :keyword', {
-              keyword: `%${keyword.toLowerCase()}%`,
-            })
-            .orWhere('LOWER(tag.tag) LIKE :keyword', {
-              keyword: `%${keyword.toLowerCase()}%`,
             });
         }),
       );
     }
 
+    // 技能/领域过滤：用 EXISTS 子查询代替 JOIN
     const capabilityFilters = [
       ...skills.map((name) => ({ type: 'skill', name })),
       ...domains.map((name) => ({ type: 'domain', name })),
     ];
-
     if (capabilityFilters.length > 0) {
-      qb.andWhere(
-        new Brackets((sub) => {
-          capabilityFilters.forEach((filter, index) => {
-            const expression = `(capability.capability_type = :capabilityType${index} AND LOWER(capability.name) = :capabilityName${index})`;
-            const params = {
-              [`capabilityType${index}`]: filter.type,
-              [`capabilityName${index}`]: filter.name.toLowerCase(),
-            };
-            if (index === 0) sub.where(expression, params);
-            else sub.orWhere(expression, params);
-          });
-        }),
-      );
-    }
-
-    if (tags.length > 0) {
-      qb.andWhere('LOWER(tag.tag) IN (:...tags)', {
-        tags: tags.map((tag) => tag.toLowerCase()),
+      capabilityFilters.forEach((filter, index) => {
+        idQb.andWhere(
+          `EXISTS (SELECT 1 FROM agent_capabilities c${index} WHERE c${index}.agent_id = agent.id AND c${index}.capability_type = :ct${index} AND LOWER(c${index}.name) = :cn${index})`,
+          {
+            [`ct${index}`]: filter.type,
+            [`cn${index}`]: filter.name.toLowerCase(),
+          },
+        );
       });
     }
 
-    qb.orderBy('agent.runtimeStatus', 'ASC')
+    // 标签过滤
+    if (tags.length > 0) {
+      idQb.andWhere(
+        `EXISTS (SELECT 1 FROM agent_tags t WHERE t.agent_id = agent.id AND LOWER(t.tag) IN (:...tags))`,
+        { tags: tags.map((t) => t.toLowerCase()) },
+      );
+    }
+
+    // 计数
+    const total = await idQb.getCount();
+
+    // 分页
+    const idRows = await idQb
+      .orderBy('agent.runtimeStatus', 'ASC')
       .addOrderBy('agent.reputationScore', 'DESC')
       .addOrderBy('agent.createdAt', 'DESC')
       .skip(query.offset || 0)
-      .take(Math.min(query.limit || 20, 100));
+      .take(limit)
+      .getRawMany<{ id: string }>();
 
-    const [items, total] = await qb.getManyAndCount();
+    const agentIds = idRows.map((r) => r.id);
+
+    if (agentIds.length === 0) {
+      return { items: [], total };
+    }
+
+    // 步骤2: 用 ID 批量加载完整 Agent + 关联数据
+    const items = await this.agentsRepository.find({
+      where: { id: In(agentIds) },
+      relations: ['capabilities', 'tags'],
+    });
+
+    // 保持排序
+    const idOrder = new Map(agentIds.map((id, i) => [id, i]));
+    items.sort((a, b) => (idOrder.get(a.id) ?? 0) - (idOrder.get(b.id) ?? 0));
+
     return { items, total };
   }
 
@@ -132,8 +145,6 @@ export class AgentsDiscoveryService {
   private toList(value?: string[] | string) {
     if (!value) return [];
     const items = Array.isArray(value) ? value : value.split(',');
-    return items
-      .map((item) => item.trim())
-      .filter(Boolean);
+    return items.map((item) => item.trim()).filter(Boolean);
   }
 }

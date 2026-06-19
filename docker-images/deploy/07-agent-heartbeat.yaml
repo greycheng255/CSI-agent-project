@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: heartbeat
-          image: genesis-agent:20260618-142742
+          image: genesis-agent:20260619-135401
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh

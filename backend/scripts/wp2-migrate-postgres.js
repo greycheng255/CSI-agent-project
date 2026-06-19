@@ -37,56 +37,28 @@ SET runtime_status = CASE
 END
 WHERE status IS NOT NULL;
 
-ALTER TABLE agent_api_keys ADD COLUMN IF NOT EXISTS key_id varchar;
-ALTER TABLE agent_api_keys ADD COLUMN IF NOT EXISTS scopes jsonb DEFAULT '["*"]'::jsonb;
-ALTER TABLE agent_api_keys ADD COLUMN IF NOT EXISTS status varchar DEFAULT 'active';
-ALTER TABLE agent_api_keys ADD COLUMN IF NOT EXISTS expires_at timestamptz;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_api_keys_key_id ON agent_api_keys(key_id) WHERE key_id IS NOT NULL;
-
 CREATE TABLE IF NOT EXISTS agent_credentials (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   agent_id uuid NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  name text,
   key_id varchar NOT NULL UNIQUE,
-  secret_hash varchar NOT NULL,
+  secret_hash text NOT NULL UNIQUE,
   scopes jsonb DEFAULT '["*"]'::jsonb,
   status varchar DEFAULT 'active',
   expires_at timestamptz,
   created_at timestamptz DEFAULT now(),
-  revoked_at timestamptz
+  revoked_at timestamptz,
+  last_used_at timestamptz
 );
 CREATE INDEX IF NOT EXISTS idx_agent_credentials_agent ON agent_credentials(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_credentials_key ON agent_credentials(key_id);
-
-INSERT INTO agent_credentials (
-  agent_id,
-  key_id,
-  secret_hash,
-  scopes,
-  status,
-  expires_at,
-  created_at,
-  revoked_at
-)
-SELECT
-  aak.agent_id,
-  COALESCE(aak.key_id, 'ak_' || replace(aak.id::text, '-', '')),
-  aak.key_hash,
-  COALESCE(aak.scopes, '["*"]'::jsonb),
-  CASE
-    WHEN aak.revoked_at IS NOT NULL THEN 'revoked'
-    WHEN aak.expires_at IS NOT NULL AND aak.expires_at < now() THEN 'expired'
-    ELSE COALESCE(aak.status, 'active')
-  END,
-  aak.expires_at,
-  aak.created_at,
-  aak.revoked_at
-FROM agent_api_keys aak
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM agent_credentials ac
-  WHERE ac.secret_hash = aak.key_hash
-     OR ac.key_id = COALESCE(aak.key_id, 'ak_' || replace(aak.id::text, '-', ''))
-);
+ALTER TABLE agent_credentials ADD COLUMN IF NOT EXISTS name text;
+ALTER TABLE agent_credentials ADD COLUMN IF NOT EXISTS last_used_at timestamptz;
+ALTER TABLE agent_credentials ADD COLUMN IF NOT EXISTS scopes jsonb DEFAULT '["*"]'::jsonb;
+ALTER TABLE agent_credentials ADD COLUMN IF NOT EXISTS status varchar DEFAULT 'active';
+ALTER TABLE agent_credentials ADD COLUMN IF NOT EXISTS expires_at timestamptz;
+ALTER TABLE agent_credentials ADD COLUMN IF NOT EXISTS revoked_at timestamptz;
+DROP TABLE IF EXISTS agent_api_keys;
 
 CREATE TABLE IF NOT EXISTS agent_cards (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

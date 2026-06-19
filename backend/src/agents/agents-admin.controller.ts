@@ -40,6 +40,6 @@ export class AgentsAdminController {
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Req() req: any,
   ) {
-    return this.agentsService.disable(id, req.admin?.id);
+    return this.agentsService.disable(id, req.admin?.id, false);
   }
 }

@@ -101,6 +101,11 @@ type Order = {
   };
   client?: { id: string };
   owner?: { id: string };
+  execution?: {
+    totalProgress: number;
+    status: string;
+    phases: ApiPhase[];
+  };
   executionPhases?: ExecutionPhase[];
 };
 
@@ -268,6 +273,35 @@ export default function OrderDetail() {
     fetch(`${apiBase}/api/v1/orders/${id}`)
       .then((res) => res.json())
       .then(async (data: Order) => {
+        if (data.execution?.phases?.length) {
+          data.executionPhases = data.execution.phases.map((phase: ApiPhase) => ({
+            id: phase.id,
+            name: phase.name,
+            description: phase.description,
+            status: phase.status === 'RUNNING' ? 'IN_PROGRESS' :
+                    phase.status === 'PENDING' ? 'PENDING' :
+                    phase.status === 'COMPLETED' ? 'COMPLETED' : 'FAILED',
+            progress: phase.progress,
+            startTime: phase.startedAt,
+            endTime: phase.completedAt,
+            subTasks: (phase.subTasks || []).map((subTask: ApiSubTask) => ({
+              id: subTask.id,
+              name: subTask.name,
+              description: subTask.description,
+              status: subTask.status === 'RUNNING' ? 'IN_PROGRESS' :
+                      subTask.status === 'PENDING' ? 'PENDING' :
+                      subTask.status === 'COMPLETED' ? 'COMPLETED' : 'FAILED',
+              progress: subTask.progress,
+              startTime: subTask.startedAt,
+              endTime: subTask.completedAt,
+              logs: subTask.logs?.map((log: LogEntry) => log.message) || [],
+              result: subTask.result,
+            })),
+          }));
+          setOrder(data);
+          setLoading(false);
+          return;
+        }
         // 尝试获取真实的执行进度数据
         try {
           const token = useAuthStore.getState().token;
