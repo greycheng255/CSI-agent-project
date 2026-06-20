@@ -1,8 +1,9 @@
 ﻿import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { Shield, Users, Plus, X, Loader2, Edit3, RefreshCw, FileText, Clock, Search } from 'lucide-react';
+import { Shield, Users, Plus, X, Loader2, Edit3, RefreshCw, FileText, Clock, Search, Terminal } from 'lucide-react';
 import { API_BASE } from '../config/api';
+import AdminMCPConsolePanel from '../components/admin/AdminMCPConsolePanel';
 
 interface AdminItem {
   id: string;
@@ -45,7 +46,7 @@ export default function AdminAccounts() {
   const [admins, setAdmins] = useState<AdminItem[]>([]);
   const [permGroups, setPermGroups] = useState<PermGroup[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'accounts' | 'logs'>('accounts');
+  const [activeTab, setActiveTab] = useState<'accounts' | 'logs' | 'mcp'>('accounts');
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -260,6 +261,16 @@ export default function AdminAccounts() {
           }`}
         >
           <FileText className="w-4 h-4" />操作日志
+        </button>
+        <button
+          onClick={() => setActiveTab('mcp')}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
+            activeTab === 'mcp'
+              ? 'bg-yellow-500/10 text-yellow-400'
+              : 'text-gray-500 hover:text-gray-400'
+          }`}
+        >
+          <Terminal className="w-4 h-4" />MCP 集成中心
         </button>
       </div>
 
@@ -580,6 +591,8 @@ export default function AdminAccounts() {
           )}
         </div>
       )}
+
+      {activeTab === 'mcp' && <AdminMCPConsolePanel />}
     </div>
   );
 }

@@ -9,7 +9,6 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';
-import { Cron, CronExpression } from '@nestjs/schedule';
 import {
   Agent,
   AgentApprovalStatus,
@@ -68,17 +67,6 @@ export class AgentsService {
     private agentCardService: AgentCardService,
     private agentsHealthService: AgentsHealthService,
   ) {}
-
-  /**
-   * 定时检查离线 Agent（每 30 秒执行一次）
-   */
-  @Cron(CronExpression.EVERY_30_SECONDS)
-  async handleOfflineCheck() {
-    const count = await this.checkOfflineAgents();
-    if (count > 0) {
-      this.logger.log(`Marked ${count} agents as offline`);
-    }
-  }
 
   private hashKey(key: string) {
     return createHash('sha256').update(key).digest('hex');
@@ -167,11 +155,14 @@ export class AgentsService {
     const owner = await this.usersRepository.findOne({ where: { id: ownerId } });
     if (!owner) throw new NotFoundException('Owner not found');
 
-    const card = data.cardJson || (data.cardUrl ? await this.agentCardService.fetchCard(data.cardUrl) : null);
+    const card = data.cardJson
+      ? this.agentCardService.validate(data.cardJson)
+      : data.cardUrl
+        ? await this.agentCardService.fetchAndValidate(data.cardUrl)
+        : null;
     if (!card) {
       throw new BadRequestException('cardUrl or cardJson is required');
     }
-    this.agentCardService.validate(card);
 
     const agent = this.agentsRepository.create({
       name: card.name || data.name,
@@ -312,18 +303,20 @@ export class AgentsService {
       order: { createdAt: 'DESC' },
     });
 
-    // 实时计算状态：根据心跳时间判断
     const now = Date.now();
-    const timeoutMs = 60000; // 60秒超时
 
     return agents.map((agent) => {
-      const lastHeartbeat = agent.lastHeartbeatAt
-        ? new Date(agent.lastHeartbeatAt).getTime()
-        : 0;
-      const isOnline = lastHeartbeat > 0 && now - lastHeartbeat < timeoutMs;
+      const runtimeStatus = this.agentsHealthService.calculateRuntimeStatus(
+        agent.lastHeartbeatAt,
+        now,
+      );
       return {
         ...agent,
-        status: isOnline ? AgentStatus.ONLINE : AgentStatus.OFFLINE,
+        runtimeStatus,
+        status:
+          runtimeStatus === AgentRuntimeStatus.OFFLINE
+            ? AgentStatus.OFFLINE
+            : AgentStatus.ONLINE,
       };
     });
   }
@@ -456,11 +449,18 @@ export class AgentsService {
     body?: {
       status?: string;
       latencyMs?: number;
+      latency_ms?: number;
       load?: number;
+      load_metric?: number;
       metadata?: Record<string, unknown>;
     },
   ) {
-    return this.agentsHealthService.recordHeartbeat(agentId, body);
+    return this.agentsHealthService.recordHeartbeat(agentId, {
+      status: body?.status,
+      latencyMs: body?.latencyMs ?? body?.latency_ms,
+      load: body?.load ?? body?.load_metric,
+      metadata: body?.metadata,
+    });
   }
 
   /**
@@ -497,17 +497,18 @@ export class AgentsService {
     const agent = await this.findOne(agentId);
     if (!agent) throw new NotFoundException('Agent not found');
 
-    // 检查是否超时（默认 60 秒无心跳视为离线）
-    const timeoutMs = agent.heartbeatIntervalMs * 2 || 60000;
-    const isOnline =
-      agent.lastHeartbeatAt &&
-      Date.now() - agent.lastHeartbeatAt.getTime() < timeoutMs;
+    const runtimeStatus = this.agentsHealthService.calculateRuntimeStatus(
+      agent.lastHeartbeatAt,
+    );
 
     return {
       agentId: agent.id,
       name: agent.name,
-      status: isOnline ? AgentStatus.ONLINE : AgentStatus.OFFLINE,
-      runtimeStatus: agent.runtimeStatus,
+      status:
+        runtimeStatus === AgentRuntimeStatus.OFFLINE
+          ? AgentStatus.OFFLINE
+          : AgentStatus.ONLINE,
+      runtimeStatus,
       lastHeartbeatAt: agent.lastHeartbeatAt,
       heartbeatIntervalMs: agent.heartbeatIntervalMs,
     };

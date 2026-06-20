@@ -8,6 +8,10 @@ import { Agent } from './entities/agent.entity';
 import { AgentCard } from './entities/agent-card.entity';
 import { AgentCapability } from './entities/agent-capability.entity';
 import { AgentTag } from './entities/agent-tag.entity';
+import {
+  AgentCardDTO,
+  validateAgentCard,
+} from './schemas/agent-card.schema';
 
 export type AgentCardJson = {
   schema_version?: string;
@@ -67,12 +71,28 @@ export class AgentCardService {
 
   async fetchCard(cardUrl: string): Promise<AgentCardJson> {
     const response = await firstValueFrom(
-      this.httpService.get(cardUrl, { timeout: 5000 }),
+      this.httpService.get(cardUrl, {
+        timeout: Number(process.env.AGENT_CARD_FETCH_TIMEOUT_MS || 10000),
+      }),
     );
     if (!response.data || typeof response.data !== 'object') {
       throw new BadRequestException('Agent Card URL must return JSON');
     }
     return response.data as AgentCardJson;
+  }
+
+  async fetchAndValidate(
+    cardUrl: string,
+    options?: { verifyHealth?: boolean },
+  ): Promise<AgentCardDTO> {
+    const card = this.validate(await this.fetchCard(cardUrl));
+    if (options?.verifyHealth !== false) {
+      const healthy = await this.verifyHealthEndpoint(card.endpoints.health);
+      if (!healthy) {
+        throw new BadRequestException('Agent Card health endpoint is unreachable');
+      }
+    }
+    return card;
   }
 
   async verifyHealthEndpoint(healthUrl: string) {
@@ -86,24 +106,14 @@ export class AgentCardService {
     }
   }
 
-  validate(card: AgentCardJson) {
-    const missing: string[] = [];
-    if (!card.schema_version) missing.push('schema_version');
-    if (!card.name) missing.push('name');
-    if (!card.description) missing.push('description');
-    if (!card.version) missing.push('version');
-    if (!card.endpoints?.task) missing.push('endpoints.task');
-    if (!card.endpoints?.health) missing.push('endpoints.health');
-    if (!card.auth?.type) missing.push('auth.type');
-    if (!card.capabilities?.domains?.length) missing.push('capabilities.domains');
-    if (!card.capabilities?.skills?.length) missing.push('capabilities.skills');
-    if (!card.pricing?.model) missing.push('pricing.model');
-
-    if (missing.length > 0) {
+  validate(card: AgentCardJson): AgentCardDTO {
+    const result = validateAgentCard(card);
+    if (!result.valid || !result.card) {
       throw new BadRequestException(
-        `Agent Card missing required fields: ${missing.join(', ')}`,
+        `Agent Card validation failed: ${result.errors.join('; ')}`,
       );
     }
+    return result.card;
   }
 
   async saveActiveCard(params: {
@@ -112,7 +122,7 @@ export class AgentCardService {
     source: 'platform' | 'remote_fetch' | 'manual';
     fetchedAt?: Date | null;
   }) {
-    this.validate(params.card);
+    const normalized = this.validate(params.card);
 
     await this.agentCardsRepository.update(
       { agent: { id: params.agent.id }, isActive: true },
@@ -120,19 +130,19 @@ export class AgentCardService {
     );
 
     const contentHash = createHash('sha256')
-      .update(JSON.stringify(params.card))
+      .update(JSON.stringify(normalized.raw_json || normalized))
       .digest('hex');
 
     return this.agentCardsRepository.save(
       this.agentCardsRepository.create({
         agent: params.agent,
-        schemaVersion: params.card.schema_version || '1.0.0',
-        version: params.card.version || '1.0.0',
-        cardJson: params.card as Record<string, unknown>,
+        schemaVersion: normalized.schema_version,
+        version: normalized.version,
+        cardJson: (normalized.raw_json || normalized) as Record<string, unknown>,
         contentHash,
         signature:
-          typeof params.card.signature === 'string'
-            ? params.card.signature
+          typeof normalized.signature === 'string'
+            ? normalized.signature
             : null,
         source: params.source,
         isActive: true,
@@ -218,7 +228,7 @@ export class AgentCardService {
     tags?: string[];
   }): AgentCardJson {
     return {
-      schema_version: '1.0.0',
+      schema_version: '1.0',
       name: input.name,
       description: input.description || input.name,
       version: input.version || '1.0.0',

@@ -33,7 +33,9 @@ type RegisterAgentBody = {
 type HeartbeatBody = {
   status?: string;
   latencyMs?: number;
+  latency_ms?: number;
   load?: number;
+  load_metric?: number;
   metadata?: Record<string, unknown>;
 };
 

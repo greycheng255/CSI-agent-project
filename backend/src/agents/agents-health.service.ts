@@ -1,12 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThan, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import {
   Agent,
+  AgentApprovalStatus,
   AgentRuntimeStatus,
   AgentStatus,
 } from './entities/agent.entity';
 import { AgentHeartbeat } from './entities/agent-heartbeat.entity';
+import { AgentAuditLog } from './entities/agent-audit-log.entity';
 
 @Injectable()
 export class AgentsHealthService {
@@ -20,6 +22,8 @@ export class AgentsHealthService {
     private readonly agentsRepository: Repository<Agent>,
     @InjectRepository(AgentHeartbeat)
     private readonly heartbeatsRepository: Repository<AgentHeartbeat>,
+    @InjectRepository(AgentAuditLog)
+    private readonly auditLogsRepository: Repository<AgentAuditLog>,
   ) {}
 
   async recordHeartbeat(
@@ -67,44 +71,63 @@ export class AgentsHealthService {
 
   async refreshTimeoutStatuses() {
     const now = Date.now();
-    const offlineThreshold = new Date(now - this.offlineMs);
-    const degradedThreshold = new Date(now - this.degradedMs);
-
-    const offlineAgents = await this.agentsRepository.find({
+    const agents = await this.agentsRepository.find({
       where: {
-        runtimeStatus: AgentRuntimeStatus.ONLINE,
-        lastHeartbeatAt: LessThan(degradedThreshold),
+        approvalStatus: AgentApprovalStatus.APPROVED,
+        isActive: true,
       },
     });
 
     let changed = 0;
-    for (const agent of offlineAgents) {
-      const last = agent.lastHeartbeatAt?.getTime() || 0;
-      if (last > 0 && now - last >= this.offlineMs) {
-        agent.runtimeStatus = AgentRuntimeStatus.OFFLINE;
-        agent.status = AgentStatus.OFFLINE;
-      } else {
-        agent.runtimeStatus = AgentRuntimeStatus.DEGRADED;
-        agent.status = AgentStatus.ONLINE;
-      }
-      await this.agentsRepository.save(agent);
-      changed += 1;
-    }
+    for (const agent of agents) {
+      const previousRuntimeStatus = agent.runtimeStatus;
+      const previousStatus = agent.status;
+      const nextRuntimeStatus = this.calculateRuntimeStatus(
+        agent.lastHeartbeatAt,
+        now,
+      );
+      const nextStatus =
+        nextRuntimeStatus === AgentRuntimeStatus.OFFLINE
+          ? AgentStatus.OFFLINE
+          : AgentStatus.ONLINE;
 
-    const staleDegradedAgents = await this.agentsRepository.find({
-      where: {
-        runtimeStatus: AgentRuntimeStatus.DEGRADED,
-        lastHeartbeatAt: LessThan(offlineThreshold),
-      },
-    });
-    for (const agent of staleDegradedAgents) {
-      agent.runtimeStatus = AgentRuntimeStatus.OFFLINE;
-      agent.status = AgentStatus.OFFLINE;
+      if (
+        previousRuntimeStatus === nextRuntimeStatus &&
+        previousStatus === nextStatus
+      ) {
+        continue;
+      }
+
+      agent.runtimeStatus = nextRuntimeStatus;
+      agent.status = nextStatus;
       await this.agentsRepository.save(agent);
+      await this.auditLogsRepository.save(
+        this.auditLogsRepository.create({
+          agent,
+          actor: null,
+          action: `runtime_${nextRuntimeStatus}`,
+          beforeValue: {
+            runtimeStatus: previousRuntimeStatus,
+            status: previousStatus,
+          },
+          afterValue: {
+            runtimeStatus: nextRuntimeStatus,
+            status: nextStatus,
+          },
+        }),
+      );
       changed += 1;
     }
 
     return changed;
+  }
+
+  calculateRuntimeStatus(lastHeartbeatAt: Date | null, now = Date.now()) {
+    if (!lastHeartbeatAt) return AgentRuntimeStatus.OFFLINE;
+    const ageMs = now - lastHeartbeatAt.getTime();
+    if (ageMs <= this.degradedMs) return AgentRuntimeStatus.ONLINE;
+    if (ageMs <= this.offlineMs) return AgentRuntimeStatus.DEGRADED;
+    return AgentRuntimeStatus.OFFLINE;
   }
 
   private normalizeRuntimeStatus(status?: string) {

@@ -40,7 +40,10 @@ import { UploadModule } from './upload/upload.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { ExecutionModule } from './execution/execution.module';
 import { AdminModule } from './admin/admin.module';
+import { AdminMCPModule } from './admin/admin-mcp.module';
+import { MCPIntegrationsModule } from './mcp-integrations/mcp-integrations.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { MCPModule } from './mcp/mcp.module';
 import { User } from './users/entities/user.entity';
 import { Agent } from './agents/entities/agent.entity';
 import { Task } from './tasks/entities/task.entity';
@@ -73,10 +76,18 @@ import {
 } from './execution/entities';
 import { Admin } from './admin/entities/admin.entity';
 import { AdminAccessToken } from './admin/entities/admin-access-token.entity';
+import { MCPToolInvocation } from './mcp/entities/mcp-tool-invocation.entity';
+import {
+  MCPAppCapability,
+  MCPAppIntegration,
+  MCPAppInvocation,
+  MCPAppTool,
+  MCPAppToolPermission,
+  MCPTaskBinding,
+} from './mcp-integrations/entities';
 
 // 根据环境变量选择数据库类型
 const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
-
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -124,6 +135,13 @@ const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
         ExecutionPhase,
         ExecutionSubTask,
         ExecutionTrace,
+        MCPToolInvocation,
+        MCPAppIntegration,
+        MCPAppTool,
+        MCPAppCapability,
+        MCPAppToolPermission,
+        MCPAppInvocation,
+        MCPTaskBinding,
         // 管理员相关实体
         Admin,
         AdminAccessToken,
@@ -146,7 +164,10 @@ const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
     UploadModule,
     RealtimeModule,
     ExecutionModule,
+    MCPModule,
     AdminModule, // 管理员模块
+    AdminMCPModule,
+    MCPIntegrationsModule,
     MetricsModule, // 业务指标模块
   ],
   controllers: [AppController],

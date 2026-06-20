@@ -10,6 +10,7 @@ import { AgentManagerController } from './agent-manager.controller';
 import { AgentBindController } from './agent-bind.controller';
 import { AgentCardService } from './agent-card.service';
 import { AgentsHealthService } from './agents-health.service';
+import { AgentsHealthCron } from './agents-health.cron';
 import { AgentsDiscoveryService } from './agents-discovery.service';
 import { Agent } from './entities/agent.entity';
 import { AgentCredential } from './entities/agent-credential.entity';
@@ -56,6 +57,7 @@ import { AdminModule } from '../admin/admin.module';
     AgentManagerService,
     AgentCardService,
     AgentsHealthService,
+    AgentsHealthCron,
     AgentsDiscoveryService,
   ],
   exports: [
