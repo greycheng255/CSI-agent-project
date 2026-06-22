@@ -266,12 +266,16 @@ async function main() {
       'platform.artifact.attach',
       'platform.quote.submit',
     ];
-    assert(tools.length === 10, `tools/list returned ${tools.length}, expected 10`, tools);
+    assert(
+      tools.length >= expectedTools.length,
+      `tools/list returned ${tools.length}, expected at least ${expectedTools.length}`,
+      tools,
+    );
     for (const name of expectedTools) {
       const tool = tools.find((item) => item.name === name);
       assert(tool?.inputSchema, `tools/list missing schema for ${name}`, tools);
     }
-    pass(checks, 'tools/list 返回所有 10 个 Tool 的 schema', { count: tools.length, names: tools.map((t) => t.name) });
+    pass(checks, 'tools/list 返回所有基础 Tool 的 schema', { count: tools.length, names: tools.map((t) => t.name) });
 
     const search = await expectMcpSuccess(server, 'platform.agent.search', { query: 'Carbon', topK: 5, request_id: `${requestPrefix}-read-search` }, 'read-1');
     assert(search.total >= 1, 'platform.agent.search returned no agents', search);

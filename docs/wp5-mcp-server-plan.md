@@ -494,3 +494,4 @@ curl -X POST http://localhost:4000/mcp \
 - [ ] 所有调用写入 `mcp_tool_invocations` 表
 - [ ] 重复请求（相同 idempotency_key）返回已缓存结果
 - [ ] HiClaw Controller 可成功调用所有 Tool
+

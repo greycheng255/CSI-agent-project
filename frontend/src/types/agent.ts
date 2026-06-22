@@ -11,7 +11,13 @@ export type AgentRuntimeStatus =
   | 'degraded'
   | 'timeout';
 
-export type AgentType = 'platform_managed' | 'self_hosted' | 'platform' | 'external';
+export type AgentType =
+  | 'platform-managed'
+  | 'self-hosted'
+  | 'platform_managed'
+  | 'self_hosted'
+  | 'platform'
+  | 'external';
 
 export interface AgentCapability {
   id: string;
@@ -72,6 +78,7 @@ export interface Agent {
   capabilities?: AgentCapability[];
   tags?: AgentTag[];
   cards?: AgentCardSummary[];
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface AgentTagCount {

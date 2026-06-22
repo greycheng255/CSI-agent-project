@@ -9,7 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User, KycStatus } from './entities/user.entity';
 import { AuthService } from '../auth/auth.service';
-import { AgentManagerService } from '../agents/agent-manager.service';
+import { AgentsService } from '../agents/agents.service';
 import { hashSync, compareSync } from 'bcryptjs';
 
 type AuthDto = {
@@ -32,8 +32,8 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private readonly authService: AuthService,
-    @Inject(forwardRef(() => AgentManagerService))
-    private readonly agentManagerService: AgentManagerService,
+    @Inject(forwardRef(() => AgentsService))
+    private readonly agentsService: AgentsService,
   ) {}
 
   private hashPassword(password: string): string {
@@ -85,22 +85,7 @@ export class UsersService {
     await this.usersRepository.save(user);
     this.logger.log(`新用户注册成功: ${user.id} (${user.phone})`);
 
-    // 为新用户自动创建 Agent
-    if (this.agentManagerService) {
-      try {
-        this.logger.log(`为新用户 ${user.id} 自动创建 Agent`);
-        const ownerToken = await this.authService.issueUserToken(user);
-        const agent = await this.agentManagerService.createAgentForUser(
-          user,
-          ownerToken,
-        );
-        this.logger.log(`Agent 创建成功: ${agent.id}`);
-      } catch (error: unknown) {
-        const errorMessage =
-          error instanceof Error ? error.message : 'Unknown error';
-        this.logger.error(`Agent 创建失败: ${errorMessage}`);
-      }
-    }
+    await this.ensureDefaultAgent(user);
 
     return {
       message: '注册成功',
@@ -137,6 +122,7 @@ export class UsersService {
 
     // 签发令牌
     const token = await this.authService.issueUserToken(user);
+    await this.ensureDefaultAgent(user);
 
     return {
       message: '登录成功',
@@ -232,5 +218,15 @@ export class UsersService {
 
     user.passwordHash = this.hashPassword(newPassword);
     await this.usersRepository.save(user);
+  }
+
+  private async ensureDefaultAgent(user: User) {
+    try {
+      await this.agentsService.ensureDefaultSystemAgent(user);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Default agent assignment failed: ${errorMessage}`);
+    }
   }
 }

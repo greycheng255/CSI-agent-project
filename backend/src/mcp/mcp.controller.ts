@@ -6,6 +6,7 @@ import {
   NotFoundException,
   Post,
   Req,
+  UseFilters,
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
@@ -15,6 +16,7 @@ import { MCPRequestDto } from './dto/mcp-request.dto';
 import { MCPResponseDto, MCPResult } from './dto/mcp-response.dto';
 import { MCPAuthGuard } from './mcp-auth.guard';
 import { MCPAuditService } from './mcp-audit.service';
+import { MCPExceptionFilter } from './mcp-exception.filter';
 import { MCPIdempotencyService } from './mcp-idempotency.service';
 import {
   MCPInvocationStatus,
@@ -22,12 +24,15 @@ import {
 } from './entities/mcp-tool-invocation.entity';
 import { ToolRegistry } from './registry/tool-registry';
 import { MCPAppIntegration, MCPAppToolPermission } from '../mcp-integrations/entities';
+import { Agent } from '../agents/entities/agent.entity';
 
 type MCPRequest = Request & {
   mcpApp?: MCPAppIntegration;
+  mcpAgent?: Agent;
 };
 
 @Controller('mcp')
+@UseFilters(MCPExceptionFilter)
 export class MCPController {
   private readonly caller = 'hiclaw-controller';
 
@@ -56,6 +61,43 @@ export class MCPController {
 
     try {
       this.assertValidJsonRpc(body);
+
+      if (body.method === 'initialize') {
+        const result = this.result(
+          true,
+          {
+            protocolVersion: '2025-06-18',
+            capabilities: { tools: {} },
+            serverInfo: { name: 'platform-mcp', version: '1.0.0' },
+          },
+          null,
+          requestId,
+        );
+        await this.recordAudit({
+          caller,
+          toolName: 'initialize',
+          requestId,
+          input: (body.params || {}) as Record<string, unknown>,
+          output: result.data,
+          status: MCPInvocationStatus.SUCCESS,
+          durationMs: Date.now() - startedAt,
+        });
+        return this.response(body, result);
+      }
+
+      if (body.method === 'notifications/initialized') {
+        const result = this.result(true, {}, null, requestId);
+        await this.recordAudit({
+          caller,
+          toolName: 'notifications/initialized',
+          requestId,
+          input: {},
+          output: result.data,
+          status: MCPInvocationStatus.SUCCESS,
+          durationMs: Date.now() - startedAt,
+        });
+        return this.response(body, result);
+      }
 
       if (body.method === 'tools/list') {
         const tools = req.mcpApp
@@ -136,7 +178,7 @@ export class MCPController {
         typeof args.idempotency_key === 'string'
           ? args.idempotency_key.trim()
           : undefined;
-      if (tool.isWrite && !idempotencyKey) {
+      if (tool.isWrite && !idempotencyKey && !req.mcpAgent) {
         throw new BadRequestException('idempotency_key is required for write tools');
       }
 
@@ -149,6 +191,9 @@ export class MCPController {
 
       const result = await tool.execute(args, {
         caller,
+        agentId: req.mcpAgent?.id || null,
+        agentExternalId: req.mcpAgent?.externalId || null,
+        ownerUserId: req.mcpAgent?.owner?.id || null,
         requestId,
         idempotencyKey,
       });
@@ -257,6 +302,9 @@ export class MCPController {
     if (error instanceof BadRequestException) {
       if (error.message.includes('not allowed for this MCP app')) {
         return { code: 'TOOL_FORBIDDEN', message: error.message };
+      }
+      if (error.message.includes('Duplicate bid')) {
+        return { code: 'DUPLICATE_BID', message: error.message };
       }
       if (error.message.includes('rate limit exceeded')) {
         return { code: 'RATE_LIMITED', message: error.message };

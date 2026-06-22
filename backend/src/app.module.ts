@@ -92,7 +92,7 @@ const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
   imports: [
     ScheduleModule.forRoot(),
     TypeOrmModule.forRoot({
-      type: isSqlite ? 'sqlite' : 'postgres',
+      type: isSqlite ? 'better-sqlite3' : 'postgres',
       ...(isSqlite
         ? {
             database: process.env.DATABASE_PATH || '/data/genesis.db',

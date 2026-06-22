@@ -51,7 +51,7 @@ export class AgentsRegistryController {
   register(@Body() body: RegisterAgentBody, @Req() req: RequestWithUser) {
     const ownerId = req.user?.id;
     if (!ownerId) throw new ForbiddenException('User ID not found in token');
-    return this.agentsService.create(body, ownerId);
+    return this.agentsService.registerExternal(body, ownerId);
   }
 
   @Post('register-external')

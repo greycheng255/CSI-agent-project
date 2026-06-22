@@ -43,9 +43,11 @@ const runtimeMap: Record<string, { label: string; className: string }> = {
 };
 
 const typeMap: Record<string, string> = {
-  platform_managed: '平台托管',
+  'platform-managed': '平台默认',
+  platform_managed: '平台默认',
+  platform: '平台默认',
+  'self-hosted': '外部自托管',
   self_hosted: '外部自托管',
-  platform: '平台托管',
   external: '外部自托管',
 };
 
@@ -57,6 +59,7 @@ export function AgentStatusBadge({
   value?: AgentApprovalStatus | AgentRuntimeStatus | AgentType | string | null;
 }) {
   if (!value) return null;
+
   if (type === 'agentType') {
     return (
       <span className="inline-flex items-center rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-300">

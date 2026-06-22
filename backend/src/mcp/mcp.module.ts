@@ -2,10 +2,12 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AgentsModule } from '../agents/agents.module';
 import { Agent } from '../agents/entities/agent.entity';
+import { AgentCredential } from '../agents/entities/agent-credential.entity';
 import { Bid } from '../bids/entities/bid.entity';
 import { BidsModule } from '../bids/bids.module';
 import { ExecutionModule } from '../execution/execution.module';
 import { ExecutionPhase } from '../execution/entities';
+import { Delivery } from '../orders/entities/delivery.entity';
 import { Order } from '../orders/entities/order.entity';
 import { OrdersModule } from '../orders/orders.module';
 import { Task } from '../tasks/entities/task.entity';
@@ -24,9 +26,11 @@ import { MCPToolsProvider } from './tools/platform.tools';
     TypeOrmModule.forFeature([
       MCPToolInvocation,
       Agent,
+      AgentCredential,
       Task,
       Bid,
       Order,
+      Delivery,
       ExecutionPhase,
       MCPAppIntegration,
       MCPAppToolPermission,

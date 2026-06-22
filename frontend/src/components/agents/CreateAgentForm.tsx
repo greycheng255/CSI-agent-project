@@ -1,17 +1,62 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, FileJson, Link2, Loader2, Server } from 'lucide-react';
-import { registerAgent, registerExternalAgent } from '../../api/agentsApi';
+import { CheckCircle2, FileJson, Link2, Loader2 } from 'lucide-react';
+import { registerExternalAgent } from '../../api/agentsApi';
 import type { Agent } from '../../types/agent';
 import { AgentCardPreview, validateAgentCardForPreview } from './AgentCardPreview';
 
-type Mode = 'platform' | 'external';
-
-function splitList(value: string) {
-  return value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
+const AGENT_CARD_JSON_EXAMPLE = JSON.stringify(
+  {
+    schema_version: '1.0',
+    agent_id: 'external-agent-demo-001',
+    name: 'AI Lead Generation Agent',
+    description:
+      'An external self-hosted agent that analyzes lead generation tasks, creates outreach plans, and returns structured delivery artifacts.',
+    version: '1.0.0',
+    provider: {
+      owner: 'Example AI Team',
+      homepage: 'https://example.com',
+      contact_email: 'ops@example.com',
+    },
+    endpoints: {
+      task: 'https://agent.example.com/a2a/tasks',
+      webhook: 'https://agent.example.com/webhook',
+      health: 'https://agent.example.com/health',
+      callback: 'https://agent.example.com/callback',
+    },
+    auth: {
+      type: 'bearer',
+      key_id: 'prod-key-001',
+    },
+    capabilities: {
+      domains: ['lead-generation', 'crm', 'marketing-automation'],
+      skills: ['task_analysis', 'lead_scoring', 'outreach_copywriting'],
+      tools: ['crm-search', 'email-draft', 'report-generator'],
+      models: ['gpt-4.1', 'claude-sonnet'],
+      languages: ['zh-CN', 'en-US'],
+      input_formats: ['text', 'json', 'csv'],
+      output_formats: ['json', 'markdown', 'xlsx'],
+      max_concurrency: 3,
+    },
+    pricing: {
+      model: 'quote',
+      currency: 'CNY',
+      minimum_price: 100,
+      description:
+        'Quote by task complexity, lead volume, and delivery deadline.',
+    },
+    limits: {
+      max_concurrent_tasks: 3,
+      timeout_seconds: 600,
+    },
+    metadata: {
+      tags: ['external-self-hosted', 'lead-generation', 'crm'],
+      service_level: 'business-hours',
+      owner_user_id: 'replace-with-platform-user-id-if-needed',
+    },
+  },
+  null,
+  2,
+);
 
 export function CreateAgentForm({
   onCreated,
@@ -20,21 +65,9 @@ export function CreateAgentForm({
   onCreated: (agent: Agent) => void;
   onCancel?: () => void;
 }) {
-  const [mode, setMode] = useState<Mode>('platform');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [skills, setSkills] = useState('python,data');
-  const [domains, setDomains] = useState('carbon');
-  const [tags, setTags] = useState('');
-  const [endpointUrl, setEndpointUrl] = useState('');
-  const [healthUrl, setHealthUrl] = useState('');
-  const [pricingModel, setPricingModel] = useState('quote');
-  const [basePrice, setBasePrice] = useState('');
   const [contactEmail, setContactEmail] = useState('');
-
   const [cardUrl, setCardUrl] = useState('');
   const [cardJsonText, setCardJsonText] = useState('');
   const [cardUrlLoading, setCardUrlLoading] = useState(false);
@@ -42,9 +75,19 @@ export function CreateAgentForm({
   const [cardPreviewError, setCardPreviewError] = useState('');
 
   const parsedCard = useMemo(() => {
-    if (!cardJsonText.trim()) return { ok: true, value: undefined as Record<string, unknown> | undefined };
+    if (!cardJsonText.trim()) {
+      return {
+        ok: true,
+        value: undefined as Record<string, unknown> | undefined,
+        message: '',
+      };
+    }
     try {
-      return { ok: true, value: JSON.parse(cardJsonText) as Record<string, unknown> };
+      return {
+        ok: true,
+        value: JSON.parse(cardJsonText) as Record<string, unknown>,
+        message: '',
+      };
     } catch (err) {
       return {
         ok: false,
@@ -58,41 +101,24 @@ export function CreateAgentForm({
     event.preventDefault();
     setError('');
     setSubmitting(true);
+
     try {
-      let agent: Agent;
-      if (mode === 'platform') {
-        agent = await registerAgent({
-          name: name.trim(),
-          description: description.trim(),
-          skills: splitList(skills),
-          domains: splitList(domains),
-          tags: splitList(tags),
-          endpointUrl: endpointUrl.trim() || undefined,
-          webhookUrl: endpointUrl.trim() || undefined,
-          healthUrl: healthUrl.trim() || undefined,
-          authType: 'bearer',
-          pricingModel,
-          basePrice: basePrice ? Number(basePrice) : null,
-          currency: 'CNY',
-          contactEmail: contactEmail.trim() || undefined,
-        });
-      } else {
-        const cardJson = parsedCard.value || cardUrlPreview || undefined;
-        if (!cardUrl.trim() && !cardJson) {
-          throw new Error('Card URL 和 Card JSON 至少填写一个');
-        }
-        if (!parsedCard.ok) {
-          throw new Error('Card JSON 格式错误，请修正后提交');
-        }
-        if (cardJson && validateAgentCardForPreview(cardJson).length > 0) {
-          throw new Error('Agent Card 缺少必填字段，请补齐后提交');
-        }
-        agent = await registerExternalAgent({
-          cardUrl: cardUrl.trim() || undefined,
-          cardJson,
-          contactEmail: contactEmail.trim() || undefined,
-        });
+      const cardJson = parsedCard.value || cardUrlPreview || undefined;
+      if (!cardUrl.trim() && !cardJson) {
+        throw new Error('请填写 Agent Card URL 或 Agent Card JSON');
       }
+      if (!parsedCard.ok) {
+        throw new Error('请修正 Agent Card JSON 后再提交');
+      }
+      if (cardJson && validateAgentCardForPreview(cardJson).length > 0) {
+        throw new Error('Agent Card 缺少必填字段');
+      }
+
+      const agent = await registerExternalAgent({
+        cardUrl: cardUrl.trim() || undefined,
+        cardJson,
+        contactEmail: contactEmail.trim() || undefined,
+      });
       onCreated(agent);
     } catch (err) {
       setError(err instanceof Error ? err.message : '注册失败');
@@ -109,9 +135,12 @@ export function CreateAgentForm({
     setCardUrlLoading(true);
     setCardPreviewError('');
     setCardUrlPreview(null);
+
     try {
       const response = await fetch(cardUrl.trim());
-      if (!response.ok) throw new Error(`Card URL 返回 HTTP ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Card URL 返回 HTTP ${response.status}`);
+      }
       const data = (await response.json()) as Record<string, unknown>;
       setCardUrlPreview(data);
     } catch (err) {
@@ -125,115 +154,94 @@ export function CreateAgentForm({
     <form onSubmit={handleSubmit} className="space-y-5 rounded-lg border border-purple-900/50 bg-purple-950/10 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-purple-300">注册 Agent</h2>
-          <p className="mt-1 text-xs text-gray-500">提交后进入待审核，管理员通过后才会进入智能体广场。</p>
+          <h2 className="text-lg font-bold text-purple-300">注册外部自托管 Agent</h2>
+          <p className="mt-1 text-xs text-gray-500">提交后进入待审核，审核通过并启动后展示到智能体广场。</p>
         </div>
-        <div className="flex rounded border border-gray-800 bg-black p-1 text-sm">
-          <button
-            type="button"
-            onClick={() => setMode('platform')}
-            className={`flex items-center gap-1 rounded px-3 py-1.5 ${
-              mode === 'platform' ? 'bg-purple-500 text-black' : 'text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            <Server className="h-4 w-4" />
-            平台托管
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('external')}
-            className={`flex items-center gap-1 rounded px-3 py-1.5 ${
-              mode === 'external' ? 'bg-purple-500 text-black' : 'text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            <Link2 className="h-4 w-4" />
-            外部自托管
-          </button>
-        </div>
+        <span className="inline-flex items-center gap-1 rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-300">
+          <Link2 className="h-3.5 w-3.5" />
+          外部自托管
+        </span>
       </div>
 
-      {mode === 'platform' ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="Agent 名称">
-            <input required value={name} onChange={(e) => setName(e.target.value)} className="field-input" />
-          </Field>
-          <Field label="Endpoint URL">
-            <input value={endpointUrl} onChange={(e) => setEndpointUrl(e.target.value)} placeholder="https://example.com/a2a/tasks" className="field-input" />
-          </Field>
-          <Field label="能力描述">
-            <input required value={description} onChange={(e) => setDescription(e.target.value)} className="field-input" />
-          </Field>
-          <Field label="Health URL">
-            <input value={healthUrl} onChange={(e) => setHealthUrl(e.target.value)} placeholder="https://example.com/health" className="field-input" />
-          </Field>
-          <Field label="技能，逗号分隔">
-            <input value={skills} onChange={(e) => setSkills(e.target.value)} className="field-input" />
-          </Field>
-          <Field label="领域，逗号分隔">
-            <input value={domains} onChange={(e) => setDomains(e.target.value)} className="field-input" />
-          </Field>
-          <Field label="自定义标签">
-            <input value={tags} onChange={(e) => setTags(e.target.value)} className="field-input" />
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="定价模式">
-              <select value={pricingModel} onChange={(e) => setPricingModel(e.target.value)} className="field-input">
-                <option value="quote">询价</option>
-                <option value="fixed">固定价</option>
-                <option value="hourly">按小时</option>
-                <option value="token">按 Token</option>
-              </select>
-            </Field>
-            <Field label="基础价格">
-              <input value={basePrice} onChange={(e) => setBasePrice(e.target.value)} inputMode="decimal" className="field-input" />
-            </Field>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <Field label="Agent Card URL">
-            <div className="flex gap-2">
-              <input value={cardUrl} onChange={(e) => setCardUrl(e.target.value)} placeholder="https://example.com/agent-card.json" className="field-input" />
-              <button
-                type="button"
-                onClick={fetchCardUrlPreview}
-                disabled={cardUrlLoading}
-                className="inline-flex items-center gap-2 rounded border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:border-gray-500 disabled:opacity-50"
-              >
-                {cardUrlLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                预览
-              </button>
-            </div>
-          </Field>
-          <Field label="或粘贴 Agent Card JSON">
-            <textarea
-              value={cardJsonText}
-              onChange={(e) => setCardJsonText(e.target.value)}
-              rows={8}
-              className="field-input font-mono"
-              placeholder='{"schema_version":"1.0","name":"Carbon Agent",...}'
+      <div className="space-y-4">
+        <Field label="Agent Card URL">
+          <div className="flex gap-2">
+            <input
+              value={cardUrl}
+              onChange={(event) => setCardUrl(event.target.value)}
+              placeholder="https://example.com/agent-card.json"
+              className="field-input"
             />
-          </Field>
-          {cardJsonText.trim() && (
-            <div className={`flex items-center gap-2 rounded border px-3 py-2 text-xs ${
-              parsedCard.ok ? 'border-green-500/30 bg-green-500/10 text-green-300' : 'border-red-500/30 bg-red-500/10 text-red-300'
-            }`}>
-              {parsedCard.ok ? <CheckCircle2 className="h-4 w-4" /> : <FileJson className="h-4 w-4" />}
-              {parsedCard.ok ? `JSON 可解析：${String(parsedCard.value?.name || '未命名 Agent')}` : parsedCard.message}
-            </div>
-          )}
-          <AgentCardPreview
-            card={(parsedCard.ok && parsedCard.value) || cardUrlPreview}
-            error={!parsedCard.ok ? parsedCard.message : cardPreviewError}
+            <button
+              type="button"
+              onClick={fetchCardUrlPreview}
+              disabled={cardUrlLoading}
+              className="inline-flex items-center gap-2 rounded border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:border-gray-500 disabled:opacity-50"
+            >
+              {cardUrlLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+              预览
+            </button>
+          </div>
+        </Field>
+
+        <Field label="或粘贴 Agent Card JSON">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-gray-500">
+              示例包含必填字段：schema_version、name、description、version、endpoints.task、endpoints.health、auth.type、capabilities.domains、capabilities.skills、pricing.model。
+            </p>
+            <button
+              type="button"
+              onClick={() => setCardJsonText(AGENT_CARD_JSON_EXAMPLE)}
+              className="inline-flex items-center gap-1 rounded border border-gray-700 px-2 py-1 text-xs text-gray-300 hover:border-gray-500"
+            >
+              <FileJson className="h-3.5 w-3.5" />
+              填入示例
+            </button>
+          </div>
+          <textarea
+            value={cardJsonText}
+            onChange={(event) => setCardJsonText(event.target.value)}
+            rows={18}
+            className="field-input font-mono"
+            placeholder={AGENT_CARD_JSON_EXAMPLE}
           />
-        </div>
-      )}
+        </Field>
+
+        {cardJsonText.trim() && (
+          <div
+            className={`flex items-center gap-2 rounded border px-3 py-2 text-xs ${
+              parsedCard.ok
+                ? 'border-green-500/30 bg-green-500/10 text-green-300'
+                : 'border-red-500/30 bg-red-500/10 text-red-300'
+            }`}
+          >
+            {parsedCard.ok ? <CheckCircle2 className="h-4 w-4" /> : <FileJson className="h-4 w-4" />}
+            {parsedCard.ok
+              ? `JSON 可解析：${String(parsedCard.value?.name || '未命名 Agent')}`
+              : parsedCard.message}
+          </div>
+        )}
+
+        <AgentCardPreview
+          card={(parsedCard.ok && parsedCard.value) || cardUrlPreview}
+          error={!parsedCard.ok ? parsedCard.message : cardPreviewError}
+        />
+      </div>
 
       <Field label="联系邮箱">
-        <input value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="ops@example.com" className="field-input" />
+        <input
+          value={contactEmail}
+          onChange={(event) => setContactEmail(event.target.value)}
+          placeholder="ops@example.com"
+          className="field-input"
+        />
       </Field>
 
-      {error && <div className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</div>}
+      {error && (
+        <div className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          {error}
+        </div>
+      )}
 
       <div className="flex justify-end gap-3">
         {onCancel && (
@@ -247,7 +255,7 @@ export function CreateAgentForm({
           className="inline-flex items-center gap-2 rounded bg-purple-500 px-5 py-2 text-sm font-bold text-black hover:bg-purple-400 disabled:opacity-60"
         >
           {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-          提交注册
+          提交审核
         </button>
       </div>
     </form>

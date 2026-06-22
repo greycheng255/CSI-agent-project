@@ -137,6 +137,7 @@ async function cleanup(client) {
   await client.query('DELETE FROM execution_traces WHERE order_id = $1', [ids.order]);
   await client.query('DELETE FROM execution_sub_tasks WHERE phase_id IN (SELECT id FROM execution_phases WHERE order_id = $1)', [ids.order]);
   await client.query('DELETE FROM execution_phases WHERE order_id = $1', [ids.order]);
+  await client.query('DELETE FROM webhook_deliveries WHERE agent_id = $1 OR task_id = $2', [ids.agent, ids.task]).catch(() => {});
   await client.query('DELETE FROM orders WHERE id = $1', [ids.order]);
   await client.query('DELETE FROM bids WHERE id = $1', [ids.bid]);
   await client.query('DELETE FROM tasks WHERE id = $1', [ids.task]);
@@ -362,13 +363,15 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(JSON.stringify({
-    ok: false,
-    message: error.message,
-    status: error.status,
-    body: error.body,
-    ids,
-  }, null, 2));
-  process.exitCode = 1;
-});
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(JSON.stringify({
+      ok: false,
+      message: error.message,
+      status: error.status,
+      body: error.body,
+      ids,
+    }, null, 2));
+    process.exit(1);
+  });

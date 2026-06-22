@@ -25,6 +25,12 @@ type Agent = {
   approvalStatus?: string;
   runtimeStatus?: string;
   isActive?: boolean;
+  metadata?: Record<string, unknown> | null;
+  tags?: Array<{
+    tag?: string;
+    name?: string;
+    tagType?: string;
+  }>;
   endpointUrl?: string | null;
   healthUrl?: string | null;
   pricingModel?: string | null;
@@ -48,6 +54,22 @@ type MarketTask = {
   expectedDeliveryAt?: string;
   status?: string;
 };
+
+function getAgentTags(agent: Agent) {
+  return (agent.tags || [])
+    .map((tag) => tag.tag || tag.name || '')
+    .filter(Boolean);
+}
+
+function isSystemDefaultAgent(agent: Agent) {
+  const tags = getAgentTags(agent);
+  return (
+    agent.metadata?.systemCreated === true ||
+    agent.metadata?.defaultAgent === true ||
+    tags.includes('system-created') ||
+    tags.includes('platform-runtime')
+  );
+}
 
 export default function AgentManagement() {
   const { user, admin } = useAuthStore();
@@ -293,7 +315,7 @@ export default function AgentManagement() {
             className="px-4 py-2 bg-purple-500 text-black font-bold rounded hover:bg-purple-400 transition-colors flex items-center space-x-2 text-sm"
           >
             <Plus className="w-4 h-4" />
-            <span>手动注册</span>
+            <span>注册外部 Agent</span>
           </button>
         </div>
       </div>
@@ -524,7 +546,7 @@ spec:
         <CreateAgentForm
           onCancel={() => setShowCreate(false)}
           onCreated={() => {
-            alert('Agent 已提交审核，当前状态：待审核。管理员审核通过后才会进入智能体广场。');
+            alert('外部自托管 Agent 已提交审核，审核通过并启动后会进入智能体广场。');
             setShowCreate(false);
             fetchAgents();
           }}
@@ -600,10 +622,22 @@ spec:
                 ) : (
                   <button
                     onClick={() => toggleAgentActive(agent)}
-                    disabled={togglingAgent === agent.id}
+                    disabled={
+                      togglingAgent === agent.id ||
+                      (!isSystemDefaultAgent(agent) && agent.approvalStatus !== 'approved')
+                    }
                     className="flex items-center gap-1 px-2 py-1 rounded border text-xs border-green-500/40 text-green-300 hover:bg-green-500/10 transition-colors disabled:opacity-50"
+                    title={
+                      !isSystemDefaultAgent(agent) && agent.approvalStatus !== 'approved'
+                        ? '审核通过后才能启动展示'
+                        : '启动后进入智能体广场'
+                    }
                   >
-                    {togglingAgent === agent.id ? '处理中' : '启动'}
+                    {togglingAgent === agent.id
+                      ? '处理中'
+                      : !isSystemDefaultAgent(agent) && agent.approvalStatus !== 'approved'
+                        ? '待审核'
+                        : '启动'}
                   </button>
                 )}
               </div>
@@ -709,6 +743,16 @@ spec:
               <p className="text-sm text-gray-500 line-clamp-2">{agent.description}</p>
               <div className="flex flex-wrap gap-2 pt-1">
                 <AgentStatusBadge type="agentType" value={agent.agentType} />
+                {isSystemDefaultAgent(agent) && (
+                  <>
+                    <span className="px-2 py-1 bg-purple-500/10 rounded text-xs text-purple-300">
+                      系统创建
+                    </span>
+                    <span className="px-2 py-1 bg-blue-500/10 rounded text-xs text-blue-300">
+                      平台 Runtime
+                    </span>
+                  </>
+                )}
                 {agent.basePrice != null && (
                   <span className="px-2 py-1 bg-gray-800/50 rounded text-xs text-gray-300">
                     {agent.currency || 'CNY'} {agent.basePrice}

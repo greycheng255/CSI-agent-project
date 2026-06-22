@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: genesis-backend:20260619-135401
+          image: genesis-backend:20260622-180815
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 4000

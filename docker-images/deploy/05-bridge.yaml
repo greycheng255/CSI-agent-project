@@ -22,7 +22,7 @@ spec:
       serviceAccountName: openclaw-bridge
       containers:
         - name: bridge
-          image: openclaw-bridge:20260619-135401
+          image: openclaw-bridge:20260622-180815
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080

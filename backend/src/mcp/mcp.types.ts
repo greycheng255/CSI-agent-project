@@ -4,6 +4,9 @@ export type JSONSchema = Record<string, unknown>;
 
 export type MCPContext = {
   caller: string;
+  agentId?: string | null;
+  agentExternalId?: string | null;
+  ownerUserId?: string | null;
   requestId?: string | null;
   idempotencyKey?: string | null;
 };

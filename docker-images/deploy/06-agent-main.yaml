@@ -25,7 +25,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: agent
-          image: genesis-agent:20260619-135401
+          image: genesis-agent:20260622-180815
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000

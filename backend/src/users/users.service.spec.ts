@@ -3,7 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { UsersService } from './users.service';
 import { User } from './entities/user.entity';
 import { AuthService } from '../auth/auth.service';
-import { AgentManagerService } from '../agents/agent-manager.service';
+import { AgentsService } from '../agents/agents.service';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -19,8 +19,8 @@ describe('UsersService', () => {
     generateTokens: jest.fn(),
   };
 
-  const mockAgentManagerService = {
-    getDefaultAgent: jest.fn(),
+  const mockAgentsService = {
+    ensureDefaultSystemAgent: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -36,8 +36,8 @@ describe('UsersService', () => {
           useValue: mockAuthService,
         },
         {
-          provide: AgentManagerService,
-          useValue: mockAgentManagerService,
+          provide: AgentsService,
+          useValue: mockAgentsService,
         },
       ],
     }).compile();

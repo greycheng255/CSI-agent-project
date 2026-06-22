@@ -48,6 +48,14 @@ type CreateAgentDto = {
   contactEmail?: string;
 };
 
+const SYSTEM_DEFAULT_AGENT_PREFIX = 'system-default-';
+const DEFAULT_PLATFORM_AGENT_SKILLS = [
+  'task_analysis',
+  'code_generation',
+  'data_processing',
+  'ai_integration',
+];
+
 @Injectable()
 export class AgentsService {
   private readonly logger = new Logger(AgentsService.name);
@@ -70,6 +78,100 @@ export class AgentsService {
 
   private hashKey(key: string) {
     return createHash('sha256').update(key).digest('hex');
+  }
+
+  async ensureDefaultSystemAgent(owner: User) {
+    if (!owner?.id) {
+      throw new NotFoundException('Owner not found');
+    }
+
+    const externalId = `${SYSTEM_DEFAULT_AGENT_PREFIX}${owner.id}`;
+    const existing = await this.agentsRepository.findOne({
+      where: { externalId },
+      relations: ['owner', 'cards', 'capabilities', 'tags'],
+    });
+
+    if (existing) {
+      const updates: Partial<Agent> = {};
+      if (existing.agentType !== AgentType.PLATFORM_MANAGED) {
+        updates.agentType = AgentType.PLATFORM_MANAGED;
+      }
+      if (existing.agentMode !== 'kubernetes') {
+        updates.agentMode = 'kubernetes';
+      }
+      if (existing.approvalStatus !== AgentApprovalStatus.APPROVED) {
+        updates.approvalStatus = AgentApprovalStatus.APPROVED;
+        updates.approvedAt = new Date();
+      }
+      const metadata = this.defaultSystemAgentMetadata(owner.id, existing.metadata);
+      if (JSON.stringify(existing.metadata || {}) !== JSON.stringify(metadata)) {
+        updates.metadata = metadata;
+      }
+      if (Object.keys(updates).length > 0) {
+        Object.assign(existing, updates);
+        await this.agentsRepository.save(existing);
+      }
+      return this.findOneWithDetails(existing.id);
+    }
+
+    const endpointUrl = this.defaultRuntimeEndpointUrl();
+    const healthUrl = this.defaultRuntimeHealthUrl(endpointUrl);
+    const displayName = owner.displayName || owner.phone || owner.id.slice(0, 8);
+
+    const agent = this.agentsRepository.create({
+      name: `${displayName} Default Agent`,
+      description:
+        'System-created default agent backed by the platform Agent Runtime.',
+      webhookUrl: endpointUrl,
+      owner,
+      status: AgentStatus.ONLINE,
+      approvalStatus: AgentApprovalStatus.APPROVED,
+      runtimeStatus: AgentRuntimeStatus.ONLINE,
+      agentType: AgentType.PLATFORM_MANAGED,
+      agentMode: 'kubernetes',
+      isActive: false,
+      visibility: 'public',
+      externalId,
+      endpointUrl,
+      healthUrl,
+      authType: 'bearer',
+      pricingModel: 'quote',
+      currency: 'CNY',
+      approvedAt: new Date(),
+      lastHeartbeatAt: new Date(),
+      skills: DEFAULT_PLATFORM_AGENT_SKILLS,
+      metadata: this.defaultSystemAgentMetadata(owner.id),
+    });
+
+    const saved = await this.agentsRepository.save(agent);
+    const card = this.agentCardService.buildPlatformCard({
+      name: saved.name,
+      description: saved.description,
+      agentType: saved.agentType,
+      endpointUrl: saved.endpointUrl || undefined,
+      webhookUrl: saved.webhookUrl || undefined,
+      healthUrl: saved.healthUrl || undefined,
+      authType: saved.authType,
+      domains: ['general'],
+      skills: DEFAULT_PLATFORM_AGENT_SKILLS,
+      pricingModel: saved.pricingModel,
+      currency: saved.currency,
+      tags: this.defaultSystemAgentTags(owner.id),
+    });
+
+    await this.agentCardService.saveActiveCard({
+      agent: saved,
+      card,
+      source: 'platform',
+    });
+    await this.agentCardService.replaceExtractedMetadata(saved, card);
+    await this.writeAudit(saved, owner, 'system_default_assigned', null, {
+      approvalStatus: saved.approvalStatus,
+      isActive: saved.isActive,
+      metadata: saved.metadata,
+    });
+
+    return this.findOneWithDetails(saved.id);
   }
 
   async create(data: CreateAgentDto, ownerId: string) {
@@ -299,7 +401,7 @@ export class AgentsService {
   async findByUser(userId: string) {
     const agents = await this.agentsRepository.find({
       where: { owner: { id: userId } },
-      relations: ['owner'],
+      relations: ['owner', 'capabilities', 'tags'],
       order: { createdAt: 'DESC' },
     });
 
@@ -565,10 +667,29 @@ export class AgentsService {
     if (actorId && agent.owner?.id !== actorId) {
       throw new ForbiddenException('Only the agent owner can enable it');
     }
-    const before = { approvalStatus: agent.approvalStatus, isActive: agent.isActive };
-    agent.isActive = true;
+    const before = {
+      approvalStatus: agent.approvalStatus,
+      isActive: agent.isActive,
+    };
+    if (agent.approvalStatus === AgentApprovalStatus.REJECTED) {
+      throw new ForbiddenException('Rejected agents cannot be enabled');
+    }
     if (agent.approvalStatus === AgentApprovalStatus.DISABLED) {
+      throw new ForbiddenException('Disabled agents must be re-enabled by an admin');
+    }
+    if (
+      !this.isSystemDefaultAgent(agent) &&
+      agent.approvalStatus !== AgentApprovalStatus.APPROVED
+    ) {
+      throw new ForbiddenException('Agent must be approved before it can be enabled');
+    }
+    agent.isActive = true;
+    if (this.isSystemDefaultAgent(agent)) {
       agent.approvalStatus = AgentApprovalStatus.APPROVED;
+      agent.runtimeStatus = AgentRuntimeStatus.ONLINE;
+      agent.status = AgentStatus.ONLINE;
+      agent.lastHeartbeatAt = new Date();
+      agent.approvedAt = agent.approvedAt || new Date();
     }
     const saved = await this.agentsRepository.save(agent);
     await this.writeAudit(saved, null, 'enable', before, { actorId });
@@ -587,9 +708,11 @@ export class AgentsService {
       isActive: agent.isActive,
     };
     agent.isActive = false;
-    agent.approvalStatus = AgentApprovalStatus.DISABLED;
-    agent.runtimeStatus = AgentRuntimeStatus.OFFLINE;
-    agent.status = AgentStatus.OFFLINE;
+    if (!enforceOwner) {
+      agent.approvalStatus = AgentApprovalStatus.DISABLED;
+      agent.runtimeStatus = AgentRuntimeStatus.OFFLINE;
+      agent.status = AgentStatus.OFFLINE;
+    }
     const saved = await this.agentsRepository.save(agent);
     await this.writeAudit(saved, null, 'disable', before, { actorId });
     return saved;
@@ -803,6 +926,52 @@ export class AgentsService {
     return (card.capabilities?.skills || [])
       .map((skill) => (typeof skill === 'string' ? skill : skill.name || ''))
       .filter(Boolean);
+  }
+
+  private defaultRuntimeEndpointUrl() {
+    return (
+      process.env.DEFAULT_AGENT_RUNTIME_ENDPOINT_URL ||
+      process.env.PLATFORM_AGENT_RUNTIME_ENDPOINT_URL ||
+      'http://genesis-agent.genesis.svc.cluster.local:3000/webhook'
+    );
+  }
+
+  private defaultRuntimeHealthUrl(endpointUrl: string) {
+    if (process.env.DEFAULT_AGENT_RUNTIME_HEALTH_URL) {
+      return process.env.DEFAULT_AGENT_RUNTIME_HEALTH_URL;
+    }
+    if (process.env.PLATFORM_AGENT_RUNTIME_HEALTH_URL) {
+      return process.env.PLATFORM_AGENT_RUNTIME_HEALTH_URL;
+    }
+    return endpointUrl.endsWith('/webhook')
+      ? endpointUrl.replace(/\/webhook$/, '/health')
+      : endpointUrl;
+  }
+
+  private defaultSystemAgentTags(ownerId: string) {
+    return ['system-created', `owner:${ownerId}`, 'platform-runtime'];
+  }
+
+  private defaultSystemAgentMetadata(
+    ownerId: string,
+    existing?: Record<string, unknown> | null,
+  ) {
+    return {
+      ...(existing || {}),
+      createdBy: 'system',
+      systemCreated: true,
+      defaultAgent: true,
+      ownerUserId: ownerId,
+      tags: this.defaultSystemAgentTags(ownerId),
+    };
+  }
+
+  private isSystemDefaultAgent(agent: Agent) {
+    return (
+      agent.agentType === AgentType.PLATFORM_MANAGED &&
+      agent.metadata?.createdBy === 'system' &&
+      agent.metadata?.defaultAgent === true
+    );
   }
 
   private async writeAudit(
