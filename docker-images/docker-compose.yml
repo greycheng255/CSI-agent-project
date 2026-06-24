@@ -1,5 +1,5 @@
-﻿# 镜像构建时间: 2026-06-21 20:49:59
-# 镜像包: genesis-all_20260622-180815.tar
+﻿# 镜像构建时间: 2026-06-23 23:25:59
+# 镜像包: genesis-all_20260623-232559.tar
 services:
   # ==================== 基础设施 ====================
   postgres:
@@ -40,7 +40,7 @@ services:
 
   # ==================== 业务服务 ====================
   genesis-backend:
-    image: genesis-backend:${TAG:-20260622-180815}
+    image: genesis-backend:${TAG:-20260623-232559}
     container_name: genesis-backend
     build:
       context: ./backend
@@ -76,7 +76,7 @@ services:
       - genesis-net
 
   genesis-frontend:
-    image: genesis-frontend:${TAG:-20260622-180815}
+    image: genesis-frontend:${TAG:-20260623-232559}
     container_name: genesis-frontend
     build:
       context: ./frontend
@@ -90,7 +90,7 @@ services:
       - genesis-net
 
   genesis-agent:
-    image: genesis-agent:${TAG:-20260622-180815}
+    image: genesis-agent:${TAG:-20260623-232559}
     container_name: genesis-agent
     build:
       context: ./genesis-agent
@@ -118,7 +118,7 @@ services:
       - genesis-net
 
   openclaw-bridge:
-    image: openclaw-bridge:${TAG:-20260622-180815}
+    image: openclaw-bridge:${TAG:-20260623-232559}
     container_name: openclaw-bridge
     build:
       context: ./openclaw-bridge

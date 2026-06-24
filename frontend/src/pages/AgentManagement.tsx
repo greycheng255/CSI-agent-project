@@ -8,7 +8,26 @@ import { AgentStatusBadge } from '../components/agents/AgentStatusBadge';
 import { disableAgent, enableAgent } from '../api/agentsApi';
 
 type AgentStatus = 'ONLINE' | 'OFFLINE';
-type OpenclawStatus = 'CONNECTED' | 'DISCONNECTED' | 'UNKNOWN';
+
+type HealthCheckState = {
+  status: AgentStatus;
+  lastHealthCheckAt?: string;
+  checks?: {
+    heartbeatValid: boolean;
+    platformExecutionReady?: boolean;
+    webhookConfigured?: boolean;
+    configurationValid: boolean;
+  };
+  errors?: string[];
+};
+
+type ExecutionDisplay = {
+  endpointLabel: string;
+  statusLabel: string;
+  statusClassName: string;
+  detail: string;
+  title: string;
+};
 
 type Agent = {
   id: string;
@@ -22,6 +41,7 @@ type Agent = {
     phone?: string;
   };
   agentType?: string;
+  agentMode?: 'kubernetes' | 'external';
   approvalStatus?: string;
   runtimeStatus?: string;
   isActive?: boolean;
@@ -32,13 +52,15 @@ type Agent = {
     tagType?: string;
   }>;
   endpointUrl?: string | null;
+  cardUrl?: string | null;
   healthUrl?: string | null;
   pricingModel?: string | null;
   basePrice?: number | null;
   currency?: string | null;
-  openclawUrl?: string;
-  openclawStatus?: OpenclawStatus;
   lastHealthCheckAt?: string;
+  hasActiveApiKey?: boolean;
+  activeApiKeyCount?: number;
+  lastCredentialUsedAt?: string | null;
   healthCheckResult?: {
     agentOnline: boolean;
     openclawReachable: boolean;
@@ -61,14 +83,129 @@ function getAgentTags(agent: Agent) {
     .filter(Boolean);
 }
 
+function normalizeAgentType(value?: string | null) {
+  if (!value) return undefined;
+  if (['self-hosted', 'self_hosted', 'external'].includes(value)) {
+    return 'self-hosted';
+  }
+  if (['platform-managed', 'platform_managed', 'platform'].includes(value)) {
+    return 'platform-managed';
+  }
+  return value;
+}
+
 function isSystemDefaultAgent(agent: Agent) {
   const tags = getAgentTags(agent);
+  const agentType = normalizeAgentType(agent.agentType);
   return (
-    agent.metadata?.systemCreated === true ||
-    agent.metadata?.defaultAgent === true ||
-    tags.includes('system-created') ||
-    tags.includes('platform-runtime')
+    agentType === 'platform-managed' &&
+    (agent.metadata?.systemCreated === true ||
+      agent.metadata?.defaultAgent === true ||
+      (tags.includes('system-created') && tags.includes('platform-runtime')))
   );
+}
+
+function getDisplayAgentType(agent: Agent) {
+  const tags = getAgentTags(agent);
+  const agentType = normalizeAgentType(agent.agentType);
+
+  if (
+    agent.agentMode === 'external' ||
+    agent.cardUrl ||
+    agentType === 'self-hosted' ||
+    tags.includes('external-self-hosted')
+  ) {
+    return 'self-hosted';
+  }
+
+  return agentType || agent.agentType;
+}
+
+function getExecutionDisplay(agent: Agent, health?: HealthCheckState): ExecutionDisplay {
+  if (isSystemDefaultAgent(agent)) {
+    if (agent.approvalStatus !== 'approved') {
+      return {
+        endpointLabel: '平台',
+        statusLabel: '不可用',
+        statusClassName: 'bg-red-500/10 text-red-400',
+        detail: '检查审核状态或禁用状态',
+        title: '该 Agent 当前不能参与任务处理。请检查审核状态、是否被禁用，或进入控制台查看执行凭证是否已失效。',
+      };
+    }
+
+    if (agent.isActive === false) {
+      return {
+        endpointLabel: '平台',
+        statusLabel: '待启动',
+        statusClassName: 'bg-yellow-500/10 text-yellow-400',
+        detail: '点击启动后参与任务处理',
+        title: '该 Agent 当前未启动，不会参与任务处理。点击卡片右上角的“启动”按钮后即可启用。',
+      };
+    }
+
+    if (!agent.hasActiveApiKey) {
+      return {
+        endpointLabel: '平台',
+        statusLabel: '凭证未创建',
+        statusClassName: 'bg-yellow-500/10 text-yellow-400',
+        detail: '进入控制台创建 Agent API Key',
+        title: '还缺少执行凭证。请进入 Agent 控制台，在 Agent API Keys 区域创建一个 Key，平台才能使用该 Agent 身份处理任务。',
+      };
+    }
+
+    return {
+      endpointLabel: '平台',
+      statusLabel: '可执行',
+      statusClassName: 'bg-green-500/10 text-green-400',
+      detail: agent.lastCredentialUsedAt
+        ? `最近调用 ${new Date(agent.lastCredentialUsedAt).toLocaleString()}`
+        : '平台已准备好执行条件',
+      title: '平台已准备好执行条件。该 Agent 已启动、审核通过，并且已有可用执行凭证，可以参与任务处理。',
+    };
+  }
+
+  if (!agent.webhookUrl) {
+    return {
+      endpointLabel: '外部自管 Agent',
+      statusLabel: '缺少 Webhook',
+      statusClassName: 'bg-yellow-500/10 text-yellow-400',
+      detail: '未配置 webhookUrl',
+      title: '还没有配置任务接收地址。请进入 Agent 控制台补充 webhookUrl，否则平台无法把任务推送给你的自管 Agent。',
+    };
+  }
+
+  const webhookHasIssue =
+    !!health?.errors?.some(
+      (error) => error.includes('Webhook') || error.includes('Health URL'),
+    ) && health.checks?.webhookConfigured !== false;
+
+  if (webhookHasIssue) {
+    return {
+      endpointLabel: '外部自管 Agent',
+      statusLabel: 'Webhook 异常',
+      statusClassName: 'bg-red-500/10 text-red-400',
+      detail: agent.webhookUrl,
+      title: '平台暂时无法确认该 Webhook 可用。请检查服务地址、网络访问权限，以及接口是否能正常响应。',
+    };
+  }
+
+  return {
+    endpointLabel: '外部自管 Agent',
+    statusLabel: 'Webhook 已配置',
+    statusClassName: 'bg-green-500/10 text-green-400',
+    detail: agent.webhookUrl,
+    title: '平台会把匹配到的任务推送到该 Webhook 地址。请确保你的 Agent 服务能正常接收并处理平台推送。',
+  };
+}
+
+function getExecutionCheckLabel(agent: Agent) {
+  return isSystemDefaultAgent(agent) ? '平台执行状态' : 'Webhook 配置';
+}
+
+function getExecutionCheckPassed(agent: Agent, health?: HealthCheckState) {
+  return isSystemDefaultAgent(agent)
+    ? !!health?.checks?.platformExecutionReady
+    : !!health?.checks?.webhookConfigured;
 }
 
 export default function AgentManagement() {
@@ -93,18 +230,7 @@ export default function AgentManagement() {
   const [refreshingAgent, setRefreshingAgent] = useState<string | null>(null);
   const [healthCheckingAgent, setHealthCheckingAgent] = useState<string | null>(null);
   const [togglingAgent, setTogglingAgent] = useState<string | null>(null);
-  const [healthStatusMap, setHealthStatusMap] = useState<Record<string, {
-    status: AgentStatus;
-    openclawStatus: OpenclawStatus;
-    lastHealthCheckAt?: string;
-    checks?: {
-      podRunning: boolean;
-      heartbeatValid: boolean;
-      openclawReachable: boolean;
-      configurationValid: boolean;
-    };
-    errors?: string[];
-  }>>({});
+  const [healthStatusMap, setHealthStatusMap] = useState<Record<string, HealthCheckState>>({});
 
   const fetchAgents = useCallback(() => {
     if (!user?.id) return;
@@ -139,7 +265,7 @@ export default function AgentManagement() {
     }
   };
 
-  // 执行健康检查（探测 Openclaw 关联状态）
+  // 执行健康检查（验证当前执行端配置）
   const performHealthCheck = async (agentId: string) => {
     setHealthCheckingAgent(agentId);
     try {
@@ -156,7 +282,6 @@ export default function AgentManagement() {
         ...prev,
         [agentId]: {
           status: data.status,
-          openclawStatus: data.openclawStatus,
           lastHealthCheckAt: data.lastHealthCheckAt,
           checks: data.checks,
           errors: data.errors,
@@ -168,7 +293,9 @@ export default function AgentManagement() {
         agent.id === agentId ? { 
           ...agent, 
           status: data.status,
-          openclawStatus: data.openclawStatus,
+          hasActiveApiKey: data.hasActiveApiKey ?? agent.hasActiveApiKey,
+          activeApiKeyCount: data.activeApiKeyCount ?? agent.activeApiKeyCount,
+          lastCredentialUsedAt: data.lastCredentialUsedAt ?? agent.lastCredentialUsedAt,
           lastHealthCheckAt: data.lastHealthCheckAt,
         } : agent
       ));
@@ -177,7 +304,7 @@ export default function AgentManagement() {
       if (data.errors && data.errors.length > 0) {
         alert(`健康检查完成，发现问题：\n${data.errors.join('\n')}`);
       } else {
-        alert('健康检查完成：Agent 和 Openclaw 连接正常');
+        alert('健康检查完成：执行端配置正常');
       }
     } catch (err) {
       console.error('Health check error:', err);
@@ -648,7 +775,7 @@ spec:
                 onClick={() => performHealthCheck(agent.id)}
                 disabled={healthCheckingAgent === agent.id}
                 className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-blue-500/10 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 transition-colors disabled:opacity-50"
-                title="立即检查 Agent 心跳、Openclaw 可达性和基础配置，并刷新健康检查结果"
+                title="立即检查 Agent 心跳、执行端配置，并刷新健康检查结果"
               >
                 <Activity className={`w-3 h-3 ${healthCheckingAgent === agent.id ? 'animate-pulse' : ''}`} />
                 <span>健康检查</span>
@@ -691,26 +818,28 @@ spec:
                   <span className="text-gray-500">Owner: {agent.owner.phone}</span>
                 </div>
               )}
-              <div className="text-xs text-gray-400 flex items-center">
-                <ExternalLink className="w-3 h-3 mr-1" />
-                <span className="truncate">{agent.webhookUrl}</span>
-              </div>
+              {!isSystemDefaultAgent(agent) && agent.webhookUrl && (
+                <div className="text-xs text-gray-400 flex items-center">
+                  <ExternalLink className="w-3 h-3 mr-1" />
+                  <span className="truncate">{agent.webhookUrl}</span>
+                </div>
+              )}
               
-              {/* Openclaw 连接状态 */}
+              {/* 执行端状态 */}
               <div className="flex items-center gap-2 pt-1">
-                <span className="text-xs text-gray-500">Openclaw:</span>
-                <span className={`text-xs px-1.5 py-0.5 rounded ${
-                  agent.openclawStatus === 'CONNECTED' 
-                    ? 'bg-green-500/10 text-green-400' 
-                    : agent.openclawStatus === 'DISCONNECTED'
-                    ? 'bg-red-500/10 text-red-400'
-                    : 'bg-gray-800 text-gray-500'
-                }`}>
-                  {agent.openclawStatus || 'UNKNOWN'}
+                <span className="text-xs text-gray-500">执行端:</span>
+                <span className="text-xs text-cyan-300">
+                  {getExecutionDisplay(agent, healthStatusMap[agent.id]).endpointLabel}
                 </span>
-                {agent.openclawUrl && (
-                  <span className="text-xs text-gray-600 truncate">{agent.openclawUrl}</span>
-                )}
+                <span
+                  className={`text-xs px-1.5 py-0.5 rounded ${getExecutionDisplay(agent, healthStatusMap[agent.id]).statusClassName}`}
+                  title={getExecutionDisplay(agent, healthStatusMap[agent.id]).title}
+                >
+                  {getExecutionDisplay(agent, healthStatusMap[agent.id]).statusLabel}
+                </span>
+                <span className="text-xs text-gray-600 truncate" title={getExecutionDisplay(agent, healthStatusMap[agent.id]).detail}>
+                  {getExecutionDisplay(agent, healthStatusMap[agent.id]).detail}
+                </span>
               </div>
               
               {/* 健康检查结果 */}
@@ -722,9 +851,9 @@ spec:
                       <span>{healthStatusMap[agent.id].checks?.heartbeatValid ? '✓' : '✗'}</span>
                       <span>心跳正常</span>
                     </div>
-                    <div className={`flex items-center gap-1 ${healthStatusMap[agent.id].checks?.openclawReachable ? 'text-green-400' : 'text-red-400'}`}>
-                      <span>{healthStatusMap[agent.id].checks?.openclawReachable ? '✓' : '✗'}</span>
-                      <span>Openclaw 可达</span>
+                    <div className={`flex items-center gap-1 ${getExecutionCheckPassed(agent, healthStatusMap[agent.id]) ? 'text-green-400' : 'text-red-400'}`}>
+                      <span>{getExecutionCheckPassed(agent, healthStatusMap[agent.id]) ? '✓' : '✗'}</span>
+                      <span>{getExecutionCheckLabel(agent)}</span>
                     </div>
                   </div>
                   {healthStatusMap[agent.id].errors && healthStatusMap[agent.id].errors!.length > 0 && (
@@ -742,7 +871,7 @@ spec:
               
               <p className="text-sm text-gray-500 line-clamp-2">{agent.description}</p>
               <div className="flex flex-wrap gap-2 pt-1">
-                <AgentStatusBadge type="agentType" value={agent.agentType} />
+                <AgentStatusBadge type="agentType" value={getDisplayAgentType(agent)} />
                 {isSystemDefaultAgent(agent) && (
                   <>
                     <span className="px-2 py-1 bg-purple-500/10 rounded text-xs text-purple-300">

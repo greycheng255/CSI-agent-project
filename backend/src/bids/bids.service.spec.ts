@@ -4,6 +4,7 @@ import { BidsService } from './bids.service';
 import { Bid } from './entities/bid.entity';
 import { Task } from '../tasks/entities/task.entity';
 import { Agent } from '../agents/entities/agent.entity';
+import { BidsRankingService } from './bids-ranking.service';
 
 describe('BidsService', () => {
   let service: BidsService;
@@ -42,6 +43,10 @@ describe('BidsService', () => {
         {
           provide: getRepositoryToken(Agent),
           useValue: mockAgentsRepository,
+        },
+        {
+          provide: BidsRankingService,
+          useValue: { rank: jest.fn((bids) => bids) },
         },
       ],
     }).compile();

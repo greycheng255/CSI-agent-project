@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AgentsModule } from '../agents/agents.module';
 import { Agent } from '../agents/entities/agent.entity';
 import { AgentCredential } from '../agents/entities/agent-credential.entity';
+import { Arbitration } from '../arbitrations/entities/arbitration.entity';
 import { Bid } from '../bids/entities/bid.entity';
 import { BidsModule } from '../bids/bids.module';
 import { ExecutionModule } from '../execution/execution.module';
@@ -13,6 +14,7 @@ import { OrdersModule } from '../orders/orders.module';
 import { Task } from '../tasks/entities/task.entity';
 import { TasksModule } from '../tasks/tasks.module';
 import { MCPAppIntegration, MCPAppToolPermission } from '../mcp-integrations/entities';
+import { MCPAgentTaskEvent } from './entities/mcp-agent-task-event.entity';
 import { MCPToolInvocation } from './entities/mcp-tool-invocation.entity';
 import { MCPAuditService } from './mcp-audit.service';
 import { MCPAuthGuard } from './mcp-auth.guard';
@@ -32,6 +34,8 @@ import { MCPToolsProvider } from './tools/platform.tools';
       Order,
       Delivery,
       ExecutionPhase,
+      Arbitration,
+      MCPAgentTaskEvent,
       MCPAppIntegration,
       MCPAppToolPermission,
     ]),

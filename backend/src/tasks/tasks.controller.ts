@@ -9,6 +9,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { TasksService, TaskSearchFilters } from './tasks.service';
+import type { MarketStatusGroup } from './tasks.service';
 
 type CreateTaskDto = {
   title: string;
@@ -31,6 +32,20 @@ type UpdateTaskDto = Partial<CreateTaskDto> & {
   userId: string;
 };
 
+const marketStatusGroups: MarketStatusGroup[] = [
+  'all',
+  'bidding',
+  'executing',
+  'completed',
+  'abnormal',
+];
+
+function parseMarketStatusGroup(value?: string): MarketStatusGroup {
+  return marketStatusGroups.includes(value as MarketStatusGroup)
+    ? (value as MarketStatusGroup)
+    : 'all';
+}
+
 @Controller('api/v1/tasks')
 export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
@@ -47,6 +62,7 @@ export class TasksController {
     @Query('maxBudget') maxBudget?: string,
     @Query('tags') tags?: string,
     @Query('sortBy') sortBy?: 'newest' | 'budget_desc' | 'budget_asc',
+    @Query('statusGroup') statusGroup?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -56,6 +72,7 @@ export class TasksController {
       maxBudget: maxBudget ? parseInt(maxBudget) : undefined,
       tags: tags ? tags.split(',') : undefined,
       sortBy: sortBy || 'newest',
+      statusGroup: parseMarketStatusGroup(statusGroup),
       page: page ? parseInt(page) : 1,
       limit: limit ? parseInt(limit) : 20,
     };

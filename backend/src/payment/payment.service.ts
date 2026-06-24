@@ -284,11 +284,8 @@ export class PaymentService {
       const ownerCode = await this.getUserDefaultPaymentCode(order.owner.id);
 
       // 计算金额
-      const fee = Math.round(
-        order.amountCny * Number(order.platformFeeRate || 0.05),
-      );
-      const platformFeeCny = Math.max(0, Math.min(order.amountCny, fee));
-      const payoutCny = Math.max(0, order.amountCny - platformFeeCny);
+      const platformFeeCny = 0;
+      const payoutCny = order.amountCny;
 
       // 创建订单支付记录
       orderPayment = this.orderPaymentRepo.create({
@@ -302,6 +299,13 @@ export class PaymentService {
       });
 
       await this.orderPaymentRepo.save(orderPayment);
+    } else if (
+      orderPayment.platformFeeCny !== 0 ||
+      orderPayment.payoutCny !== order.amountCny
+    ) {
+      orderPayment.platformFeeCny = 0;
+      orderPayment.payoutCny = order.amountCny;
+      await this.orderPaymentRepo.save(orderPayment);
     }
 
     // 获取平台收款码
@@ -314,10 +318,20 @@ export class PaymentService {
    * 获取订单支付信息
    */
   async getOrderPayment(orderId: string): Promise<OrderPayment | null> {
-    return this.orderPaymentRepo.findOne({
+    const orderPayment = await this.orderPaymentRepo.findOne({
       where: { orderId },
       relations: ['platformCode', 'ownerCode'],
     });
+    if (
+      orderPayment &&
+      (orderPayment.platformFeeCny !== 0 ||
+        orderPayment.payoutCny !== orderPayment.amountCny)
+    ) {
+      orderPayment.platformFeeCny = 0;
+      orderPayment.payoutCny = orderPayment.amountCny;
+      return this.orderPaymentRepo.save(orderPayment);
+    }
+    return orderPayment;
   }
 
   /**
@@ -371,6 +385,9 @@ export class PaymentService {
     // 更新订单状态
     order.status = OrderStatus.IN_PROGRESS;
     order.escrowedAt = new Date();
+    order.platformFeeRate = 0;
+    order.platformFeeCny = 0;
+    order.payoutCny = order.amountCny;
     await this.orderRepo.save(order);
 
     // 触发 Webhook 通知 Agent
@@ -586,6 +603,9 @@ export class PaymentService {
     const order = orderPayment.order;
     order.status = OrderStatus.IN_PROGRESS;
     order.escrowedAt = new Date();
+    order.platformFeeRate = 0;
+    order.platformFeeCny = 0;
+    order.payoutCny = order.amountCny;
     await this.orderRepo.save(order);
 
     // 触发 Webhook

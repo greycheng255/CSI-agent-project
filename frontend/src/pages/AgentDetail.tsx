@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Bot, ExternalLink, Loader2, Save, Key, Copy, Trash2, Wallet, Server, Link2, Cloud, Cpu, Activity, HeartPulse, RefreshCw, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { Bot, ExternalLink, Loader2, Save, Key, Copy, Trash2, Wallet, Server, Link2, Cpu, Activity, HeartPulse, RefreshCw, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
 import { CardSection } from '../components/agents/CardSection';
@@ -40,6 +40,7 @@ type Agent = {
   basePrice?: number | null;
   currency?: string | null;
   reputationScore?: number | null;
+  metadata?: Record<string, unknown> | null;
   capabilities?: Array<{ id: string; capabilityType?: string; name: string; value?: Record<string, unknown> | null }>;
   tags?: Array<{ id: string; tag?: string; name?: string; tagType?: string }>;
   cards?: Array<{
@@ -58,6 +59,23 @@ type Agent = {
     skillsLoaded: boolean;
     errors?: string[];
   } | null;
+};
+
+type HealthCheckResult = {
+  status: AgentStatus;
+  lastHeartbeatAt: string | null;
+  lastHealthCheckAt: string | null;
+  executionMode?: 'platform' | 'external';
+  hasActiveApiKey?: boolean;
+  activeApiKeyCount?: number;
+  lastCredentialUsedAt?: string | null;
+  checks: {
+    heartbeatValid: boolean;
+    platformExecutionReady?: boolean;
+    webhookConfigured?: boolean;
+    configurationValid: boolean;
+  };
+  errors: string[];
 };
 
 type BidItem = {
@@ -85,6 +103,99 @@ type ApiKeyItem = {
   lastUsedAt?: string | null;
 };
 
+function getAgentTags(agent: Agent) {
+  return (agent.tags || [])
+    .map((tag) => tag.tag || tag.name || '')
+    .filter(Boolean);
+}
+
+function normalizeAgentType(value?: string | null) {
+  if (!value) return undefined;
+  if (['self-hosted', 'self_hosted', 'external'].includes(value)) return 'self-hosted';
+  if (['platform-managed', 'platform_managed', 'platform'].includes(value)) return 'platform-managed';
+  return value;
+}
+
+function isSystemDefaultAgent(agent: Agent) {
+  const tags = getAgentTags(agent);
+  const agentType = normalizeAgentType(agent.agentType);
+  return (
+    agentType === 'platform-managed' &&
+    (agent.metadata?.systemCreated === true ||
+      agent.metadata?.defaultAgent === true ||
+      (tags.includes('system-created') && tags.includes('platform-runtime')))
+  );
+}
+
+function getPlatformExecutionState(agent: Agent, hasActiveApiKey: boolean) {
+  if (agent.approvalStatus !== 'approved') {
+    return {
+      label: '不可用',
+      className: 'text-red-400',
+      panelClassName: 'bg-red-500/5 border-red-500/20',
+      description: '请检查审核状态或禁用状态',
+    };
+  }
+  if (agent.isActive === false) {
+    return {
+      label: '待启动',
+      className: 'text-yellow-400',
+      panelClassName: 'bg-yellow-500/5 border-yellow-500/20',
+      description: '点击启动后参与任务处理',
+    };
+  }
+  if (!hasActiveApiKey) {
+    return {
+      label: '凭证未创建',
+      className: 'text-yellow-400',
+      panelClassName: 'bg-yellow-500/5 border-yellow-500/20',
+      description: '进入 Agent API Keys 创建执行凭证',
+    };
+  }
+  return {
+    label: '可执行',
+    className: 'text-green-400',
+    panelClassName: 'bg-green-500/5 border-green-500/20',
+    description: '平台已准备好执行条件',
+  };
+}
+
+function getExternalExecutionState(agent: Agent, result?: HealthCheckResult | null) {
+  if (!agent.webhookUrl) {
+    return {
+      label: '缺少 Webhook',
+      className: 'text-yellow-400',
+      panelClassName: 'bg-yellow-500/5 border-yellow-500/20',
+      description: '请补充 webhookUrl',
+    };
+  }
+  const webhookHasIssue =
+    !!result?.errors?.some((error) => error.includes('Webhook') || error.includes('Health URL')) &&
+    result.checks?.webhookConfigured !== false;
+  if (webhookHasIssue) {
+    return {
+      label: 'Webhook 异常',
+      className: 'text-red-400',
+      panelClassName: 'bg-red-500/5 border-red-500/20',
+      description: '请检查服务地址和网络访问',
+    };
+  }
+  return {
+    label: 'Webhook 已配置',
+    className: 'text-green-400',
+    panelClassName: 'bg-green-500/5 border-green-500/20',
+    description: agent.webhookUrl,
+  };
+}
+
+function healthCheckLabel(key: string) {
+  if (key === 'heartbeatValid') return '心跳正常';
+  if (key === 'platformExecutionReady') return '平台执行状态';
+  if (key === 'webhookConfigured') return 'Webhook 配置';
+  if (key === 'configurationValid') return '配置有效';
+  return key;
+}
+
 export default function AgentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -97,28 +208,16 @@ export default function AgentDetail() {
   const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([]);
   const [creatingKey, setCreatingKey] = useState(false);
   const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
-  const [newKeyName, setNewKeyName] = useState('openclaw');
+  const [newKeyName, setNewKeyName] = useState('platform-executor');
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'success' | 'failed'>('idle');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [togglingActive, setTogglingActive] = useState(false);
   const [skillsText, setSkillsText] = useState('');
 
-  // 健康检查相关状态
   const [healthCheckLoading, setHealthCheckLoading] = useState(false);
-  const [healthCheckResult, setHealthCheckResult] = useState<{
-    status: AgentStatus;
-    openclawStatus: string;
-    lastHeartbeatAt: string | null;
-    lastHealthCheckAt: string | null;
-    checks: {
-      podRunning: boolean;
-      heartbeatValid: boolean;
-      openclawReachable: boolean;
-      configurationValid: boolean;
-    };
-    errors: string[];
-  } | null>(null);
+  const [healthCheckResult, setHealthCheckResult] = useState<HealthCheckResult | null>(null);
 
   // 收款码相关状态
   const [paymentQrUrl, setPaymentQrUrl] = useState('');
@@ -224,6 +323,7 @@ export default function AgentDetail() {
     if (!id || !token) return;
     setCreatingKey(true);
     setNewApiKey(null);
+    setCopyStatus('idle');
     try {
       const res = await fetch(`${apiBase}/api/v1/owner/agents/${id}/api-keys`, {
         method: 'POST',
@@ -242,6 +342,37 @@ export default function AgentDetail() {
       alert('创建失败，请检查后端服务。');
     } finally {
       setCreatingKey(false);
+    }
+  };
+
+  const handleCopyNewApiKey = async () => {
+    if (!newApiKey) return;
+
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(newApiKey);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = newApiKey;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (!copied) {
+          throw new Error('copy failed');
+        }
+      }
+
+      setCopyStatus('success');
+      window.setTimeout(() => setCopyStatus('idle'), 2000);
+    } catch {
+      setCopyStatus('failed');
+      window.setTimeout(() => setCopyStatus('idle'), 3000);
     }
   };
 
@@ -358,6 +489,13 @@ export default function AgentDetail() {
     );
   }
 
+  const hasActiveApiKey = apiKeys.some((key) => !key.revokedAt);
+  const platformAgent = isSystemDefaultAgent(agent);
+  const executionState = platformAgent
+    ? getPlatformExecutionState(agent, hasActiveApiKey)
+    : getExternalExecutionState(agent, healthCheckResult);
+  const executionEndpointLabel = platformAgent ? '平台' : '外部自管 Agent';
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Agent 基本信息 + 健康状态 */}
@@ -401,10 +539,12 @@ export default function AgentDetail() {
         </div>
 
         <div className="mt-4 space-y-3">
-          <div className="text-xs text-gray-400 flex items-center">
-            <ExternalLink className="w-3 h-3 mr-1" />
-            <span className="truncate">{agent.webhookUrl || '未配置 webhookUrl'}</span>
-          </div>
+          {!platformAgent && (
+            <div className="text-xs text-gray-400 flex items-center">
+              <ExternalLink className="w-3 h-3 mr-1" />
+              <span className="truncate">{agent.webhookUrl || '未配置 webhookUrl'}</span>
+            </div>
+          )}
           {agent.description && (
             <div className="text-sm text-gray-500">{agent.description}</div>
           )}
@@ -456,51 +596,45 @@ export default function AgentDetail() {
               )}
             </div>
 
-            {/* Openclaw 连接状态 */}
-            <div className={`p-4 rounded-lg border ${
-              agent.openclawStatus === 'CONNECTED' 
-                ? 'bg-green-500/5 border-green-500/20' 
-                : agent.openclawStatus === 'DISCONNECTED'
-                ? 'bg-red-500/5 border-red-500/20'
-                : 'bg-gray-800/50 border-gray-700'
-            }`}>
+            {/* 执行端 */}
+            <div className={`p-4 rounded-lg border ${executionState.panelClassName}`}>
               <div className="flex items-center gap-2 mb-2">
-                {agent.openclawStatus === 'CONNECTED' ? (
+                {executionState.className === 'text-green-400' ? (
                   <CheckCircle2 className="w-4 h-4 text-green-400" />
-                ) : agent.openclawStatus === 'DISCONNECTED' ? (
+                ) : executionState.className === 'text-red-400' ? (
                   <XCircle className="w-4 h-4 text-red-400" />
                 ) : (
                   <AlertTriangle className="w-4 h-4 text-yellow-400" />
                 )}
-                <span className="text-xs text-gray-400">Openclaw</span>
+                <span className="text-xs text-gray-400">执行端</span>
               </div>
-              <div className={`text-sm font-bold ${
-                agent.openclawStatus === 'CONNECTED' ? 'text-green-400' : 
-                agent.openclawStatus === 'DISCONNECTED' ? 'text-red-400' : 'text-yellow-400'
-              }`}>
-                {agent.openclawStatus === 'CONNECTED' ? '已连接' : 
-                 agent.openclawStatus === 'DISCONNECTED' ? '未连接' : '未知'}
+              <div className="text-sm text-cyan-300 font-bold">
+                {executionEndpointLabel}
+              </div>
+              <div className={`text-xs mt-1 ${executionState.className}`}>
+                {executionState.label}
               </div>
             </div>
 
-            {/* 配置状态 */}
-            <div className={`p-4 rounded-lg border ${
-              agent.webhookUrl && agent.openclawUrl
-                ? 'bg-green-500/5 border-green-500/20' 
-                : 'bg-yellow-500/5 border-yellow-500/20'
-            }`}>
+            {/* 执行配置 */}
+            <div className={`p-4 rounded-lg border ${executionState.panelClassName}`}>
               <div className="flex items-center gap-2 mb-2">
-                {agent.webhookUrl && agent.openclawUrl ? (
+                {executionState.className === 'text-green-400' ? (
                   <CheckCircle2 className="w-4 h-4 text-green-400" />
+                ) : executionState.className === 'text-red-400' ? (
+                  <XCircle className="w-4 h-4 text-red-400" />
                 ) : (
                   <AlertTriangle className="w-4 h-4 text-yellow-400" />
                 )}
-                <span className="text-xs text-gray-400">配置状态</span>
+                <span className="text-xs text-gray-400">
+                  {platformAgent ? '执行凭证' : 'Webhook 配置'}
+                </span>
               </div>
-              <div className={`text-sm font-bold ${
-                agent.webhookUrl && agent.openclawUrl ? 'text-green-400' : 'text-yellow-400'
-              }`}>
-                {agent.webhookUrl && agent.openclawUrl ? '已配置' : '配置不完整'}
+              <div className={`text-sm font-bold ${executionState.className}`}>
+                {executionState.label}
+              </div>
+              <div className="text-xs text-gray-500 mt-1 truncate" title={executionState.description}>
+                {executionState.description}
               </div>
             </div>
 
@@ -541,12 +675,10 @@ export default function AgentDetail() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Cloud className="w-4 h-4 text-gray-500" />
-                  <span className="text-xs text-gray-400">Openclaw:</span>
-                  <span className={`text-xs font-bold ${
-                    healthCheckResult.openclawStatus === 'CONNECTED' ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {healthCheckResult.openclawStatus}
+                  <Cpu className="w-4 h-4 text-gray-500" />
+                  <span className="text-xs text-gray-400">执行端:</span>
+                  <span className="text-xs font-bold text-cyan-300">
+                    {healthCheckResult.executionMode === 'platform' ? '平台' : '外部自管 Agent'}
                   </span>
                 </div>
                 {healthCheckResult.lastHealthCheckAt && (
@@ -573,10 +705,7 @@ export default function AgentDetail() {
                           <XCircle className="w-3 h-3 text-red-400" />
                         )}
                         <span className="text-xs text-gray-400">
-                          {key === 'podRunning' ? 'Pod 运行' :
-                           key === 'heartbeatValid' ? '心跳正常' :
-                           key === 'openclawReachable' ? 'Openclaw 可达' :
-                           key === 'configurationValid' ? '配置有效' : key}
+                          {healthCheckLabel(key)}
                         </span>
                         <span className={`text-xs font-bold ${value ? 'text-green-400' : 'text-red-400'}`}>
                           {value ? '通过' : '失败'}
@@ -657,44 +786,116 @@ export default function AgentDetail() {
         )}
       </div>
 
-      {/* Openclaw 实例关联信息 */}
+      {/* 执行接入信息 */}
       <div className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-6">
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-lg font-bold text-gray-200 flex items-center gap-2">
-              <Cloud className="w-5 h-5 text-blue-500" />
-              Openclaw 实例关联
+              <Cpu className="w-5 h-5 text-blue-500" />
+              执行接入信息
             </div>
             <div className="text-xs text-gray-500 mt-1">
-              显示当前 Agent 关联的 Openclaw 实例信息和运行状态
+              显示当前 Agent 的任务执行端、接入地址和执行状态。
             </div>
           </div>
           <span
             className={`px-2 py-0.5 rounded text-xs border ${
-              agent.openclawStatus === 'CONNECTED'
+              executionState.className === 'text-green-400'
                 ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                : agent.openclawStatus === 'DISCONNECTED'
+                : executionState.className === 'text-red-400'
                 ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                : 'bg-gray-800 text-gray-400 border-gray-700'
+                : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
             }`}
           >
-            {agent.openclawStatus === 'CONNECTED' ? '已连接' : agent.openclawStatus === 'DISCONNECTED' ? '未连接' : '未知'}
+            {executionState.label}
           </span>
         </div>
 
         <div className="mt-4 space-y-4">
-          {/* 运行模式 */}
           <div className="flex items-center gap-3 p-3 bg-gray-900/50 rounded-lg">
             <Cpu className="w-4 h-4 text-gray-500" />
             <div className="flex-1">
-              <div className="text-xs text-gray-500">运行模式</div>
-              <div className="text-sm text-gray-300">
-                {agent.agentMode === 'kubernetes' ? 'Kubernetes 集群模式' : '外部独立模式'}
-              </div>
+              <div className="text-xs text-gray-500">执行端</div>
+              <div className="text-sm text-gray-300">{executionEndpointLabel}</div>
             </div>
           </div>
 
-          {/* Pod 名称 */}
+          <div className="flex items-center gap-3 p-3 bg-gray-900/50 rounded-lg">
+            <Activity className="w-4 h-4 text-gray-500" />
+            <div className="flex-1">
+              <div className="text-xs text-gray-500">执行状态</div>
+              <div className={`text-sm font-bold ${executionState.className}`}>
+                {executionState.label}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">{executionState.description}</div>
+            </div>
+          </div>
+
+          {platformAgent ? (
+            <>
+              <div className="flex items-center gap-3 p-3 bg-gray-900/50 rounded-lg">
+                <Key className="w-4 h-4 text-gray-500" />
+                <div className="flex-1">
+                  <div className="text-xs text-gray-500">执行凭证</div>
+                  <div className={`text-sm font-bold ${hasActiveApiKey ? 'text-green-400' : 'text-yellow-400'}`}>
+                    {hasActiveApiKey ? '已创建' : '未创建'}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {hasActiveApiKey
+                      ? `有效 Key 数量：${apiKeys.filter((key) => !key.revokedAt).length}`
+                      : '请在 Agent API Keys 区域创建 Key。'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-gray-900/50 rounded-lg">
+                <RefreshCw className="w-4 h-4 text-gray-500" />
+                <div className="flex-1">
+                  <div className="text-xs text-gray-500">最近调用</div>
+                  <div className="text-sm text-gray-300">
+                    {healthCheckResult?.lastCredentialUsedAt
+                      ? new Date(healthCheckResult.lastCredentialUsedAt).toLocaleString()
+                      : apiKeys.find((key) => key.lastUsedAt)?.lastUsedAt
+                      ? new Date(apiKeys.find((key) => key.lastUsedAt)!.lastUsedAt!).toLocaleString()
+                      : '从未调用'}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-3 p-3 bg-gray-900/50 rounded-lg">
+                <ExternalLink className="w-4 h-4 text-gray-500" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-gray-500">接收任务地址</div>
+                  <div className={`text-sm font-mono truncate ${agent.webhookUrl ? 'text-gray-300' : 'text-yellow-400'}`}>
+                    {agent.webhookUrl || '未配置 webhookUrl'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-gray-900/50 rounded-lg">
+                <ExternalLink className="w-4 h-4 text-gray-500" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-gray-500">任务接口地址</div>
+                  <div className={`text-sm font-mono truncate ${agent.endpointUrl ? 'text-gray-300' : 'text-yellow-400'}`}>
+                    {agent.endpointUrl || '未配置 endpointUrl'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-gray-900/50 rounded-lg">
+                <HeartPulse className="w-4 h-4 text-gray-500" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-gray-500">健康检查地址</div>
+                  <div className={`text-sm font-mono truncate ${agent.healthUrl ? 'text-gray-300' : 'text-yellow-400'}`}>
+                    {agent.healthUrl || '未配置 healthUrl'}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
           {agent.podName && (
             <div className="flex items-center gap-3 p-3 bg-gray-900/50 rounded-lg">
               <Server className="w-4 h-4 text-gray-500" />
@@ -705,7 +906,6 @@ export default function AgentDetail() {
             </div>
           )}
 
-          {/* External ID */}
           {agent.externalId && (
             <div className="flex items-center gap-3 p-3 bg-gray-900/50 rounded-lg">
               <Link2 className="w-4 h-4 text-gray-500" />
@@ -716,36 +916,13 @@ export default function AgentDetail() {
             </div>
           )}
 
-          {/* Openclaw URL */}
-          {agent.openclawUrl ? (
-            <div className="flex items-center gap-3 p-3 bg-gray-900/50 rounded-lg">
-              <Cloud className="w-4 h-4 text-gray-500" />
-              <div className="flex-1">
-                <div className="text-xs text-gray-500">Openclaw 地址</div>
-                <div className="text-sm font-mono text-gray-300 truncate">{agent.openclawUrl}</div>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3 p-3 bg-yellow-500/10 rounded-lg border border-yellow-500/20">
-              <Cloud className="w-4 h-4 text-yellow-500" />
-              <div className="flex-1">
-                <div className="text-xs text-yellow-500">未配置 Openclaw</div>
-                <div className="text-sm text-gray-400">
-                  当前 Agent 未关联 Openclaw 实例，任务分析功能可能受限
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 关联说明 */}
           <div className="mt-4 p-4 bg-blue-500/10 rounded-lg border border-blue-500/20">
-            <div className="text-xs text-blue-400 font-bold mb-2">关联说明</div>
+            <div className="text-xs text-blue-400 font-bold mb-2">接入说明</div>
             <div className="text-xs text-gray-400 space-y-1">
-              <p>• Genesis Agent 负责扫描任务、技能匹配、转发请求</p>
-              <p>• Openclaw 实例负责任务分析、价格计算、代码生成</p>
-              <p>• 两者通过 Openclaw Bridge 进行通信</p>
-              {agent.agentMode === 'kubernetes' && (
-                <p>• 当前为 Kubernetes 模式，Openclaw 实例运行在集群中</p>
+              {platformAgent ? (
+                <p>平台负责该 Agent 的任务处理；请确保执行凭证已创建并保持 Agent 启用。</p>
+              ) : (
+                <p>平台会把匹配到的任务推送到 Webhook 地址；请确保你的 Agent 服务可以接收并处理平台推送。</p>
               )}
             </div>
           </div>
@@ -853,7 +1030,7 @@ export default function AgentDetail() {
           <input
             value={newKeyName}
             onChange={(e) => setNewKeyName(e.target.value)}
-            placeholder="key 名称（例如 openclaw）"
+            placeholder="key 名称（例如 platform-executor）"
             className="flex-1 bg-black border border-gray-700 rounded-lg px-4 py-3 text-gray-200 focus:outline-none focus:border-yellow-500"
           />
           <button
@@ -874,13 +1051,18 @@ export default function AgentDetail() {
               <div className="flex-1 font-mono text-xs text-gray-200 break-all">{newApiKey}</div>
               <button
                 type="button"
-                onClick={() => navigator.clipboard.writeText(newApiKey)}
+                onClick={handleCopyNewApiKey}
                 className="px-3 py-2 border border-gray-700 rounded text-sm text-gray-300 hover:border-gray-500 flex items-center gap-2"
               >
                 <Copy className="w-4 h-4" />
-                复制
+                {copyStatus === 'success' ? '已复制' : '复制'}
               </button>
             </div>
+            {copyStatus === 'failed' && (
+              <div className="mt-2 text-xs text-red-400">
+                复制失败，请手动选中 Key 后复制。
+              </div>
+            )}
           </div>
         )}
 
@@ -939,7 +1121,7 @@ export default function AgentDetail() {
 
         {bids.length === 0 ? (
           <div className="text-center py-10 text-gray-500 border border-gray-800 border-dashed rounded-lg mt-4">
-            暂无报价记录。确保 Openclaw 自动报价服务已启动并能访问后端。
+            暂无报价记录。请确认执行端已配置，并且可以正常访问平台。
           </div>
         ) : (
           <div className="space-y-3 mt-4">

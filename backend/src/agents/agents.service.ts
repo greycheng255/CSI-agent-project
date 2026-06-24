@@ -7,7 +7,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';
 import {
   Agent,
@@ -46,6 +46,12 @@ type CreateAgentDto = {
   basePrice?: number;
   currency?: string;
   contactEmail?: string;
+};
+
+type AgentCredentialSummary = {
+  hasActiveApiKey: boolean;
+  activeApiKeyCount: number;
+  lastCredentialUsedAt: Date | null;
 };
 
 const SYSTEM_DEFAULT_AGENT_PREFIX = 'system-default-';
@@ -406,12 +412,17 @@ export class AgentsService {
     });
 
     const now = Date.now();
+    const credentialSummaries = await this.getCredentialSummaries(
+      agents.map((agent) => agent.id),
+    );
 
     return agents.map((agent) => {
       const runtimeStatus = this.agentsHealthService.calculateRuntimeStatus(
         agent.lastHeartbeatAt,
         now,
       );
+      const credentialSummary =
+        credentialSummaries.get(agent.id) || this.emptyCredentialSummary();
       return {
         ...agent,
         runtimeStatus,
@@ -419,6 +430,7 @@ export class AgentsService {
           runtimeStatus === AgentRuntimeStatus.OFFLINE
             ? AgentStatus.OFFLINE
             : AgentStatus.ONLINE,
+        ...credentialSummary,
       };
     });
   }
@@ -767,23 +779,22 @@ export class AgentsService {
     };
   }
 
-  /**
-   * 执行 Agent 健康检查
-   * 检查 Agent Pod 状态、心跳、Openclaw 可达性
-   */
   async healthCheck(agentId: string) {
     const agent = await this.findOne(agentId);
     if (!agent) throw new NotFoundException('Agent not found');
 
     const errors: string[] = [];
     const checks = {
-      podRunning: false,
       heartbeatValid: false,
-      openclawReachable: false,
+      platformExecutionReady: false,
+      webhookConfigured: false,
       configurationValid: false,
     };
+    const isPlatformAgent = this.isSystemDefaultAgent(agent);
+    const credentialSummary =
+      (await this.getCredentialSummaries([agent.id])).get(agent.id) ||
+      this.emptyCredentialSummary();
 
-    // 1. 检查 Agent 心跳是否在 60 秒内
     const timeoutMs = 60000;
     const lastHeartbeat = agent.lastHeartbeatAt
       ? new Date(agent.lastHeartbeatAt).getTime()
@@ -793,49 +804,56 @@ export class AgentsService {
 
     if (!checks.heartbeatValid) {
       errors.push('Agent heartbeat timeout (no heartbeat in 60s)');
-      // 如果心跳超时，标记为 OFFLINE
       agent.status = AgentStatus.OFFLINE;
     } else {
-      checks.podRunning = true;
       agent.status = AgentStatus.ONLINE;
     }
 
-    // 2. 检查 Openclaw 是否可访问
-    if (agent.openclawUrl) {
-      try {
-        const response = await firstValueFrom(
-          this.httpService.get(`${agent.openclawUrl}/health`, {
-            timeout: 5000,
-          }),
-        );
-        checks.openclawReachable = response.status === 200;
-        agent.openclawStatus = checks.openclawReachable
-          ? OpenclawStatus.CONNECTED
-          : OpenclawStatus.DISCONNECTED;
-      } catch (error: unknown) {
-        checks.openclawReachable = false;
-        agent.openclawStatus = OpenclawStatus.DISCONNECTED;
-        const errorMessage =
-          error instanceof Error ? error.message : 'Unknown error';
-        errors.push(`Openclaw unreachable: ${errorMessage}`);
+    if (isPlatformAgent) {
+      checks.platformExecutionReady =
+        agent.isActive === true &&
+        agent.approvalStatus === AgentApprovalStatus.APPROVED &&
+        credentialSummary.hasActiveApiKey;
+      checks.configurationValid = checks.platformExecutionReady;
+
+      if (agent.approvalStatus !== AgentApprovalStatus.APPROVED) {
+        errors.push('Agent is not approved');
+      }
+      if (agent.isActive !== true) {
+        errors.push('Agent is not started');
+      }
+      if (!credentialSummary.hasActiveApiKey) {
+        errors.push('Active Agent API Key not found');
       }
     } else {
-      agent.openclawStatus = OpenclawStatus.UNKNOWN;
-      errors.push('Openclaw URL not configured');
+      checks.webhookConfigured = !!agent.webhookUrl;
+      checks.configurationValid = checks.webhookConfigured;
+
+      if (!checks.webhookConfigured) {
+        errors.push('Webhook URL not configured');
+      }
+      if (agent.healthUrl) {
+        try {
+          const response = await firstValueFrom(
+            this.httpService.get(agent.healthUrl, { timeout: 5000 }),
+          );
+          if (response.status < 200 || response.status >= 300) {
+            errors.push(`Health URL returned HTTP ${response.status}`);
+          }
+        } catch (error: unknown) {
+          const errorMessage =
+            error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Health URL unreachable: ${errorMessage}`);
+        }
+      }
     }
 
-    // 3. 检查配置是否有效
-    checks.configurationValid = !!agent.webhookUrl && !!agent.openclawUrl;
-    if (!checks.configurationValid) {
-      if (!agent.webhookUrl) errors.push('Webhook URL not configured');
-      if (!agent.openclawUrl) errors.push('Openclaw URL not configured');
-    }
-
-    // 更新健康检查结果
     agent.lastHealthCheckAt = new Date();
     agent.healthCheckResult = {
       agentOnline: checks.heartbeatValid,
-      openclawReachable: checks.openclawReachable,
+      openclawReachable: isPlatformAgent
+        ? checks.platformExecutionReady
+        : checks.webhookConfigured,
       skillsLoaded: Array.isArray(agent.skills) && agent.skills.length > 0,
       errors: errors.length > 0 ? errors : undefined,
     };
@@ -845,6 +863,10 @@ export class AgentsService {
     return {
       agentId: agent.id,
       status: agent.status,
+      executionMode: isPlatformAgent ? 'platform' : 'external',
+      hasActiveApiKey: credentialSummary.hasActiveApiKey,
+      activeApiKeyCount: credentialSummary.activeApiKeyCount,
+      lastCredentialUsedAt: credentialSummary.lastCredentialUsedAt,
       openclawStatus: agent.openclawStatus,
       lastHeartbeatAt: agent.lastHeartbeatAt,
       lastHealthCheckAt: agent.lastHealthCheckAt,
@@ -859,6 +881,9 @@ export class AgentsService {
   async getHealthStatus(agentId: string) {
     const agent = await this.findOne(agentId);
     if (!agent) throw new NotFoundException('Agent not found');
+    const credentialSummary =
+      (await this.getCredentialSummaries([agent.id])).get(agent.id) ||
+      this.emptyCredentialSummary();
 
     // 实时计算 Agent 在线状态
     const timeoutMs = 60000;
@@ -871,6 +896,10 @@ export class AgentsService {
     return {
       agentId: agent.id,
       status: isOnline ? AgentStatus.ONLINE : AgentStatus.OFFLINE,
+      executionMode: this.isSystemDefaultAgent(agent) ? 'platform' : 'external',
+      hasActiveApiKey: credentialSummary.hasActiveApiKey,
+      activeApiKeyCount: credentialSummary.activeApiKeyCount,
+      lastCredentialUsedAt: credentialSummary.lastCredentialUsedAt,
       openclawStatus: agent.openclawStatus || OpenclawStatus.UNKNOWN,
       lastHeartbeatAt: agent.lastHeartbeatAt,
       lastHealthCheckAt: agent.lastHealthCheckAt,
@@ -972,6 +1001,52 @@ export class AgentsService {
       agent.metadata?.createdBy === 'system' &&
       agent.metadata?.defaultAgent === true
     );
+  }
+
+  private emptyCredentialSummary(): AgentCredentialSummary {
+    return {
+      hasActiveApiKey: false,
+      activeApiKeyCount: 0,
+      lastCredentialUsedAt: null,
+    };
+  }
+
+  private async getCredentialSummaries(agentIds: string[]) {
+    const result = new Map<string, AgentCredentialSummary>();
+    if (agentIds.length === 0) return result;
+
+    const credentials = await this.agentCredentialsRepository.find({
+      where: { agent: { id: In(agentIds) } },
+      relations: ['agent'],
+    });
+    const now = Date.now();
+
+    for (const credential of credentials) {
+      const agentId = credential.agent?.id;
+      if (!agentId) continue;
+      if (
+        credential.status !== 'active' ||
+        credential.revokedAt ||
+        (credential.expiresAt && credential.expiresAt.getTime() < now)
+      ) {
+        continue;
+      }
+
+      const summary = result.get(agentId) || this.emptyCredentialSummary();
+      summary.hasActiveApiKey = true;
+      summary.activeApiKeyCount += 1;
+      if (
+        credential.lastUsedAt &&
+        (!summary.lastCredentialUsedAt ||
+          credential.lastUsedAt.getTime() >
+            summary.lastCredentialUsedAt.getTime())
+      ) {
+        summary.lastCredentialUsedAt = credential.lastUsedAt;
+      }
+      result.set(agentId, summary);
+    }
+
+    return result;
   }
 
   private async writeAudit(

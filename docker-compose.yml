@@ -38,7 +38,7 @@ services:
 
   # ==================== 业务服务 ====================
   genesis-backend:
-    image: genesis-backend:${TAG:-latest}
+    image: genesis-backend:${TAG:-20260623-232559}
     container_name: genesis-backend
     build:
       context: ./backend
@@ -74,7 +74,7 @@ services:
       - genesis-net
 
   genesis-frontend:
-    image: genesis-frontend:${TAG:-latest}
+    image: genesis-frontend:${TAG:-20260623-232559}
     container_name: genesis-frontend
     build:
       context: ./frontend
@@ -88,7 +88,7 @@ services:
       - genesis-net
 
   genesis-agent:
-    image: genesis-agent:${TAG:-latest}
+    image: genesis-agent:${TAG:-20260623-232559}
     container_name: genesis-agent
     build:
       context: ./genesis-agent
@@ -116,7 +116,7 @@ services:
       - genesis-net
 
   openclaw-bridge:
-    image: openclaw-bridge:${TAG:-latest}
+    image: openclaw-bridge:${TAG:-20260623-232559}
     container_name: openclaw-bridge
     build:
       context: ./openclaw-bridge

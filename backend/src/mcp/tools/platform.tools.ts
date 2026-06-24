@@ -1,22 +1,67 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { AgentsDiscoveryService } from '../../agents/agents-discovery.service';
 import { AgentsHealthService } from '../../agents/agents-health.service';
 import { Agent } from '../../agents/entities/agent.entity';
+import {
+  Arbitration,
+  ArbitrationStatus,
+} from '../../arbitrations/entities/arbitration.entity';
 import { Bid } from '../../bids/entities/bid.entity';
 import { BidsService } from '../../bids/bids.service';
 import { ExecutionService } from '../../execution/execution.service';
 import { ExecutionPhase } from '../../execution/entities';
-import { Delivery, DeliveryStatus } from '../../orders/entities/delivery.entity';
+import {
+  Delivery,
+  DeliveryStatus,
+} from '../../orders/entities/delivery.entity';
 import { Order, OrderStatus } from '../../orders/entities/order.entity';
 import { OrdersService } from '../../orders/orders.service';
 import { Task } from '../../tasks/entities/task.entity';
 import { TasksService } from '../../tasks/tasks.service';
 import { IMCPTool, MCPContext } from '../mcp.types';
 import { MCPResult } from '../dto/mcp-response.dto';
+import {
+  MCPAgentTaskEvent,
+  MCPAgentTaskEventStatus,
+  MCPAgentTaskEventType,
+} from '../entities/mcp-agent-task-event.entity';
 
 type Args = Record<string, unknown>;
+
+type EventEnvelope = {
+  eventId: string;
+  eventType: MCPAgentTaskEventType;
+  eventKey: string;
+  noticeStatus: MCPAgentTaskEventStatus;
+  shouldAct: boolean;
+  requiresAck: boolean;
+  taskId: string;
+  orderId: string | null;
+  bidId: string | null;
+  deliveryId: string | null;
+  arbitrationId: string | null;
+  payload: Record<string, unknown>;
+};
+
+type EventSeed = {
+  agentId: string;
+  agentExternalId?: string | null;
+  taskId: string;
+  orderId?: string | null;
+  bidId?: string | null;
+  deliveryId?: string | null;
+  arbitrationId?: string | null;
+  eventType: MCPAgentTaskEventType;
+  eventKey: string;
+  payload?: Record<string, unknown>;
+  requestId?: string | null;
+};
 
 @Injectable()
 export class MCPToolsProvider {
@@ -39,6 +84,10 @@ export class MCPToolsProvider {
     private readonly deliveriesRepository: Repository<Delivery>,
     @InjectRepository(ExecutionPhase)
     private readonly phasesRepository: Repository<ExecutionPhase>,
+    @InjectRepository(MCPAgentTaskEvent)
+    private readonly taskEventsRepository: Repository<MCPAgentTaskEvent>,
+    @InjectRepository(Arbitration)
+    private readonly arbitrationsRepository: Repository<Arbitration>,
   ) {}
 
   getTools(): IMCPTool[] {
@@ -54,6 +103,8 @@ export class MCPToolsProvider {
       this.attachArtifactTool(),
       this.submitQuoteTool(),
       this.getMyQuoteTool(),
+      this.listMyEventsTool(),
+      this.ackEventTool(),
       this.listMyOrdersTool(),
       this.getTaskStatusTool(),
     ];
@@ -89,7 +140,12 @@ export class MCPToolsProvider {
     return fallback;
   }
 
-  private error(code: string, message: string, details?: unknown, args?: Args): MCPResult {
+  private error(
+    code: string,
+    message: string,
+    details?: unknown,
+    args?: Args,
+  ): MCPResult {
     return {
       success: false,
       data: null,
@@ -155,7 +211,12 @@ export class MCPToolsProvider {
     const argAgentId = this.firstStringArg(args, ['agentId', 'agent_id']);
     const ctxAgentId = ctx.agentId || undefined;
     const ctxExternalId = ctx.agentExternalId || undefined;
-    if (argAgentId && ctxAgentId && argAgentId !== ctxAgentId && argAgentId !== ctxExternalId) {
+    if (
+      argAgentId &&
+      ctxAgentId &&
+      argAgentId !== ctxAgentId &&
+      argAgentId !== ctxExternalId
+    ) {
       throw new BadRequestException('agentId must match X-SolForge-Agent-Id');
     }
     const agentId = ctxAgentId || argAgentId;
@@ -167,6 +228,411 @@ export class MCPToolsProvider {
     return ctx.agentExternalId || ctx.agentId || fallback;
   }
 
+  private eventKey(
+    type: MCPAgentTaskEventType,
+    ...parts: Array<string | null | undefined>
+  ) {
+    return [
+      type,
+      ...parts.filter((part): part is string => Boolean(part)),
+    ].join(':');
+  }
+
+  private eventEnvelope(
+    event: MCPAgentTaskEvent,
+    shouldAct: boolean,
+  ): EventEnvelope {
+    return {
+      eventId: event.id,
+      eventType: event.eventType,
+      eventKey: event.eventKey,
+      noticeStatus: event.status,
+      shouldAct,
+      requiresAck:
+        event.status !== MCPAgentTaskEventStatus.ACKED &&
+        event.status !== MCPAgentTaskEventStatus.EXPIRED,
+      taskId: event.taskId,
+      orderId: event.orderId,
+      bidId: event.bidId,
+      deliveryId: event.deliveryId,
+      arbitrationId: event.arbitrationId,
+      payload: event.payloadJson || {},
+    };
+  }
+
+  private async deliverEventIfPending(
+    event: MCPAgentTaskEvent,
+    requestId?: string | null,
+  ) {
+    if (event.status !== MCPAgentTaskEventStatus.PENDING) {
+      return this.eventEnvelope(event, false);
+    }
+
+    const deliveredAt = new Date();
+    event.status = MCPAgentTaskEventStatus.DELIVERED;
+    event.deliveryCount = (event.deliveryCount || 0) + 1;
+    event.firstDeliveredAt = event.firstDeliveredAt || deliveredAt;
+    event.lastDeliveredAt = deliveredAt;
+    event.lastRequestId = requestId || event.lastRequestId;
+    const saved = await this.taskEventsRepository.save(event);
+    return this.eventEnvelope(saved, true);
+  }
+
+  private async ensureTaskEvent(seed: EventSeed) {
+    const where = {
+      agentId: seed.agentId,
+      eventType: seed.eventType,
+      eventKey: seed.eventKey,
+    };
+    let event = await this.taskEventsRepository.findOne({ where });
+    if (event) return event;
+
+    try {
+      event = await this.taskEventsRepository.save({
+        agentId: seed.agentId,
+        agentExternalId: seed.agentExternalId || null,
+        taskId: seed.taskId,
+        orderId: seed.orderId || null,
+        bidId: seed.bidId || null,
+        deliveryId: seed.deliveryId || null,
+        arbitrationId: seed.arbitrationId || null,
+        eventType: seed.eventType,
+        eventKey: seed.eventKey,
+        status: MCPAgentTaskEventStatus.PENDING,
+        deliveryCount: 0,
+        firstDeliveredAt: null,
+        lastDeliveredAt: null,
+        ackedAt: null,
+        expiredAt: null,
+        lastRequestId: seed.requestId || null,
+        payloadJson: seed.payload || null,
+      } as MCPAgentTaskEvent);
+    } catch {
+      event = await this.taskEventsRepository.findOne({ where });
+    }
+
+    if (!event)
+      throw new BadRequestException('Task event could not be created');
+    return event;
+  }
+
+  private async ensureAndDeliverTaskEvent(seed: EventSeed) {
+    const event = await this.ensureTaskEvent(seed);
+    return this.deliverEventIfPending(event, seed.requestId);
+  }
+
+  private async eventForTaskRecommendation(
+    task: Task,
+    agentId: string | undefined,
+    ctx: MCPContext,
+    args: Args,
+  ) {
+    if (!agentId) return [];
+    const event = await this.ensureAndDeliverTaskEvent({
+      agentId,
+      agentExternalId: ctx.agentExternalId,
+      taskId: task.id,
+      eventType: MCPAgentTaskEventType.TASK_RECOMMENDED,
+      eventKey: this.eventKey(
+        MCPAgentTaskEventType.TASK_RECOMMENDED,
+        task.id,
+        agentId,
+      ),
+      requestId: this.stringArg(args, 'request_id') || ctx.requestId,
+      payload: {
+        title: task.title,
+        budgetCny: task.budgetCny,
+        skills: this.taskSkills(task),
+      },
+    });
+    return [event];
+  }
+
+  private async eventsForBid(
+    bid: Bid,
+    order: Order | null | undefined,
+    agentId: string,
+    ctx: MCPContext,
+    args: Args,
+  ) {
+    const taskId = bid.task?.id;
+    if (!taskId) return [];
+
+    const status = this.mapBidStatus(bid.status);
+    const requestId = this.stringArg(args, 'request_id') || ctx.requestId;
+    if (status === 'PENDING') {
+      return [
+        await this.ensureAndDeliverTaskEvent({
+          agentId,
+          agentExternalId: ctx.agentExternalId,
+          taskId,
+          bidId: bid.id,
+          eventType: MCPAgentTaskEventType.BID_SUBMITTED,
+          eventKey: this.eventKey(
+            MCPAgentTaskEventType.BID_SUBMITTED,
+            taskId,
+            bid.id,
+          ),
+          requestId,
+          payload: { priceCny: bid.priceCny, planSummary: bid.planSummary },
+        }),
+      ];
+    }
+
+    if (status === 'ACCEPTED' && order?.id) {
+      return [
+        await this.ensureAndDeliverTaskEvent({
+          agentId,
+          agentExternalId: ctx.agentExternalId,
+          taskId,
+          orderId: order.id,
+          bidId: bid.id,
+          eventType: MCPAgentTaskEventType.BID_ACCEPTED,
+          eventKey: this.eventKey(
+            MCPAgentTaskEventType.BID_ACCEPTED,
+            taskId,
+            order.id,
+          ),
+          requestId,
+          payload: { priceCny: bid.priceCny, acceptedAt: bid.updatedAt },
+        }),
+      ];
+    }
+
+    if (status === 'REJECTED') {
+      return [
+        await this.ensureAndDeliverTaskEvent({
+          agentId,
+          agentExternalId: ctx.agentExternalId,
+          taskId,
+          bidId: bid.id,
+          eventType: MCPAgentTaskEventType.BID_REJECTED,
+          eventKey: this.eventKey(
+            MCPAgentTaskEventType.BID_REJECTED,
+            taskId,
+            bid.id,
+          ),
+          requestId,
+          payload: { bidStatus: bid.status },
+        }),
+      ];
+    }
+
+    return [];
+  }
+
+  private async eventsForOrder(
+    order: Order,
+    agentId: string,
+    ctx: MCPContext,
+    args: Args,
+  ) {
+    const taskId = order.task?.id;
+    if (!taskId) return [];
+
+    const requestId = this.stringArg(args, 'request_id') || ctx.requestId;
+    const seeds: EventSeed[] = [];
+    if (this.mapBidStatus(order.bid?.status) === 'ACCEPTED') {
+      seeds.push({
+        agentId,
+        agentExternalId: ctx.agentExternalId,
+        taskId,
+        orderId: order.id,
+        bidId: order.bid?.id || null,
+        eventType: MCPAgentTaskEventType.BID_ACCEPTED,
+        eventKey: this.eventKey(
+          MCPAgentTaskEventType.BID_ACCEPTED,
+          taskId,
+          order.id,
+        ),
+        requestId,
+        payload: {
+          acceptedAt: order.createdAt,
+          bidPriceCny: order.bid?.priceCny,
+        },
+      });
+    }
+
+    if (order.status === OrderStatus.IN_PROGRESS) {
+      seeds.push({
+        agentId,
+        agentExternalId: ctx.agentExternalId,
+        taskId,
+        orderId: order.id,
+        bidId: order.bid?.id || null,
+        eventType: MCPAgentTaskEventType.ORDER_STARTED,
+        eventKey: this.eventKey(MCPAgentTaskEventType.ORDER_STARTED, order.id),
+        requestId,
+        payload: { status: order.status },
+      });
+    }
+
+    if (order.status === OrderStatus.COMPLETED) {
+      seeds.push({
+        agentId,
+        agentExternalId: ctx.agentExternalId,
+        taskId,
+        orderId: order.id,
+        bidId: order.bid?.id || null,
+        eventType: MCPAgentTaskEventType.ORDER_COMPLETED,
+        eventKey: this.eventKey(
+          MCPAgentTaskEventType.ORDER_COMPLETED,
+          order.id,
+        ),
+        requestId,
+        payload: {
+          completedAt: order.releasedAt || order.acceptedAt || order.updatedAt,
+        },
+      });
+    }
+
+    if (order.status === OrderStatus.CANCELED) {
+      seeds.push({
+        agentId,
+        agentExternalId: ctx.agentExternalId,
+        taskId,
+        orderId: order.id,
+        bidId: order.bid?.id || null,
+        eventType: MCPAgentTaskEventType.ORDER_CANCELLED,
+        eventKey: this.eventKey(
+          MCPAgentTaskEventType.ORDER_CANCELLED,
+          order.id,
+        ),
+        requestId,
+        payload: { cancelledAt: order.canceledAt || order.updatedAt },
+      });
+    }
+
+    if (order.status === OrderStatus.REFUNDED) {
+      seeds.push({
+        agentId,
+        agentExternalId: ctx.agentExternalId,
+        taskId,
+        orderId: order.id,
+        bidId: order.bid?.id || null,
+        eventType: MCPAgentTaskEventType.ORDER_REFUNDED,
+        eventKey: this.eventKey(MCPAgentTaskEventType.ORDER_REFUNDED, order.id),
+        requestId,
+        payload: { refundedAt: order.refundedAt || order.updatedAt },
+      });
+    }
+
+    if (order.status === OrderStatus.ARBITRATING) {
+      seeds.push({
+        agentId,
+        agentExternalId: ctx.agentExternalId,
+        taskId,
+        orderId: order.id,
+        bidId: order.bid?.id || null,
+        eventType: MCPAgentTaskEventType.DISPUTE_OPENED,
+        eventKey: this.eventKey(MCPAgentTaskEventType.DISPUTE_OPENED, order.id),
+        requestId,
+        payload: { disputeReason: order.disputeReason },
+      });
+    }
+
+    const arbitration = await this.arbitrationsRepository.findOne({
+      where: { order: { id: order.id } },
+      relations: ['order'],
+      order: { createdAt: 'DESC' },
+    });
+    if (arbitration?.status === ArbitrationStatus.RESOLVED) {
+      seeds.push({
+        agentId,
+        agentExternalId: ctx.agentExternalId,
+        taskId,
+        orderId: order.id,
+        bidId: order.bid?.id || null,
+        arbitrationId: arbitration.id,
+        eventType: MCPAgentTaskEventType.DISPUTE_RESOLVED,
+        eventKey: this.eventKey(
+          MCPAgentTaskEventType.DISPUTE_RESOLVED,
+          order.id,
+          arbitration.id,
+        ),
+        requestId,
+        payload: {
+          resolution: arbitration.resolution,
+          resolvedAt: arbitration.resolvedAt,
+        },
+      });
+    }
+
+    return Promise.all(
+      seeds.map((seed) => this.ensureAndDeliverTaskEvent(seed)),
+    );
+  }
+
+  private async eventsForTaskStatus(params: {
+    order: Order;
+    agentId: string;
+    ctx: MCPContext;
+    args: Args;
+    status: string;
+    rejectedDelivery?: Delivery | null;
+    acceptedDelivery?: Delivery | null;
+  }) {
+    const events = await this.eventsForOrder(
+      params.order,
+      params.agentId,
+      params.ctx,
+      params.args,
+    );
+    const taskId = params.order.task?.id;
+    if (!taskId) return events;
+
+    const requestId =
+      this.stringArg(params.args, 'request_id') || params.ctx.requestId;
+    if (params.rejectedDelivery) {
+      events.push(
+        await this.ensureAndDeliverTaskEvent({
+          agentId: params.agentId,
+          agentExternalId: params.ctx.agentExternalId,
+          taskId,
+          orderId: params.order.id,
+          bidId: params.order.bid?.id || null,
+          deliveryId: params.rejectedDelivery.id,
+          eventType: MCPAgentTaskEventType.REVISION_REQUESTED,
+          eventKey: this.eventKey(
+            MCPAgentTaskEventType.REVISION_REQUESTED,
+            params.order.id,
+            params.rejectedDelivery.id,
+          ),
+          requestId,
+          payload: {
+            revisionReason:
+              params.rejectedDelivery.rejectionReason ||
+              params.order.disputeReason,
+            revisionRequestedAt: params.rejectedDelivery.rejectedAt,
+          },
+        }),
+      );
+    }
+
+    if (params.acceptedDelivery) {
+      events.push(
+        await this.ensureAndDeliverTaskEvent({
+          agentId: params.agentId,
+          agentExternalId: params.ctx.agentExternalId,
+          taskId,
+          orderId: params.order.id,
+          bidId: params.order.bid?.id || null,
+          deliveryId: params.acceptedDelivery.id,
+          eventType: MCPAgentTaskEventType.DELIVERY_ACCEPTED,
+          eventKey: this.eventKey(
+            MCPAgentTaskEventType.DELIVERY_ACCEPTED,
+            params.order.id,
+            params.acceptedDelivery.id,
+          ),
+          requestId,
+          payload: { acceptedAt: params.acceptedDelivery.acceptedAt },
+        }),
+      );
+    }
+
+    return events;
+  }
+
   private async resolveOrderForAgentTask(params: {
     agentId: string;
     taskId: string;
@@ -176,7 +642,14 @@ export class MCPToolsProvider {
         task: { id: params.taskId },
         bid: { agent: { id: params.agentId } },
       },
-      relations: ['task', 'bid', 'bid.agent', 'bid.agent.owner', 'owner', 'client'],
+      relations: [
+        'task',
+        'bid',
+        'bid.agent',
+        'bid.agent.owner',
+        'owner',
+        'client',
+      ],
       order: { createdAt: 'DESC' },
     });
     if (!order) {
@@ -231,14 +704,18 @@ export class MCPToolsProvider {
     }
   }
 
-  private writeToolBase(properties: Record<string, unknown>, required: string[]) {
+  private writeToolBase(
+    properties: Record<string, unknown>,
+    required: string[],
+  ) {
     return {
       type: 'object',
       properties: {
         ...properties,
         idempotency_key: {
           type: 'string',
-          description: 'Write idempotency key. Format recommendation: caller_uuid.',
+          description:
+            'Write idempotency key. Format recommendation: caller_uuid.',
         },
         request_id: { type: 'string' },
       },
@@ -249,7 +726,8 @@ export class MCPToolsProvider {
   private searchAgentsTool(): IMCPTool {
     return {
       name: 'platform.agent.search',
-      description: 'Search discoverable Agents by keyword, tags, capabilities, and health.',
+      description:
+        'Search discoverable Agents by keyword, tags, capabilities, and health.',
       isWrite: false,
       inputSchema: {
         type: 'object',
@@ -268,7 +746,7 @@ export class MCPToolsProvider {
           request_id: { type: 'string' },
         },
       },
-      execute: async (args) => {
+      execute: async (args, ctx: MCPContext) => {
         const filters = this.objectArg(args, 'filters') || {};
         const result = await this.agentsDiscoveryService.discover({
           query: this.stringArg(args, 'query'),
@@ -297,7 +775,7 @@ export class MCPToolsProvider {
         },
         required: ['agent_id'],
       },
-      execute: async (args) => {
+      execute: async (args, ctx: MCPContext) => {
         const agentId = this.requireString(args, 'agent_id');
         const agent = await this.agentsRepository.findOne({
           where: { id: agentId },
@@ -313,7 +791,8 @@ export class MCPToolsProvider {
   private reportHealthTool(): IMCPTool {
     return {
       name: 'platform.agent.report_health',
-      description: 'Report Agent runtime health from HiClaw Controller or Agent gateway.',
+      description:
+        'Report Agent runtime health from HiClaw Controller or Agent gateway.',
       isWrite: true,
       inputSchema: this.writeToolBase(
         {
@@ -343,7 +822,8 @@ export class MCPToolsProvider {
   private getTaskTool(): IMCPTool {
     return {
       name: 'platform.task.get',
-      description: 'Get task details, bids, acceptance criteria, and attachments.',
+      description:
+        'Get task details, bids, acceptance criteria, and attachments.',
       isWrite: false,
       inputSchema: {
         type: 'object',
@@ -360,7 +840,9 @@ export class MCPToolsProvider {
         const task = await this.tasksService.findOne(taskId);
         if (!task) throw new NotFoundException('Task not found');
         const includeBids = args.include_bids !== false;
-        const bids = includeBids ? await this.tasksService.findBids(taskId) : [];
+        const bids = includeBids
+          ? await this.tasksService.findBids(taskId)
+          : [];
         const attachments = (task.attachmentUrls || []).map((url, index) => ({
           name: `attachment-${index + 1}`,
           url,
@@ -414,7 +896,7 @@ export class MCPToolsProvider {
           request_id: { type: 'string' },
         },
       },
-      execute: async (args) => {
+      execute: async (args, ctx: MCPContext) => {
         const filters = this.objectArg(args, 'filters') || {};
         const pageSize = Math.min(
           this.firstNumberArg(args, ['pageSize', 'limit'], 20) || 20,
@@ -427,7 +909,7 @@ export class MCPToolsProvider {
           this.stringArrayArg(args, 'skills') ||
           this.stringArrayArg(filters, 'skills');
         const tags = this.stringArrayArg(filters, 'tags');
-        const result = await this.tasksService.findMarketTasks({
+        const result = await this.tasksService.findOpenMarketTasks({
           keyword: this.stringArg(filters, 'keyword'),
           minBudget: this.numberArg(filters, 'min_budget'),
           maxBudget: this.numberArg(filters, 'max_budget'),
@@ -437,13 +919,29 @@ export class MCPToolsProvider {
         });
         const tasks = skills
           ? result.data.filter((task) => {
-              const taskSkills = this.taskSkills(task).map((item) => item.toLowerCase());
-              return skills.some((skill) => taskSkills.includes(skill.toLowerCase()));
+              const taskSkills = this.taskSkills(task).map((item) =>
+                item.toLowerCase(),
+              );
+              return skills.some((skill) =>
+                taskSkills.includes(skill.toLowerCase()),
+              );
             })
           : result.data;
+        const agentId = ctx.agentId || undefined;
+        const taskSummaries = await Promise.all(
+          tasks.map(async (task) => ({
+            ...this.mapTaskSummary(task),
+            events: await this.eventForTaskRecommendation(
+              task,
+              agentId,
+              ctx,
+              args,
+            ),
+          })),
+        );
         return this.ok(
           {
-            tasks: tasks.map((task) => this.mapTaskSummary(task)),
+            tasks: taskSummaries,
             total: skills ? tasks.length : result.pagination.total,
             page,
             pageSize,
@@ -491,10 +989,15 @@ export class MCPToolsProvider {
         if (!task) throw new NotFoundException('Task not found');
 
         const userId =
-          this.stringArg(args, 'user_id') || task.clientUserId || task.client?.id;
+          this.stringArg(args, 'user_id') ||
+          task.clientUserId ||
+          task.client?.id;
         if (!userId) throw new BadRequestException('Task has no publisher');
 
-        const order = await this.tasksService.selectBid(taskId, { bidId, userId });
+        const order = await this.tasksService.selectBid(taskId, {
+          bidId,
+          userId,
+        });
         return this.ok({ order }, args);
       },
     };
@@ -503,7 +1006,8 @@ export class MCPToolsProvider {
   private getOrderTool(): IMCPTool {
     return {
       name: 'platform.order.get',
-      description: 'Get order details, execution snapshot, delivery history, and checklist stats.',
+      description:
+        'Get order details, execution snapshot, delivery history, and checklist stats.',
       isWrite: false,
       inputSchema: {
         type: 'object',
@@ -525,7 +1029,8 @@ export class MCPToolsProvider {
   private updateExecutionTool(): IMCPTool {
     return {
       name: 'platform.order.update_execution',
-      description: 'Report order execution phase/status/progress from HiClaw Controller.',
+      description:
+        'Report order execution phase/status/progress from HiClaw Controller.',
       isWrite: true,
       inputSchema: this.writeToolBase(
         {
@@ -549,7 +1054,9 @@ export class MCPToolsProvider {
         }
         const agentId = taskId ? this.requireAgentId(args, ctx) : undefined;
         const order = explicitOrderId
-          ? await this.ordersRepository.findOne({ where: { id: explicitOrderId } })
+          ? await this.ordersRepository.findOne({
+              where: { id: explicitOrderId },
+            })
           : await this.resolveOrderForAgentTask({
               agentId: agentId as string,
               taskId: taskId as string,
@@ -557,10 +1064,19 @@ export class MCPToolsProvider {
         if (!order) throw new NotFoundException('Order not found');
 
         const orderId = order.id;
-        const status = (this.stringArg(args, 'status') || 'RUNNING').toUpperCase();
+        const status = (
+          this.stringArg(args, 'status') || 'RUNNING'
+        ).toUpperCase();
         const progress = Math.max(
           0,
-          Math.min(100, this.numberArg(args, 'progress', status === 'COMPLETED' ? 100 : 0) || 0),
+          Math.min(
+            100,
+            this.numberArg(
+              args,
+              'progress',
+              status === 'COMPLETED' ? 100 : 0,
+            ) || 0,
+          ),
         );
 
         const phaseId = await this.resolvePhaseId(orderId, args);
@@ -569,7 +1085,9 @@ export class MCPToolsProvider {
           phaseId,
           progress,
           event: this.toExecutionEvent(status),
-          message: this.stringArg(args, 'message') || `MCP execution status: ${status}`,
+          message:
+            this.stringArg(args, 'message') ||
+            `MCP execution status: ${status}`,
           metadata: {
             ...(this.objectArg(args, 'metadata') || {}),
             mcpRequestId: ctx.requestId,
@@ -586,7 +1104,8 @@ export class MCPToolsProvider {
           await this.ordersRepository.save(order);
         }
 
-        const execution = await this.executionService.getExecutionProgress(orderId);
+        const execution =
+          await this.executionService.getExecutionProgress(orderId);
         return this.ok({ orderId, progress, status, order, execution }, args);
       },
     };
@@ -637,7 +1156,13 @@ export class MCPToolsProvider {
         const order = explicitOrderId
           ? await this.ordersRepository.findOne({
               where: { id: explicitOrderId },
-              relations: ['task', 'owner', 'bid', 'bid.agent', 'bid.agent.owner'],
+              relations: [
+                'task',
+                'owner',
+                'bid',
+                'bid.agent',
+                'bid.agent.owner',
+              ],
             })
           : await this.resolveOrderForAgentTask({
               agentId: agentId as string,
@@ -648,7 +1173,9 @@ export class MCPToolsProvider {
           order.ownerUserId || order.owner?.id || order.bid?.agent?.owner?.id;
         if (!ownerUserId) throw new BadRequestException('Order has no owner');
 
-        const artifacts = Array.isArray(args.artifacts) ? [...args.artifacts] : [];
+        const artifacts = Array.isArray(args.artifacts)
+          ? [...args.artifacts]
+          : [];
         const singleArtifactUrl = this.stringArg(args, 'url');
         if (singleArtifactUrl) {
           artifacts.push({
@@ -663,7 +1190,10 @@ export class MCPToolsProvider {
               ? (artifact as Record<string, unknown>).url
               : artifact,
           )
-          .filter((url): url is string => typeof url === 'string' && url.trim().length > 0);
+          .filter(
+            (url): url is string =>
+              typeof url === 'string' && url.trim().length > 0,
+          );
         const previewUrl = this.stringArg(args, 'previewUrl');
         if (previewUrl) {
           artifactUrls.unshift(previewUrl);
@@ -755,10 +1285,19 @@ export class MCPToolsProvider {
           taskId,
           agentId,
           priceCny: price,
-          planSummary: this.firstStringArg(args, ['planSummary', 'plan_summary']),
+          planSummary: this.firstStringArg(args, [
+            'planSummary',
+            'plan_summary',
+          ]),
           pricingModel: this.stringArg(args, 'pricing_model') || 'quote',
-          estimatedHours: this.firstNumberArg(args, ['estimatedHours', 'estimated_hours']),
-          confidenceScore: this.firstNumberArg(args, ['confidence', 'confidence_score']),
+          estimatedHours: this.firstNumberArg(args, [
+            'estimatedHours',
+            'estimated_hours',
+          ]),
+          confidenceScore: this.firstNumberArg(args, [
+            'confidence',
+            'confidence_score',
+          ]),
           riskNotes: this.stringArg(args, 'risk_notes'),
         });
         return this.ok(
@@ -807,6 +1346,7 @@ export class MCPToolsProvider {
               taskId,
               agentId: this.responseAgentId(ctx, agentId),
               status: null,
+              events: [],
             },
             args,
           );
@@ -817,6 +1357,7 @@ export class MCPToolsProvider {
             bid: { agent: { id: agentId } },
           },
         });
+        const events = await this.eventsForBid(bid, order, agentId, ctx, args);
 
         return this.ok(
           {
@@ -829,6 +1370,156 @@ export class MCPToolsProvider {
             submittedAt: bid.createdAt,
             acceptedAt: bid.status === 'accepted' ? bid.updatedAt : null,
             orderId: order?.id || null,
+            events,
+          },
+          args,
+        );
+      },
+    };
+  }
+
+  private listMyEventsTool(): IMCPTool {
+    return {
+      name: 'platform.event.list_my',
+      description:
+        'List consumable HiClaw Agent events for notifications and workflow actions.',
+      isWrite: false,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          status: {
+            type: 'array',
+            items: {
+              type: 'string',
+              enum: ['PENDING', 'DELIVERED', 'ACKED', 'EXPIRED'],
+            },
+          },
+          limit: { type: 'integer', default: 50 },
+          request_id: { type: 'string' },
+        },
+      },
+      execute: async (args, ctx: MCPContext) => {
+        const agentId = this.requireAgentId(args, ctx);
+        const requestedStatuses = this.stringArrayArg(args, 'status') || [
+          MCPAgentTaskEventStatus.PENDING,
+          MCPAgentTaskEventStatus.DELIVERED,
+        ];
+        const statuses = requestedStatuses.filter(
+          (status): status is MCPAgentTaskEventStatus =>
+            Object.values(MCPAgentTaskEventStatus).includes(
+              status as MCPAgentTaskEventStatus,
+            ),
+        );
+        const events = await this.taskEventsRepository.find({
+          where: {
+            agentId,
+            status: In(
+              statuses.length > 0
+                ? statuses
+                : [
+                    MCPAgentTaskEventStatus.PENDING,
+                    MCPAgentTaskEventStatus.DELIVERED,
+                  ],
+            ),
+          },
+          order: { createdAt: 'ASC' },
+          take: Math.min(this.numberArg(args, 'limit', 50) || 50, 100),
+        });
+        const requestId = this.stringArg(args, 'request_id') || ctx.requestId;
+        const delivered = await Promise.all(
+          events.map((event) => this.deliverEventIfPending(event, requestId)),
+        );
+        return this.ok({ events: delivered }, args);
+      },
+    };
+  }
+
+  private ackEventTool(): IMCPTool {
+    return {
+      name: 'platform.event.ack',
+      description: 'Acknowledge a consumable HiClaw Agent event.',
+      isWrite: true,
+      inputSchema: this.writeToolBase(
+        {
+          eventId: { type: 'string' },
+          event_id: { type: 'string' },
+          eventType: { type: 'string' },
+          event_type: { type: 'string' },
+          eventKey: { type: 'string' },
+          event_key: { type: 'string' },
+          taskId: { type: 'string' },
+          task_id: { type: 'string' },
+          orderId: { type: 'string' },
+          order_id: { type: 'string' },
+        },
+        [],
+      ),
+      execute: async (args, ctx: MCPContext) => {
+        const agentId = this.requireAgentId(args, ctx);
+        const eventId = this.firstStringArg(args, ['eventId', 'event_id']);
+        const eventKey = this.firstStringArg(args, ['eventKey', 'event_key']);
+        const eventTypeArg = this.firstStringArg(args, [
+          'eventType',
+          'event_type',
+        ]);
+        let eventType: MCPAgentTaskEventType | undefined;
+        if (eventTypeArg) {
+          if (
+            !Object.values(MCPAgentTaskEventType).includes(
+              eventTypeArg as MCPAgentTaskEventType,
+            )
+          ) {
+            throw new BadRequestException('eventType is invalid');
+          }
+          eventType = eventTypeArg as MCPAgentTaskEventType;
+        }
+
+        if (!eventId && (!eventType || !eventKey)) {
+          throw new BadRequestException(
+            'eventId or eventType + eventKey is required',
+          );
+        }
+
+        const event = eventId
+          ? await this.taskEventsRepository.findOne({
+              where: { id: eventId, agentId },
+            })
+          : await this.taskEventsRepository.findOne({
+              where: {
+                agentId,
+                eventType: eventType as MCPAgentTaskEventType,
+                eventKey: eventKey as string,
+              },
+            });
+        if (!event) throw new NotFoundException('Task event not found');
+
+        const taskId = this.firstStringArg(args, ['taskId', 'task_id']);
+        const orderId = this.firstStringArg(args, ['orderId', 'order_id']);
+        if (taskId && event.taskId !== taskId) {
+          throw new BadRequestException('taskId does not match event');
+        }
+        if (orderId && event.orderId !== orderId) {
+          throw new BadRequestException('orderId does not match event');
+        }
+
+        if (event.status !== MCPAgentTaskEventStatus.ACKED) {
+          event.status = MCPAgentTaskEventStatus.ACKED;
+          event.ackedAt = event.ackedAt || new Date();
+          event.lastRequestId =
+            this.stringArg(args, 'request_id') ||
+            ctx.requestId ||
+            event.lastRequestId;
+          await this.taskEventsRepository.save(event);
+        }
+
+        return this.ok(
+          {
+            accepted: true,
+            eventId: event.id,
+            eventType: event.eventType,
+            eventKey: event.eventKey,
+            noticeStatus: event.status,
+            ackedAt: event.ackedAt,
           },
           args,
         );
@@ -846,7 +1537,10 @@ export class MCPToolsProvider {
         properties: {
           status: {
             type: 'array',
-            items: { type: 'string', enum: ['in_progress', 'delivered', 'completed'] },
+            items: {
+              type: 'string',
+              enum: ['in_progress', 'delivered', 'completed'],
+            },
           },
           request_id: { type: 'string' },
         },
@@ -859,17 +1553,20 @@ export class MCPToolsProvider {
           relations: ['task', 'bid', 'bid.agent'],
           order: { createdAt: 'DESC' },
         });
-        const tasks = orders
-          .map((order) => ({
-            taskId: order.task?.id,
-            title: order.task?.title,
-            status: this.mapOrderStatus(order),
-            bidStatus: this.mapBidStatus(order.bid?.status),
-            bidPriceCny: order.bid?.priceCny,
-            acceptedAt: order.createdAt,
-            orderId: order.id,
-          }))
-          .filter((item) => this.matchesMyTaskFilter(item.status, requested));
+        const tasks = (
+          await Promise.all(
+            orders.map(async (order) => ({
+              taskId: order.task?.id,
+              title: order.task?.title,
+              status: this.mapOrderStatus(order),
+              bidStatus: this.mapBidStatus(order.bid?.status),
+              bidPriceCny: order.bid?.priceCny,
+              acceptedAt: order.createdAt,
+              orderId: order.id,
+              events: await this.eventsForOrder(order, agentId, ctx, args),
+            })),
+          )
+        ).filter((item) => this.matchesMyTaskFilter(item.status, requested));
 
         return this.ok({ tasks }, args);
       },
@@ -879,7 +1576,8 @@ export class MCPToolsProvider {
   private getTaskStatusTool(): IMCPTool {
     return {
       name: 'platform.task.get_status',
-      description: 'Get acceptance or revision status for the current HiClaw Agent task.',
+      description:
+        'Get acceptance or revision status for the current HiClaw Agent task.',
       isWrite: false,
       inputSchema: {
         type: 'object',
@@ -893,13 +1591,27 @@ export class MCPToolsProvider {
         const taskId = this.requireAnyString(args, ['taskId', 'task_id']);
         const agentId = this.requireAgentId(args, ctx);
         const order = await this.resolveOrderForAgentTask({ agentId, taskId });
-        const rejectedDelivery = await this.latestRejectedCurrentDelivery(order);
+        const rejectedDelivery =
+          await this.latestRejectedCurrentDelivery(order);
+        const acceptedDelivery =
+          await this.latestAcceptedCurrentDelivery(order);
         const revisionRequested =
           order.status !== OrderStatus.COMPLETED &&
           order.status !== OrderStatus.PENDING_RELEASE &&
           Boolean(rejectedDelivery || order.disputeReason);
-        const execution = await this.executionService.getExecutionProgress(order.id);
+        const execution = await this.executionService.getExecutionProgress(
+          order.id,
+        );
         const status = this.mapOrderStatus(order, revisionRequested);
+        const events = await this.eventsForTaskStatus({
+          order,
+          agentId,
+          ctx,
+          args,
+          status,
+          rejectedDelivery,
+          acceptedDelivery,
+        });
 
         return this.ok(
           {
@@ -908,15 +1620,20 @@ export class MCPToolsProvider {
             hiclawStatus: status,
             progress: {
               phase: this.statusPhase(status),
-              percent: status === 'COMPLETED' ? 100 : execution.totalProgress || 0,
+              percent:
+                status === 'COMPLETED' ? 100 : execution.totalProgress || 0,
             },
             completedAt:
               status === 'COMPLETED'
                 ? order.releasedAt || order.acceptedAt || order.updatedAt
                 : null,
-            revisionReason: rejectedDelivery?.rejectionReason || order.disputeReason || undefined,
+            revisionReason:
+              rejectedDelivery?.rejectionReason ||
+              order.disputeReason ||
+              undefined,
             revisionRequestedAt: rejectedDelivery?.rejectedAt || undefined,
             orderId: order.id,
+            events,
           },
           args,
         );
@@ -926,7 +1643,8 @@ export class MCPToolsProvider {
 
   private matchesMyTaskFilter(status: string, requested?: string[]) {
     if (!requested || requested.length === 0) return true;
-    if (requested.includes('in_progress') && status === 'IN_PROGRESS') return true;
+    if (requested.includes('in_progress') && status === 'IN_PROGRESS')
+      return true;
     if (
       requested.includes('delivered') &&
       ['DELIVERED', 'WAITING_ACCEPTANCE', 'REVISION_REQUESTED'].includes(status)
@@ -947,6 +1665,26 @@ export class MCPToolsProvider {
         status: DeliveryStatus.REJECTED,
       },
       order: { rejectedAt: 'DESC' },
+    });
+  }
+
+  private async latestAcceptedCurrentDelivery(order: Order) {
+    if (
+      ![
+        OrderStatus.PENDING_RELEASE,
+        OrderStatus.COMPLETED,
+        OrderStatus.ACCEPTED,
+      ].includes(order.status) ||
+      !order.currentDeliveryId
+    ) {
+      return null;
+    }
+    return this.deliveriesRepository.findOne({
+      where: {
+        id: order.currentDeliveryId,
+        status: DeliveryStatus.ACCEPTED,
+      },
+      order: { acceptedAt: 'DESC' },
     });
   }
 

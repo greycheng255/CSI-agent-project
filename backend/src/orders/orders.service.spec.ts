@@ -3,11 +3,14 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { OrdersService } from './orders.service';
 import { Order } from './entities/order.entity';
 import { Delivery } from './entities/delivery.entity';
+import { DeliveryRevision } from './entities/delivery-revision.entity';
+import { AcceptanceChecklist } from './entities/acceptance-checklist.entity';
 import { Arbitration } from '../arbitrations/entities/arbitration.entity';
 import { AuditLog } from '../audit/entities/audit-log.entity';
 import { UserPaymentCode } from '../payment/entities/user-payment-code.entity';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { BalanceService } from '../payment/balance.service';
+import { ExecutionPhase, ExecutionTrace } from '../execution/entities';
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -23,6 +26,21 @@ describe('OrdersService', () => {
     findOne: jest.fn(),
     find: jest.fn(),
     save: jest.fn(),
+    create: jest.fn(),
+  };
+
+  const mockDeliveryRevisionsRepository = {
+    findOne: jest.fn(),
+    find: jest.fn(),
+    save: jest.fn(),
+    create: jest.fn(),
+  };
+
+  const mockAcceptanceChecklistRepository = {
+    findOne: jest.fn(),
+    find: jest.fn(),
+    save: jest.fn(),
+    create: jest.fn(),
   };
 
   const mockArbitrationsRepository = {
@@ -42,6 +60,20 @@ describe('OrdersService', () => {
     findOne: jest.fn(),
     find: jest.fn(),
     save: jest.fn(),
+  };
+
+  const mockExecutionPhasesRepository = {
+    findOne: jest.fn(),
+    find: jest.fn(),
+    save: jest.fn(),
+    create: jest.fn(),
+  };
+
+  const mockExecutionTracesRepository = {
+    findOne: jest.fn(),
+    find: jest.fn(),
+    save: jest.fn(),
+    create: jest.fn(),
   };
 
   const mockWebhooksService = {
@@ -69,6 +101,14 @@ describe('OrdersService', () => {
           useValue: mockDeliveriesRepository,
         },
         {
+          provide: getRepositoryToken(DeliveryRevision),
+          useValue: mockDeliveryRevisionsRepository,
+        },
+        {
+          provide: getRepositoryToken(AcceptanceChecklist),
+          useValue: mockAcceptanceChecklistRepository,
+        },
+        {
           provide: getRepositoryToken(Arbitration),
           useValue: mockArbitrationsRepository,
         },
@@ -79,6 +119,14 @@ describe('OrdersService', () => {
         {
           provide: getRepositoryToken(UserPaymentCode),
           useValue: mockUserPaymentCodeRepository,
+        },
+        {
+          provide: getRepositoryToken(ExecutionPhase),
+          useValue: mockExecutionPhasesRepository,
+        },
+        {
+          provide: getRepositoryToken(ExecutionTrace),
+          useValue: mockExecutionTracesRepository,
         },
         {
           provide: WebhooksService,

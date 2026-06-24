@@ -180,7 +180,9 @@ async function acceptBid(ds, fixture) {
       owner: fixture.owner,
       ownerUserId: fixture.owner.id,
       amountCny: bid.priceCny,
-      platformFeeRate: 0.05,
+      platformFeeRate: 0,
+      platformFeeCny: 0,
+      payoutCny: bid.priceCny,
       status: OrderStatus.IN_PROGRESS,
     }),
   );

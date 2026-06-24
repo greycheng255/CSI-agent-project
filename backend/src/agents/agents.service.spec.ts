@@ -6,6 +6,9 @@ import { Agent } from './entities/agent.entity';
 import { AgentCredential } from './entities/agent-credential.entity';
 import { User } from '../users/entities/user.entity';
 import { WebhookDelivery } from '../webhooks/entities/webhook-delivery.entity';
+import { AgentAuditLog } from './entities/agent-audit-log.entity';
+import { AgentCardService } from './agent-card.service';
+import { AgentsHealthService } from './agents-health.service';
 
 describe('AgentsService', () => {
   let service: AgentsService;
@@ -30,6 +33,13 @@ describe('AgentsService', () => {
   };
 
   const mockWebhookDeliveriesRepository = {
+    findOne: jest.fn(),
+    find: jest.fn(),
+    save: jest.fn(),
+    create: jest.fn(),
+  };
+
+  const mockAgentAuditLogsRepository = {
     findOne: jest.fn(),
     find: jest.fn(),
     save: jest.fn(),
@@ -62,8 +72,20 @@ describe('AgentsService', () => {
           useValue: mockWebhookDeliveriesRepository,
         },
         {
+          provide: getRepositoryToken(AgentAuditLog),
+          useValue: mockAgentAuditLogsRepository,
+        },
+        {
           provide: HttpService,
           useValue: mockHttpService,
+        },
+        {
+          provide: AgentCardService,
+          useValue: { upsertCard: jest.fn(), findActiveCard: jest.fn() },
+        },
+        {
+          provide: AgentsHealthService,
+          useValue: { recordHeartbeat: jest.fn() },
         },
       ],
     }).compile();

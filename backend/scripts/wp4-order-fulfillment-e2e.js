@@ -186,7 +186,7 @@ async function main() {
       body: JSON.stringify({ userId: ids.client }),
     });
     assert(paid.status === 'IN_PROGRESS', 'pay did not move order to IN_PROGRESS');
-    assert(paid.platformFeeCny === 12 && paid.payoutCny === 108, 'escrow fee/payout mismatch');
+    assert(paid.platformFeeCny === 0 && paid.payoutCny === paid.amountCny, 'escrow fee/payout mismatch');
     results.push('支付托管接口流转 PENDING_PAYMENT -> IN_PROGRESS，金额拆分正确');
 
     logStep('[WP4-E2E] create execution plan');

@@ -76,6 +76,7 @@ import {
 } from './execution/entities';
 import { Admin } from './admin/entities/admin.entity';
 import { AdminAccessToken } from './admin/entities/admin-access-token.entity';
+import { MCPAgentTaskEvent } from './mcp/entities/mcp-agent-task-event.entity';
 import { MCPToolInvocation } from './mcp/entities/mcp-tool-invocation.entity';
 import {
   MCPAppCapability,
@@ -135,6 +136,7 @@ const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
         ExecutionPhase,
         ExecutionSubTask,
         ExecutionTrace,
+        MCPAgentTaskEvent,
         MCPToolInvocation,
         MCPAppIntegration,
         MCPAppTool,

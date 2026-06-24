@@ -136,6 +136,9 @@ export class OrdersService {
 
       return {
         ...order,
+        platformFeeRate: 0,
+        platformFeeCny: 0,
+        payoutCny: order.amountCny,
         clientUserId: order.clientUserId,
         ownerUserId: order.ownerUserId,
         bid: order.bid
@@ -335,11 +338,12 @@ export class OrdersService {
   }
 
   async findByTask(taskId: string) {
-    return this.ordersRepository.find({
+    const orders = await this.ordersRepository.find({
       where: { task: { id: taskId } },
       relations: ['task', 'bid', 'bid.agent', 'client', 'owner'],
       order: { createdAt: 'DESC' },
     });
+    return this.enrichOrdersWithPaymentCodes(orders);
   }
 
   async pay(id: string, payerUserId: string) {
@@ -372,14 +376,9 @@ export class OrdersService {
     const from = order.status;
     order.status = OrderStatus.IN_PROGRESS;
     order.escrowedAt = new Date();
-    const fee = Math.round(
-      order.amountCny * Number(order.platformFeeRate || 0),
-    );
-    order.platformFeeCny = Math.max(0, Math.min(order.amountCny, fee));
-    order.payoutCny = Math.max(
-      0,
-      order.amountCny - (order.platformFeeCny || 0),
-    );
+    order.platformFeeRate = 0;
+    order.platformFeeCny = 0;
+    order.payoutCny = order.amountCny;
 
     const saved = await this.ordersRepository.save(order);
 
@@ -615,8 +614,11 @@ export class OrdersService {
     }
 
     const ownerId = order.bid?.agent?.owner?.id || order.ownerUserId;
-    const payoutCny = Number(order.payoutCny ?? 0);
-    const platformFeeCny = Number(order.platformFeeCny ?? 0);
+    order.platformFeeRate = 0;
+    order.platformFeeCny = 0;
+    order.payoutCny = order.amountCny;
+    const payoutCny = Number(order.amountCny);
+    const platformFeeCny = 0;
     if (!ownerId) {
       throw new BadRequestException('Order has no payable owner');
     }

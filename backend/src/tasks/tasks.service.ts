@@ -23,8 +23,43 @@ export type TaskSearchFilters = {
   maxBudget?: number;
   tags?: string[];
   sortBy?: 'newest' | 'budget_desc' | 'budget_asc';
+  statusGroup?: MarketStatusGroup;
   page?: number;
   limit?: number;
+};
+
+export type MarketStatusGroup =
+  | 'all'
+  | 'bidding'
+  | 'executing'
+  | 'completed'
+  | 'abnormal';
+
+export type MarketStatus =
+  | 'OPEN_FOR_BIDDING'
+  | 'AWARDED_PENDING_PAYMENT'
+  | 'IN_PROGRESS'
+  | 'WAITING_ACCEPTANCE'
+  | 'PENDING_RELEASE'
+  | 'COMPLETED'
+  | 'REJECTED'
+  | 'ARBITRATING'
+  | 'REFUNDED'
+  | 'CANCELED'
+  | 'CLOSED_NO_AWARD';
+
+type TaskWithMarketMeta = Task & {
+  bidsCount?: number;
+  totalBidsCount?: number;
+  latestBid?: number | null;
+  matchedAgents?: number;
+  marketStatus?: MarketStatus;
+  marketStatusLabel?: string;
+  isAcceptingBids?: boolean;
+  orderId?: string | null;
+  orderStatus?: OrderStatus | null;
+  selectedAgent?: { id: string; name?: string | null } | null;
+  dealPriceCny?: number | null;
 };
 
 type CreateTaskDto = {
@@ -207,12 +242,10 @@ export class TasksService {
     return saved;
   }
 
-  async findMarketTasks(filters?: TaskSearchFilters) {
-    const qb = this.tasksRepository
-      .createQueryBuilder('task')
-      .leftJoinAndSelect('task.client', 'client')
-      .where('task.status = :status', { status: TaskStatus.OPEN });
-
+  private applyMarketFilters(
+    qb: ReturnType<Repository<Task>['createQueryBuilder']>,
+    filters?: TaskSearchFilters,
+  ) {
     if (filters?.keyword) {
       qb.andWhere(
         '(task.title LIKE :keyword OR task.description LIKE :keyword)',
@@ -232,11 +265,179 @@ export class TasksService {
       qb.andWhere('task.tags && :tags', { tags: filters.tags });
     }
 
+    return qb;
+  }
+
+  private applyMarketSort(
+    qb: ReturnType<Repository<Task>['createQueryBuilder']>,
+    filters?: TaskSearchFilters,
+  ) {
     switch (filters?.sortBy) {
-      case 'budget_desc': qb.orderBy('task.budgetCny', 'DESC'); break;
-      case 'budget_asc': qb.orderBy('task.budgetCny', 'ASC'); break;
-      default: qb.orderBy('task.createdAt', 'DESC'); break;
+      case 'budget_desc':
+        qb.orderBy('task.budgetCny', 'DESC');
+        break;
+      case 'budget_asc':
+        qb.orderBy('task.budgetCny', 'ASC');
+        break;
+      default:
+        qb.orderBy('task.createdAt', 'DESC');
+        break;
     }
+    return qb;
+  }
+
+  private marketStatusFor(task: Task, order?: Order | null): MarketStatus {
+    if (!order) {
+      return task.status === TaskStatus.OPEN
+        ? 'OPEN_FOR_BIDDING'
+        : 'CLOSED_NO_AWARD';
+    }
+    switch (order.status) {
+      case OrderStatus.PENDING_PAYMENT:
+        return 'AWARDED_PENDING_PAYMENT';
+      case OrderStatus.IN_PROGRESS:
+        return 'IN_PROGRESS';
+      case OrderStatus.DELIVERED:
+        return 'WAITING_ACCEPTANCE';
+      case OrderStatus.ACCEPTED:
+      case OrderStatus.PENDING_RELEASE:
+        return 'PENDING_RELEASE';
+      case OrderStatus.COMPLETED:
+        return 'COMPLETED';
+      case OrderStatus.REJECTED:
+        return 'REJECTED';
+      case OrderStatus.ARBITRATING:
+        return 'ARBITRATING';
+      case OrderStatus.REFUNDED:
+        return 'REFUNDED';
+      case OrderStatus.CANCELED:
+        return 'CANCELED';
+      default:
+        return 'IN_PROGRESS';
+    }
+  }
+
+  private marketStatusLabel(status: MarketStatus) {
+    const labels: Record<MarketStatus, string> = {
+      OPEN_FOR_BIDDING: '招标中',
+      AWARDED_PENDING_PAYMENT: '已中标，待支付',
+      IN_PROGRESS: '执行中',
+      WAITING_ACCEPTANCE: '已交付，待验收',
+      PENDING_RELEASE: '验收通过，待放款',
+      COMPLETED: '已完成',
+      REJECTED: '验收驳回',
+      ARBITRATING: '仲裁中',
+      REFUNDED: '已退款',
+      CANCELED: '已取消',
+      CLOSED_NO_AWARD: '已关闭',
+    };
+    return labels[status];
+  }
+
+  private async enrichMarketTasks(tasks: Task[]) {
+    if (tasks.length === 0) return [];
+    const taskIds = tasks.map((t) => t.id);
+
+    const [activeBidStats, totalBidStats, orders, agentCount] =
+      await Promise.all([
+        this.bidsRepository
+          .createQueryBuilder('bid')
+          .select('bid.task_id', 'taskId')
+          .addSelect('COUNT(bid.id)', 'count')
+          .addSelect('MIN(bid.priceCny)', 'minPrice')
+          .where('bid.task_id IN (:...taskIds)', { taskIds })
+          .andWhere('bid.status = :status', { status: BidStatus.SUBMITTED })
+          .groupBy('bid.task_id')
+          .getRawMany<{
+            taskId: string;
+            count: string;
+            minPrice: string | null;
+          }>(),
+        this.bidsRepository
+          .createQueryBuilder('bid')
+          .select('bid.task_id', 'taskId')
+          .addSelect('COUNT(bid.id)', 'count')
+          .where('bid.task_id IN (:...taskIds)', { taskIds })
+          .groupBy('bid.task_id')
+          .getRawMany<{ taskId: string; count: string }>(),
+        this.ordersRepository.find({
+          where: taskIds.map((id) => ({ task: { id } })),
+          relations: ['task', 'bid', 'bid.agent'],
+          order: { createdAt: 'DESC' },
+        }),
+        this.agentsRepository
+          .createQueryBuilder('agent')
+          .select('COUNT(agent.id)', 'cnt')
+          .where('agent.approvalStatus = :approved', { approved: 'approved' })
+          .andWhere('agent.isActive = :active', { active: true })
+          .andWhere('agent.runtimeStatus IN (:...statuses)', {
+            statuses: ['online', 'degraded'],
+          })
+          .getRawOne<{ cnt: string }>(),
+      ]);
+
+    const activeBidMap = new Map<
+      string,
+      { count: number; minPrice: number | null }
+    >();
+    for (const row of activeBidStats) {
+      activeBidMap.set(row.taskId, {
+        count: parseInt(row.count, 10),
+        minPrice: row.minPrice ? Number(row.minPrice) : null,
+      });
+    }
+
+    const totalBidMap = new Map<string, number>();
+    for (const row of totalBidStats) {
+      totalBidMap.set(row.taskId, parseInt(row.count, 10));
+    }
+
+    const orderMap = new Map<string, Order>();
+    for (const order of orders) {
+      const taskId = order.task?.id;
+      if (taskId && !orderMap.has(taskId)) {
+        orderMap.set(taskId, order);
+      }
+    }
+
+    const totalAgents = parseInt(agentCount?.cnt || '0', 10);
+
+    return tasks.map((task): TaskWithMarketMeta => {
+      const stats = activeBidMap.get(task.id);
+      const order = orderMap.get(task.id) || null;
+      const marketStatus = this.marketStatusFor(task, order);
+      const selectedAgent = order?.bid?.agent
+        ? {
+            id: order.bid.agent.id,
+            name: order.bid.agent.name || null,
+          }
+        : null;
+
+      return {
+        ...task,
+        bidsCount: stats?.count ?? 0,
+        totalBidsCount: totalBidMap.get(task.id) ?? 0,
+        latestBid: stats?.minPrice ?? null,
+        matchedAgents: totalAgents,
+        marketStatus,
+        marketStatusLabel: this.marketStatusLabel(marketStatus),
+        isAcceptingBids: task.status === TaskStatus.OPEN && !order,
+        orderId: order?.id || null,
+        orderStatus: order?.status || null,
+        selectedAgent,
+        dealPriceCny: order?.amountCny ?? order?.bid?.priceCny ?? null,
+      };
+    });
+  }
+
+  async findOpenMarketTasks(filters?: TaskSearchFilters) {
+    const qb = this.tasksRepository
+      .createQueryBuilder('task')
+      .leftJoinAndSelect('task.client', 'client')
+      .where('task.status = :status', { status: TaskStatus.OPEN });
+
+    this.applyMarketFilters(qb, filters);
+    this.applyMarketSort(qb, filters);
 
     const page = filters?.page || 1;
     const limit = filters?.limit || 20;
@@ -247,43 +448,77 @@ export class TasksService {
       return { data: [], pagination: { page, limit, total, totalPages: 0 } };
     }
 
-    const taskIds = tasks.map((t) => t.id);
+    const tasksWithMeta = await this.enrichMarketTasks(tasks);
 
-    // 批量查询：一次拿所有 task 的报价数和最低报价
-    const bidStats = await this.bidsRepository
-      .createQueryBuilder('bid')
-      .select('bid.task_id', 'taskId')
-      .addSelect('COUNT(bid.id)', 'count')
-      .addSelect('MIN(bid.priceCny)', 'minPrice')
-      .where('bid.task_id IN (:...taskIds)', { taskIds })
-      .andWhere('bid.status = :status', { status: BidStatus.SUBMITTED })
-      .groupBy('bid.task_id')
-      .getRawMany<{ taskId: string; count: string; minPrice: string | null }>();
+    return {
+      data: tasksWithMeta,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
 
-    const bidMap = new Map<string, { count: number; minPrice: number | null }>();
-    for (const row of bidStats) {
-      bidMap.set(row.taskId, { count: parseInt(row.count, 10), minPrice: row.minPrice ? Number(row.minPrice) : null });
+  async findMarketTasks(filters?: TaskSearchFilters) {
+    const statusGroup = filters?.statusGroup || 'all';
+    const qb = this.tasksRepository
+      .createQueryBuilder('task')
+      .leftJoinAndSelect('task.client', 'client')
+      .leftJoin('task.orders', 'marketOrder')
+      .where('task.status != :draft', { draft: TaskStatus.DRAFT })
+      .distinct(true);
+
+    this.applyMarketFilters(qb, filters);
+
+    switch (statusGroup) {
+      case 'bidding':
+        qb.andWhere('task.status = :openStatus', {
+          openStatus: TaskStatus.OPEN,
+        });
+        break;
+      case 'executing':
+        qb.andWhere('marketOrder.status IN (:...executingStatuses)', {
+          executingStatuses: [
+            OrderStatus.PENDING_PAYMENT,
+            OrderStatus.IN_PROGRESS,
+            OrderStatus.DELIVERED,
+            OrderStatus.ACCEPTED,
+            OrderStatus.PENDING_RELEASE,
+          ],
+        });
+        break;
+      case 'completed':
+        qb.andWhere('marketOrder.status = :completedStatus', {
+          completedStatus: OrderStatus.COMPLETED,
+        });
+        break;
+      case 'abnormal':
+        qb.andWhere(
+          '(marketOrder.status IN (:...abnormalStatuses) OR (task.status = :closedStatus AND marketOrder.id IS NULL))',
+          {
+            abnormalStatuses: [
+              OrderStatus.REJECTED,
+              OrderStatus.ARBITRATING,
+              OrderStatus.REFUNDED,
+              OrderStatus.CANCELED,
+            ],
+            closedStatus: TaskStatus.CLOSED,
+          },
+        );
+        break;
+      default:
+        break;
     }
 
-    // 批量查询：一次拿所有 task 的匹配 Agent 数
-    const agentCount = await this.agentsRepository
-      .createQueryBuilder('agent')
-      .select('COUNT(agent.id)', 'cnt')
-      .where('agent.approvalStatus = :approved', { approved: 'approved' })
-      .andWhere('agent.isActive = :active', { active: true })
-      .andWhere('agent.runtimeStatus IN (:...statuses)', { statuses: ['online', 'degraded'] })
-      .getRawOne<{ cnt: string }>();
-    const totalAgents = parseInt(agentCount?.cnt || '0', 10);
+    this.applyMarketSort(qb, filters);
 
-    const tasksWithMeta = tasks.map((task) => {
-      const stats = bidMap.get(task.id);
-      return {
-        ...task,
-        bidsCount: stats?.count ?? 0,
-        latestBid: stats?.minPrice ?? null,
-        matchedAgents: totalAgents,
-      };
-    });
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 20;
+    qb.skip((page - 1) * limit).take(limit);
+
+    const [tasks, total] = await qb.getManyAndCount();
+    if (tasks.length === 0) {
+      return { data: [], pagination: { page, limit, total, totalPages: 0 } };
+    }
+
+    const tasksWithMeta = await this.enrichMarketTasks(tasks);
 
     return {
       data: tasksWithMeta,
@@ -424,7 +659,9 @@ export class TasksService {
       ownerUserId: bid.agent?.owner?.id,
       owner: bid.agent?.owner || undefined,
       amountCny: bid.priceCny,
-      platformFeeRate: 0.05, // 5% 鏈嶅姟璐?
+      platformFeeRate: 0,
+      platformFeeCny: 0,
+      payoutCny: bid.priceCny,
       status: OrderStatus.PENDING_PAYMENT,
     });
     const savedOrder = await this.ordersRepository.save(order);

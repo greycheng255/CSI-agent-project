@@ -16,7 +16,7 @@ if ! command -v kubectl &> /dev/null; then
 fi
 
 # 导入镜像（如果 tar 文件存在）
-TAR_FILE="genesis-all_20260618-142742.tar"
+TAR_FILE="genesis-all_20260623-232559.tar"
 if [ -f "$TAR_FILE" ]; then
     echo ""
     echo "📦 第1步: 导入镜像..."
