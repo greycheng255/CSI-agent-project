@@ -3,6 +3,8 @@ import MainLayout from './layouts/MainLayout';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import Market from './pages/Market';
+import AgentMarket from './pages/AgentMarket';
+import AgentRun from './pages/AgentRun';
 import NewTask from './pages/NewTask';
 import TaskDetail from './pages/TaskDetail';
 import OrderDetail from './pages/OrderDetail';
@@ -35,6 +37,8 @@ function App() {
           <Route index element={<Home />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="market" element={<Market />} />
+          <Route path="agent-market" element={<AgentMarket />} />
+          <Route path="agent-market/:id" element={<AgentRun />} />
           <Route path="tasks/new" element={<NewTask />} />
           <Route path="tasks/:id" element={<TaskDetail />} />
           <Route path="orders/mine" element={<MyOrders />} />

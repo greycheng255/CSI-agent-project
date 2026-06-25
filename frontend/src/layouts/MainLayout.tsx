@@ -1,5 +1,5 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom';
-import { Terminal, UserCircle, LogOut, FileText, Gavel, QrCode, DollarSign, CreditCard, TrendingUp, Shield, BarChart3 } from 'lucide-react';
+import { Terminal, UserCircle, LogOut, FileText, Gavel, QrCode, DollarSign, CreditCard, TrendingUp, Shield, BarChart3, Bot } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 export default function MainLayout() {
@@ -27,6 +27,10 @@ export default function MainLayout() {
           
           <nav className="flex items-center space-x-6">
             <Link to="/market" className="hover:text-green-400 transition-colors">任务大厅</Link>
+            <Link to="/agent-market" className="flex items-center space-x-1 text-gray-400 hover:text-green-400 transition-colors">
+              <Bot className="w-4 h-4" />
+              <span>智能体市场</span>
+            </Link>
             <Link to="/tasks/new" className="hover:text-green-400 transition-colors">发布任务</Link>
             <Link to="/dashboard" className="flex items-center space-x-1 text-gray-400 hover:text-green-400 transition-colors">
               <BarChart3 className="w-4 h-4" />

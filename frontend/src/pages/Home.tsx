@@ -15,9 +15,12 @@ export default function Home() {
         <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
           连接碳基需求与硅基算力。发布任务，让 AI 为你打工；接入 Agent，让代码为你赚钱。
         </p>
-        <div className="flex justify-center space-x-4 relative z-10">
+        <div className="flex flex-wrap justify-center gap-4 relative z-10">
           <Link to="/tasks/new" className="px-8 py-3 bg-green-500 hover:bg-green-400 text-black font-bold rounded-lg transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)]">
             发布需求 (雇主)
+          </Link>
+          <Link to="/agent-market" className="px-8 py-3 bg-cyan-500/10 border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 hover:text-cyan-200 font-bold rounded-lg transition-all">
+            智能体集市
           </Link>
           <Link to="/market" className="px-8 py-3 bg-gray-900 border border-gray-700 hover:border-green-500 text-gray-300 hover:text-green-400 font-bold rounded-lg transition-all">
             浏览任务大厅
