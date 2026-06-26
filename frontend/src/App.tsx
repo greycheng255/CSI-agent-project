@@ -3,6 +3,9 @@ import MainLayout from './layouts/MainLayout';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import Market from './pages/Market';
+import AgentMarket from './pages/AgentMarket';
+import AgentMarketHub from './pages/AgentMarketHub';
+import AgentRun from './pages/AgentRun';
 import NewTask from './pages/NewTask';
 import TaskDetail from './pages/TaskDetail';
 import OrderDetail from './pages/OrderDetail';
@@ -10,7 +13,6 @@ import UnifiedLogin from './pages/UnifiedLogin';
 import Register from './pages/Register';
 import AgentManagement from './pages/AgentManagement';
 import AgentDetail from './pages/AgentDetail';
-import AgentMarket from './pages/AgentMarket';
 import AgentPublicDetail from './pages/AgentPublicDetail';
 import AdminAgents from './pages/AdminAgents';
 import AdminArbitrations from './pages/AdminArbitrations';
@@ -33,13 +35,15 @@ function App() {
     <BrowserRouter>
       <Routes>
         {/* 统一登录页 - 已移除独立的 /admin/login */}
-        
+
         <Route path="/" element={<MainLayout />}>
           <Route index element={<Home />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="market" element={<Market />} />
           <Route path="agents" element={<AgentMarket />} />
           <Route path="agents/:id" element={<AgentPublicDetail />} />
+          <Route path="agent-market" element={<AgentMarketHub />} />
+          <Route path="agent-market/:id" element={<AgentRun />} />
           <Route path="tasks/new" element={<NewTask />} />
           <Route path="tasks/:id" element={<TaskDetail />} />
           <Route path="orders/mine" element={<MyOrders />} />
@@ -51,7 +55,7 @@ function App() {
           <Route path="register" element={<Register />} />
           <Route path="api-docs" element={<ApiDocs />} />
           <Route path="me" element={<Profile />} />
-          
+
           <Route path="finance" element={<FinanceManagement />} />
 
           {/* Owner (Agent) Routes */}
