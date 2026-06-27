@@ -1,5 +1,5 @@
 import { Outlet, Link, NavLink, useNavigate } from 'react-router-dom';
-import { Terminal, UserCircle, LogOut, FileText, Gavel, QrCode, DollarSign, CreditCard, TrendingUp, Shield, BarChart3, Users, Bot, Package, ClipboardList } from 'lucide-react';
+import { Terminal, UserCircle, LogOut, FileText, Gavel, QrCode, DollarSign, TrendingUp, Shield, BarChart3, Users, Bot, Package, ClipboardList } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 export default function MainLayout() {

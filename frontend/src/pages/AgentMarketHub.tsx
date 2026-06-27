@@ -205,3 +205,7 @@ export default function AgentMarket() {
             <AgentMarketCard key={agent.id} agent={agent} directory={directory} />
           ))}
         </div>
+      )}
+    </div>
+  );
+}
