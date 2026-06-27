@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, Loader2, Search, Star, Zap } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Bot, Loader2, Search, Star, Zap } from 'lucide-react';
 import {
   isCatalogItemRunnable,
   loadAgentDirectory,
@@ -21,36 +21,35 @@ function AgentMarketCard({
   return (
     <Link
       to={`/agent-market/${agent.id}`}
-      className="group min-h-[210px] rounded-xl border bg-[#0a0a0a] p-5 transition-all hover:-translate-y-0.5 hover:shadow-[0_0_28px_rgba(34,197,94,0.08)]"
-      style={{ borderColor: runnable ? 'rgb(31 41 55)' : 'rgba(75,85,99,0.55)' }}
+      className="group flex min-h-[176px] flex-col rounded-lg border border-gray-800 bg-[#0a0a0a] p-3.5 transition-colors hover:border-green-500/40"
     >
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-2.5">
         <div
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border text-2xl"
-          style={{ background: style.bg, borderColor: style.border }}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-green-500/10"
+          style={{ borderColor: style.border }}
         >
-          {agent.icon}
+          <Bot className="h-4 w-4" style={{ color: style.text }} />
         </div>
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-bold text-gray-100 group-hover:text-green-400">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="truncate text-sm font-bold text-gray-100 group-hover:text-green-400">
               {agent.name}
             </h3>
             {!runnable && (
-              <span className="rounded border border-gray-700 bg-gray-900 px-2 py-0.5 text-[10px] font-bold text-gray-500">
+              <span className="shrink-0 rounded-full border border-gray-700 bg-gray-900 px-2 py-0.5 text-[10px] font-bold text-gray-500">
                 接口未开放
               </span>
             )}
           </div>
-          <p className="mt-1 line-clamp-2 text-sm leading-6 text-gray-500">{agent.desc}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{agent.desc}</p>
         </div>
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap gap-1.5">
         {agent.tags.map((tag) => (
           <span
             key={tag}
-            className="rounded border px-2 py-1 text-xs font-bold"
+            className="rounded border px-2 py-1 text-[11px] font-bold leading-none"
             style={{ color: style.text, background: style.bg, borderColor: style.border }}
           >
             {tag}
@@ -58,18 +57,21 @@ function AgentMarketCard({
         ))}
       </div>
 
-      <div className="mt-8 flex items-center gap-4 border-t border-gray-800/80 pt-4 text-sm text-gray-500">
+      <div className="mt-auto flex items-center gap-3 border-t border-gray-800 pt-2.5 text-xs text-gray-500">
         <span className="flex items-center gap-1">
-          <Star className="h-4 w-4" style={{ color: style.text }} />
+          <Star className="h-3 w-3" style={{ color: style.text }} />
           {agent.rating.toFixed(1)}
         </span>
         <span className="flex items-center gap-1">
-          <Zap className="h-4 w-4" style={{ color: style.text }} />
+          <Zap className="h-3 w-3" style={{ color: style.text }} />
           {agent.calls.toLocaleString()} 次
         </span>
-        <span className="ml-auto flex items-center gap-1 font-bold" style={{ color: style.text }}>
+        <span
+          className="ml-auto flex items-center gap-1 font-bold"
+          style={{ color: runnable ? style.text : 'rgb(107 114 128)' }}
+        >
           {runnable ? '运行' : '查看'}
-          <ArrowRight className="h-4 w-4" />
+          <ArrowRight className="h-3.5 w-3.5" />
         </span>
       </div>
     </Link>
@@ -133,7 +135,7 @@ export default function AgentMarket() {
   }, [directory]);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="m-0 text-3xl font-bold text-gray-100">智能体集市</h1>
@@ -164,8 +166,8 @@ export default function AgentMarket() {
       )}
 
       <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="relative min-w-0 flex-1">
+        <div className="space-y-4">
+          <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600" />
             <input
               value={search}
@@ -174,7 +176,7 @@ export default function AgentMarket() {
               className="w-full rounded-lg border border-gray-700 bg-black py-2.5 pl-10 pr-4 text-sm text-gray-200 outline-none transition-colors placeholder:text-gray-600 focus:border-green-500"
             />
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible lg:pb-0">
+          <div className="flex flex-wrap gap-2">
             {allTags.map((tag) => {
               const active = tag === activeTag;
               return (
@@ -200,7 +202,7 @@ export default function AgentMarket() {
           没有匹配的智能体
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
           {filteredAgents.map((agent) => (
             <AgentMarketCard key={agent.id} agent={agent} directory={directory} />
           ))}

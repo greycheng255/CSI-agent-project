@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Video } from 'lucide-react';
 import type { AgentPanelProps } from './types';
 import {
@@ -11,6 +12,15 @@ import {
 
 export default function VideoPlugin(props: AgentPanelProps) {
   const videoType = props.formValues.videoType || 't2v';
+
+  const currentSize = props.formValues.size;
+  const updateField = props.updateField;
+
+  useEffect(() => {
+    if (!currentSize) {
+      updateField('size', '1280*720');
+    }
+  }, [currentSize, updateField]);
 
   return (
     <div className="space-y-5">
@@ -86,11 +96,16 @@ export default function VideoPlugin(props: AgentPanelProps) {
         />
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        <PanelInput
+        <ChoicePills
           label="画幅/尺寸"
-          value={props.formValues.size || ''}
+          value={props.formValues.size || '1280*720'}
+          accent={props.accent}
           onChange={(value) => props.updateField('size', value)}
-          placeholder="16:9 / 9:16 / 自适应"
+          options={[
+            { value: '1280*720', label: '16:9 横版' },
+            { value: '720*1280', label: '9:16 竖版' },
+            { value: '960*960', label: '1:1 方形' },
+          ]}
         />
         <ChoicePills
           label="镜头"
