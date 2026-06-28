@@ -29,10 +29,7 @@ export default function MainLayout() {
           
           <nav className="flex items-center space-x-4 text-sm whitespace-nowrap">
             <NavLink to="/agents" className={({ isActive }) => `transition-colors flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'hover:text-green-400'}`}>智能体广场</NavLink>
-            <NavLink to="/agent-market" className={({ isActive }) => `flex items-center gap-1 transition-colors flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'text-gray-400 hover:text-green-400'}`}>
-              <Bot className="w-3.5 h-3.5" />
-              <span>智能体集市</span>
-            </NavLink>
+            <NavLink to="/agent-market" className={({ isActive }) => `transition-colors flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'hover:text-green-400'}`}>智能体集市</NavLink>
             <NavLink to="/market" className={({ isActive }) => `transition-colors flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'hover:text-green-400'}`}>任务大厅</NavLink>
             <NavLink to="/tasks/new" className={({ isActive }) => `transition-colors flex-shrink-0 ${isActive ? 'text-green-400 font-semibold' : 'hover:text-green-400'}`}>发布任务</NavLink>
             <NavLink to="/dashboard" className={({ isActive }) => `flex items-center gap-1 transition-colors flex-shrink-0 ${isActive ? 'text-green-400' : 'text-gray-400 hover:text-green-400'}`}>
