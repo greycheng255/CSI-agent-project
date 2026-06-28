@@ -1,6 +1,40 @@
 import { API_BASE } from '../config/api';
 import { useAuthStore, type User, type Admin } from '../store/authStore';
 
+const parseApiJson = async <T>(response: Response): Promise<T> => {
+  const text = await response.text();
+  const contentType = response.headers.get('content-type') || '';
+
+  if (!text) {
+    return null as T;
+  }
+
+  if (contentType.toLowerCase().includes('application/json')) {
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new Error('API returned invalid JSON');
+    }
+  }
+
+  const preview = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  const suffix = preview ? `: ${preview.slice(0, 120)}` : '';
+  throw new Error(
+    `API returned non-JSON response (${response.status} ${response.statusText || 'HTTP error'})${suffix}`,
+  );
+}
+
+const getErrorMessage = async (response: Response, fallback: string) => {
+  try {
+    const data = await parseApiJson<{ message?: string | string[] }>(response);
+    const message = data?.message;
+    if (Array.isArray(message)) return message.join(', ');
+    return message || fallback;
+  } catch (error) {
+    return error instanceof Error ? error.message : fallback;
+  }
+};
+
 /**
  * 用户注册
  */
@@ -16,7 +50,7 @@ export async function registerUser(
   });
 
   if (!response.ok) {
-    const error = await response.json();
+    const error = { message: await getErrorMessage(response, 'Request failed') };
     throw new Error(error.message || '注册失败');
   }
 
@@ -38,11 +72,11 @@ export async function loginUser(
   });
 
   if (!response.ok) {
-    const error = await response.json();
+    const error = { message: await getErrorMessage(response, 'Request failed') };
     throw new Error(error.message || '登录失败');
   }
 
-  const data = await response.json();
+  const data = await parseApiJson<{ user: User; token: string }>(response);
   
   // 保存到 store
   const { login } = useAuthStore.getState();
@@ -121,6 +155,50 @@ export const userAuthService = {
   getCurrentUser,
 };
 
+export type UnifiedLoginResult =
+  | { type: 'user'; user: User; token: string }
+  | { type: 'admin'; admin: Admin; token: string };
+
+const isInfrastructureError = (error: unknown) => {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes('non-JSON response') ||
+    error.message.includes('invalid JSON') ||
+    error.message.includes('Failed to fetch') ||
+    error.message.includes('NetworkError')
+  );
+};
+
+export async function loginWithAccount(
+  account: string,
+  password: string,
+): Promise<UnifiedLoginResult> {
+  let userError: unknown;
+
+  try {
+    const result = await loginUser(account, password);
+    return { type: 'user', ...result };
+  } catch (error) {
+    userError = error;
+    if (isInfrastructureError(error)) {
+      throw error;
+    }
+  }
+
+  try {
+    const result = await loginAdmin(account, password);
+    return { type: 'admin', ...result };
+  } catch (adminError) {
+    if (isInfrastructureError(adminError)) {
+      throw adminError;
+    }
+    if (isInfrastructureError(userError)) {
+      throw userError;
+    }
+    throw new Error('账号或密码不正确');
+  }
+}
+
 /**
  * 管理员登录（独立系统）
  */
@@ -135,11 +213,11 @@ export async function loginAdmin(
   });
 
   if (!response.ok) {
-    const error = await response.json();
+    const error = { message: await getErrorMessage(response, 'Request failed') };
     throw new Error(error.message || '登录失败');
   }
 
-  const data = await response.json();
+  const data = await parseApiJson<{ admin: Admin; token: string }>(response);
   
   // 保存到 store
   const { adminLogin } = useAuthStore.getState();
