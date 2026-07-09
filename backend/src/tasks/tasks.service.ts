@@ -93,6 +93,9 @@ type UpdateTaskDto = {
 
 @Injectable()
 export class TasksService {
+  private readonly legacyTaskWebhooksEnabled =
+    process.env.LEGACY_TASK_WEBHOOKS_ENABLED === 'true';
+
   constructor(
     @InjectRepository(Task)
     private tasksRepository: Repository<Task>,
@@ -184,6 +187,13 @@ export class TasksService {
   }
 
   private async notifyAgents(task: Task) {
+    if (!this.legacyTaskWebhooksEnabled) {
+      console.log(
+        `[MCP-FLOW] Legacy task webhook fanout disabled; task is available through MCP | taskId=${task.id}`,
+      );
+      return;
+    }
+
     const matchedAgents = await this.tasksMatchingService.matchTask(task, 10);
     const targetAgents = matchedAgents.filter(
       (a) => typeof a.webhookUrl === 'string' && a.webhookUrl.length > 0,

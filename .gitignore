@@ -44,5 +44,9 @@ coverage/
 .temp/
 *.tsbuildinfo
 
+# Local Codex agent skills
+.agents/
+skills-lock.json
+
 # OS files
 Thumbs.db

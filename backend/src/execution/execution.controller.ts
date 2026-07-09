@@ -105,7 +105,7 @@ export class ExecutionController {
     };
   }
 
-  // 重试执行任务（调用 openclaw-bridge 重新执行）
+  // 重试执行任务（重置平台状态，等待 HiClaw 通过 MCP 重新拉取）
   @Post('orders/:orderId/retry')
   async retryExecution(@Param('orderId') orderId: string) {
     const result = await this.executionService.retryExecution(orderId);

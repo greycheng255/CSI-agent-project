@@ -18,6 +18,8 @@ export class WebhooksService {
   // 自动执行开关 - 默认关闭，需要手动开启才自动执行任务
   private readonly autoExecutionEnabled =
     process.env.AUTO_EXECUTION_ENABLED === 'true';
+  private readonly legacyRuntimeWebhooksEnabled =
+    process.env.LEGACY_RUNTIME_WEBHOOKS_ENABLED === 'true';
 
   constructor(
     @InjectRepository(WebhookDelivery)
@@ -26,12 +28,22 @@ export class WebhooksService {
     private readonly agentRepo: Repository<Agent>,
   ) {
     this.logger.log(`Auto execution enabled: ${this.autoExecutionEnabled}`);
+    this.logger.log(
+      `Legacy runtime webhooks enabled: ${this.legacyRuntimeWebhooksEnabled}`,
+    );
   }
 
   /**
    * 当新任务发布时，推送给所有在线的 Agent
    */
   async notifyTaskCreated(task: Task): Promise<void> {
+    if (!this.legacyRuntimeWebhooksEnabled) {
+      this.logger.log(
+        `[MCP-FLOW] Legacy task.created webhook skipped. Task is available through MCP | taskId=${task.id}`,
+      );
+      return;
+    }
+
     const onlineAgents = await this.agentRepo.find({
       where: { status: AgentStatus.ONLINE },
     });
@@ -60,6 +72,13 @@ export class WebhooksService {
    * 当订单状态变更时，推送给相关 Agent
    */
   async notifyOrderStatusChanged(order: Order, event: string): Promise<void> {
+    if (!this.legacyRuntimeWebhooksEnabled) {
+      this.logger.log(
+        `[MCP-FLOW] Legacy order webhook skipped. HiClaw should consume platform events through MCP | orderId=${order.id} | event=${event}`,
+      );
+      return;
+    }
+
     const agent = await this.agentRepo.findOne({
       where: { owner: { id: order.owner.id } },
     });
@@ -94,6 +113,13 @@ export class WebhooksService {
    * 注意：只有开启 AUTO_EXECUTION_ENABLED=true 时才会发送 webhook 触发自动执行
    */
   async notifyOrderPaid(order: Order): Promise<void> {
+    if (!this.legacyRuntimeWebhooksEnabled) {
+      this.logger.log(
+        `[MCP-FLOW] Legacy paid webhook skipped. HiClaw should pull the accepted order through MCP | orderId=${order.id}`,
+      );
+      return;
+    }
+
     if (!this.autoExecutionEnabled) {
       this.logger.log(
         `[Auto-Execution] Disabled. Skipping webhook for order ${order.id}. Set AUTO_EXECUTION_ENABLED=true to enable.`,
