@@ -1,40 +1,57 @@
-import { useEffect } from 'react';
 import { Video } from 'lucide-react';
-import type { AgentPanelProps } from './types';
+import type { AgentPanelProps, ChoiceOption } from './types';
 import {
+  AttachmentUpload,
   ChoicePills,
   PanelHeader,
-  PanelInput,
+  PanelSelect,
   PanelTextarea,
   SubmitBlock,
-  ToggleOption,
 } from './shared';
 
+const DURATION_OPTIONS: ChoiceOption[] = [
+  { value: 'auto', label: '自动' },
+  ...Array.from({ length: 12 }, (_, index) => {
+    const seconds = String(index + 4);
+    return { value: seconds, label: `${seconds} 秒` };
+  }),
+];
+
+const ASPECT_RATIO_OPTIONS: ChoiceOption[] = [
+  { value: 'adaptive', label: '自适应' },
+  { value: '16:9', label: '16:9 横版' },
+  { value: '4:3', label: '4:3 横版' },
+  { value: '1:1', label: '1:1 方形' },
+  { value: '3:4', label: '3:4 竖版' },
+  { value: '9:16', label: '9:16 竖版' },
+  { value: '21:9', label: '21:9 超宽' },
+];
+
+function normalizeResolution(value: string) {
+  if (value.toLowerCase() === '4k') return '4K';
+  return value.toLowerCase();
+}
+
 export default function VideoPlugin(props: AgentPanelProps) {
-  const videoType = props.formValues.videoType || 't2v';
-
-  const currentSize = props.formValues.size;
-  const updateField = props.updateField;
-
-  useEffect(() => {
-    if (!currentSize) {
-      updateField('size', '1280*720');
-    }
-  }, [currentSize, updateField]);
+  const videoType = props.formValues.video_type || 't2v';
+  const version = props.formValues.version || '标准';
+  const resolution = normalizeResolution(props.formValues.resolution || '720p');
+  const supportsHighResolution = version === '标准';
+  const modelLabel = videoType === 'r2v' ? 'Seedance 2.0 参考生' : 'Seedance 2.0 首尾帧';
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <PanelHeader
         icon={<Video className="h-5 w-5" />}
-        title="多模式视频生成"
-        description="支持文生视频、首尾帧视频和参考生视频，结果按工作区写入任务记录。"
+        title={modelLabel}
+        description="使用 Seedance 2.0。"
         accent={props.accent}
       />
       <ChoicePills
         label="视频模式"
         value={videoType}
         accent={props.accent}
-        onChange={(value) => props.updateField('videoType', value)}
+        onChange={(value) => props.updateField('video_type', value)}
         options={[
           { value: 't2v', label: '文生视频' },
           { value: 'i2v', label: '首尾帧' },
@@ -43,86 +60,82 @@ export default function VideoPlugin(props: AgentPanelProps) {
       />
       <PanelTextarea
         label="提示词"
-        value={props.formValues.prompt || ''}
-        onChange={(value) => props.updateField('prompt', value)}
+        value={props.prompt}
+        onChange={props.setPrompt}
         placeholder="描述场景、动作、镜头、光线、节奏和风格..."
         rows={7}
       />
       {videoType === 'i2v' && (
         <div className="grid gap-4 md:grid-cols-2">
-          <PanelInput
-            label="首帧图片 URL"
-            value={props.formValues.firstFrameUrl || ''}
-            onChange={(value) => props.updateField('firstFrameUrl', value)}
+          <AttachmentUpload
+            label="首帧图片"
+            value={props.formValues.first_frame_url || ''}
+            onChange={(value) => props.updateField('first_frame_url', value)}
+            accept="image/*"
           />
-          <PanelInput
-            label="尾帧图片 URL"
-            value={props.formValues.lastFrameUrl || ''}
-            onChange={(value) => props.updateField('lastFrameUrl', value)}
+          <AttachmentUpload
+            label="尾帧图片（可选）"
+            value={props.formValues.last_frame_url || ''}
+            onChange={(value) => props.updateField('last_frame_url', value)}
+            accept="image/*"
           />
         </div>
       )}
       {videoType === 'r2v' && (
-        <PanelTextarea
-          label="参考图片 URL"
-          value={props.formValues.referenceUrls || ''}
-          onChange={(value) => props.updateField('referenceUrls', value)}
-          placeholder="每行一个参考图 URL"
-          rows={4}
+        <AttachmentUpload
+          label="参考图片"
+          value={props.formValues.reference_urls || ''}
+          onChange={(value) => props.updateField('reference_urls', value)}
+          accept="image/*"
+          multiple
+          maxFiles={9}
         />
       )}
-      <div className="grid gap-4 md:grid-cols-2">
-        <ChoicePills
-          label="分辨率"
-          value={props.formValues.resolution || '720P'}
-          accent={props.accent}
-          onChange={(value) => props.updateField('resolution', value)}
+      <div className="grid gap-3 md:grid-cols-2">
+        <PanelSelect
+          label="速度版本"
+          value={version}
+          onChange={(value) => {
+            props.updateField('version', value);
+            if (value !== '标准' && (resolution === '1080p' || resolution === '4K')) {
+              props.updateField('resolution', '720p');
+            }
+          }}
           options={[
-            { value: '480P', label: '480P' },
-            { value: '720P', label: '720P' },
-            { value: '1080P', label: '1080P' },
+            { value: '标准', label: '标准（高质量）' },
+            { value: '快速', label: '快速' },
+            { value: 'Mini', label: 'Mini' },
           ]}
         />
-        <ChoicePills
+        <PanelSelect
           label="时长"
           value={props.formValues.duration || '5'}
-          accent={props.accent}
           onChange={(value) => props.updateField('duration', value)}
-          options={[
-            { value: '5', label: '5s' },
-            { value: '10', label: '10s' },
-            { value: '15', label: '15s' },
-          ]}
+          options={DURATION_OPTIONS}
         />
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <ChoicePills
-          label="画幅/尺寸"
-          value={props.formValues.size || '1280*720'}
-          accent={props.accent}
-          onChange={(value) => props.updateField('size', value)}
-          options={[
-            { value: '1280*720', label: '16:9 横版' },
-            { value: '720*1280', label: '9:16 竖版' },
-            { value: '960*960', label: '1:1 方形' },
-          ]}
-        />
-        <ChoicePills
-          label="镜头"
-          value={props.formValues.shotType || 'single'}
-          accent={props.accent}
-          onChange={(value) => props.updateField('shotType', value)}
-          options={[
-            { value: 'single', label: '单镜头' },
-            { value: 'multi', label: '多镜头' },
-          ]}
-        />
-      </div>
-      <ToggleOption
-        label="生成声音"
-        value={(props.formValues.audio || 'true') === 'true'}
+      <ChoicePills
+        label="分辨率"
+        value={resolution}
         accent={props.accent}
-        onChange={(value) => props.updateField('audio', String(value))}
+        onChange={(value) => props.updateField('resolution', value)}
+        options={[
+          { value: '480p', label: '480p' },
+          { value: '720p', label: '720p' },
+          ...(supportsHighResolution
+            ? [
+                { value: '1080p', label: '1080p' },
+                { value: '4K', label: '4K' },
+              ]
+            : []),
+        ]}
+      />
+      <ChoicePills
+        label="画幅比例"
+        value={props.formValues.aspect_ratio || 'adaptive'}
+        accent={props.accent}
+        onChange={(value) => props.updateField('aspect_ratio', value)}
+        options={ASPECT_RATIO_OPTIONS}
       />
       <SubmitBlock
         submitting={props.submitting}
@@ -130,6 +143,7 @@ export default function VideoPlugin(props: AgentPanelProps) {
         error={props.runError}
         taskId={props.taskId}
         label="开始生成视频"
+        accent={props.accent}
       />
     </div>
   );

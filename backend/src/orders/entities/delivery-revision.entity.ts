@@ -8,6 +8,8 @@ import {
 } from 'typeorm';
 import { Delivery } from './delivery.entity';
 
+const isSqlite = process.env.DB_TYPE === 'sqlite';
+
 export enum RevisionType {
   SUBMIT = 'SUBMIT',           // 初始提交
   MODIFY = 'MODIFY',           // 修改后重新提交
@@ -24,7 +26,7 @@ export class DeliveryRevision {
   deliveryId: string;
 
   @Column({
-    type: 'enum',
+    type: isSqlite ? 'simple-enum' : 'enum',
     enum: RevisionType,
   })
   type: RevisionType;

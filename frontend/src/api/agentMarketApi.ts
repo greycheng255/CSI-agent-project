@@ -85,7 +85,7 @@ const FALLBACK_AGENTS: ApiAgentDefinition[] = [
     icon: '🧠',
     description: '把素材提炼为大纲并生成结构化思维导图树。',
     params: {
-      sourceMaterial: { type: 'string', required: true, description: '原始素材、文章或知识点' },
+      source_material: { type: 'string', required: true, description: '原始素材、文章或知识点' },
       layout: {
         type: 'string',
         default: 'mindmap',
@@ -101,8 +101,8 @@ const FALLBACK_AGENTS: ApiAgentDefinition[] = [
     icon: '🃏',
     description: '把知识材料整理成可复习的问答闪卡。',
     params: {
-      sourceMaterial: { type: 'string', required: true, description: '用于生成闪卡的学习材料' },
-      cardStyle: {
+      source_material: { type: 'string', required: true, description: '用于生成闪卡的学习材料' },
+      card_style: {
         type: 'string',
         options: ['经典问答', '填空补全', '概念配对', '判断正误'],
         default: '经典问答',
@@ -116,11 +116,11 @@ const FALLBACK_AGENTS: ApiAgentDefinition[] = [
     icon: '🎙️',
     description: '把文档内容转成双人播客或讲解音频。',
     params: {
-      sourceMaterial: { type: 'string', required: true, description: '播客依据的资料' },
-      style: { type: 'string', default: '深度访谈', options: ['深度访谈', '双人对谈', '独白讲解', '圆桌讨论'] },
+      source_material: { type: 'string', required: true, description: '播客依据的资料' },
+      style: { type: 'string', default: '访谈' },
       duration: { type: 'string', default: '5分钟', options: ['3分钟', '5分钟', '8分钟', '10分钟', '15分钟'] },
-      hostVoice: { type: 'string', default: 'Cherry', description: '主持人音色' },
-      guestVoice: { type: 'string', default: 'Serena', description: '嘉宾音色' },
+      host_voice: { type: 'string', default: 'Cherry', description: '主持人音色' },
+      guest_voice: { type: 'string', default: 'Serena', description: '嘉宾音色' },
     },
   },
   {
@@ -130,10 +130,10 @@ const FALLBACK_AGENTS: ApiAgentDefinition[] = [
     description: '从文本、图片 URL 或 PDF URL 中提取发票结构化信息。',
     params: {
       text: { type: 'string', required: false, description: '已有票据文本' },
-      imageUrls: { type: 'array', required: false, description: '发票图片 URL，每行一个' },
-      pdfUrl: { type: 'string', required: false, description: 'PDF 文件 URL' },
-      pdfName: { type: 'string', default: 'invoice.pdf' },
-      categoryHint: { type: 'string', default: '通用', description: '费用类别提示' },
+      image_urls: { type: 'array', required: false, description: '发票图片 URL，每行一个' },
+      pdf_url: { type: 'string', required: false, description: 'PDF 文件 URL' },
+      pdf_name: { type: 'string', default: 'invoice.pdf' },
+      category_hint: { type: 'string', default: '通用', description: '费用类别提示' },
     },
   },
   {
@@ -142,8 +142,8 @@ const FALLBACK_AGENTS: ApiAgentDefinition[] = [
     icon: '👤',
     description: '用人物图片和音频生成数字人视频。',
     params: {
-      imageUrl: { type: 'string', required: true, description: '人物图片 URL' },
-      audioUrl: { type: 'string', required: true, description: '音频 URL' },
+      image_url: { type: 'string', required: true, description: '人物图片 URL' },
+      audio_url: { type: 'string', required: true, description: '音频 URL' },
       resolution: { type: 'string', options: ['480P', '720P'], default: '480P' },
     },
   },
@@ -153,21 +153,114 @@ const FALLBACK_AGENTS: ApiAgentDefinition[] = [
     icon: '🎬',
     description: 'DashScope 多模式视频生成，支持文生、首尾帧、参考生。',
     params: {
-      videoType: { type: 'string', options: ['t2v', 'i2v', 'r2v'], required: true, default: 't2v' },
+      video_type: { type: 'string', options: ['i2v', 't2v', 'r2v'], required: true, default: 't2v' },
       prompt: { type: 'string', required: false, description: '视频提示词' },
       resolution: { type: 'string', options: ['480P', '720P', '1080P'], default: '720P' },
-      firstFrameUrl: { type: 'string', required: false, description: '首帧图片 URL' },
-      lastFrameUrl: { type: 'string', required: false, description: '尾帧图片 URL' },
-      size: { type: 'string', required: false, description: '比例或尺寸，例如 16:9' },
+      first_frame_url: { type: 'string', required: false, description: '首帧图片 URL' },
+      last_frame_url: { type: 'string', required: false, description: '尾帧图片 URL' },
+      size: { type: 'string', required: false, description: '画面尺寸，例如 1280*720' },
       duration: { type: 'number', default: 5 },
-      shotType: { type: 'string', options: ['single', 'multi'], required: false },
-      referenceUrls: { type: 'array', required: false, description: '参考图 URL，每行一个' },
+      shot_type: { type: 'string', options: ['single', 'multi'], required: false },
+      reference_urls: { type: 'array', required: false, description: '参考图 URL，每行一个' },
       audio: { type: 'boolean', default: true },
+    },
+  },
+  {
+    type: 'speech_synth',
+    label: '语音合成',
+    icon: '🎤',
+    description: '文本转 Gemini-3.1-TTS 语音文件。',
+    params: {
+      text: { type: 'string', required: true, description: '需要合成的文本' },
+      voice: { type: 'string', default: 'Achernar', description: 'Gemini 音色英文名' },
+      voice_name: { type: 'string', required: false, description: '展示用音色名' },
+      model_id: { type: 'string', default: 'gemini-3.1-flash-tts-preview' },
+      model_name: { type: 'string', default: 'Gemini-3.1-TTS' },
     },
   },
 ];
 
+const SEEDANCE_MODELS: ApiModelDefinition[] = [
+  {
+    name: 'kwvideo-v2',
+    type: 'video',
+    label: 'Seedance 2.0 首尾帧',
+    description: '支持文生视频、首帧图生视频和首尾帧视频，自动生成有声视频。',
+    params: {
+      prompt: { type: 'string', required: true },
+      version: { type: 'string', required: true, default: '标准', options: ['Mini', '快速', '标准'] },
+      duration: {
+        type: 'string',
+        required: true,
+        default: '5',
+        options: ['auto', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'],
+      },
+      aspect_ratio: {
+        type: 'string',
+        default: 'adaptive',
+        options: ['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16', '21:9'],
+      },
+      resolution: { type: 'string', required: true, default: '720p', options: ['480p', '720p', '1080p', '4K'] },
+      images: { type: 'upload', required: false, description: '0 张为文生视频，1 张为首帧，2 张为首尾帧' },
+    },
+  },
+  {
+    name: 'kwvideo-v2-ref',
+    type: 'video',
+    label: 'Seedance 2.0 参考生',
+    description: '支持 1–9 张参考图生成风格和主体一致的视频。',
+    params: {
+      prompt: { type: 'string', required: true },
+      version: { type: 'string', required: true, default: '标准', options: ['Mini', '快速', '标准'] },
+      duration: {
+        type: 'string',
+        required: true,
+        default: '5',
+        options: ['auto', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'],
+      },
+      aspect_ratio: {
+        type: 'string',
+        default: 'adaptive',
+        options: ['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16', '21:9'],
+      },
+      resolution: { type: 'string', required: true, default: '720p', options: ['480p', '720p', '1080p', '4K'] },
+      images: { type: 'upload', required: true, description: '1–9 张参考图片 URL' },
+    },
+  },
+];
+
+const SUNO_MUSIC_MODEL: ApiModelDefinition = {
+  name: 'suno-v4.5',
+  type: 'music',
+  label: 'Suno Music Generation 4.5',
+  description: '根据歌词与音乐描述生成完整人声歌曲或无人声纯音乐，最长支持约 4 分钟。',
+  params: {
+    mv: {
+      type: 'string',
+      default: 'chirp-v4-5',
+      options: ['chirp-v4-5', 'chirp-v4', 'chirp-v3-5', 'chirp-bluejay'],
+    },
+    make_instrumental: { type: 'string', default: 'song', options: ['song', 'instrumental'] },
+    vocal_gender: { type: 'string', default: 'auto', options: ['auto', 'm', 'f'] },
+    sample_rate: { type: 'string', default: '44100', options: ['44100', '48000'] },
+    bitrate: { type: 'string', default: '192000', options: ['128000', '192000', '256000'] },
+  },
+};
+
+const REQUIRED_MEDIA_MODELS = [...SEEDANCE_MODELS, SUNO_MUSIC_MODEL];
+
 const FALLBACK_MODELS: ApiModelDefinition[] = [
+  {
+    name: 'midjourney',
+    type: 'image',
+    label: 'Midjourney V6',
+    description: '高质量图像生成模型，支持文生图和图生图。',
+    params: {
+      prompt: { type: 'string', required: true },
+      size: { type: 'string', default: '1024x1024', options: ['1024x1024', '16:9', '9:16', '3:4', '4:3'] },
+      image_url: { type: 'string', required: false, description: '参考图 URL' },
+    },
+  },
   {
     name: 'gpt-image-2',
     type: 'image',
@@ -178,7 +271,10 @@ const FALLBACK_MODELS: ApiModelDefinition[] = [
       size: {
         type: 'string',
         default: 'auto',
-        options: ['auto', '1024x1024', '1536x1024', '1024x1536', '2048x1152', '1152x2048'],
+        options: [
+          '1152x2048', '2048x1152', '2048x2048', 'auto', '1024x1024',
+          '1536x1024', '1024x1536', '2160x3840', '3840x2160',
+        ],
       },
       images: { type: 'upload', required: false, description: '参考图片 URL，每行一个，最多 10 张' },
       quality: { type: 'string', default: 'auto', options: ['auto', 'high', 'medium', 'low'] },
@@ -195,17 +291,8 @@ const FALLBACK_MODELS: ApiModelDefinition[] = [
       image_url: { type: 'string', required: false, description: '首帧参考图 URL' },
     },
   },
-  {
-    name: 'speech-2.8',
-    type: 'tts',
-    label: 'Speech 2.8',
-    description: '把文本合成为自然语音，可用于旁白、播报和讲解。',
-    params: {
-      prompt: { type: 'string', required: true },
-      voice: { type: 'string', default: 'Cherry', options: ['Cherry', 'Serena', 'Ethan', 'Ryan', 'Jennifer'] },
-      format: { type: 'string', default: 'mp3', options: ['mp3', 'wav'] },
-    },
-  },
+  ...SEEDANCE_MODELS,
+  SUNO_MUSIC_MODEL,
   {
     name: 'suno-v3',
     type: 'music',
@@ -215,24 +302,6 @@ const FALLBACK_MODELS: ApiModelDefinition[] = [
       prompt: { type: 'string', required: true },
       is_music: { type: 'boolean', default: true },
       tags: { type: 'string', required: false, description: '音乐风格标签' },
-    },
-  },
-  {
-    name: 'framedirector-v1',
-    type: 'framedirector',
-    label: 'FrameDirector',
-    description: 'AI 导演：从一句话到多场景视频。',
-    params: {
-      prompt: { type: 'string', required: true },
-      aspect_ratio: { type: 'string', options: ['16:9', '9:16', '1:1'], default: '16:9' },
-      duration_s: { type: 'number', default: 20 },
-      preview_only: { type: 'boolean', default: true },
-      visual_preset: {
-        type: 'string',
-        options: ['cinematic-promo', 'product-demo', 'social-kinetic', 'documentary'],
-        default: 'cinematic-promo',
-      },
-      include_bgm: { type: 'boolean', default: true },
     },
   },
 ];
@@ -306,6 +375,17 @@ export async function loadAgentDirectory(provider?: AgentRequestProvider): Promi
     modelsResult.status === 'fulfilled'
       ? readArray<ApiModelDefinition>(modelsResult.value, 'models')
       : [];
+  const availableModels = models.length > 0
+    ? [
+        ...REQUIRED_MEDIA_MODELS.map((requiredModel) => {
+          const discovered = models.find((model) => model.name === requiredModel.name);
+          return discovered ? { ...discovered, type: requiredModel.type } : requiredModel;
+        }),
+        ...models.filter((model) =>
+          !REQUIRED_MEDIA_MODELS.some((requiredModel) => requiredModel.name === model.name),
+        ),
+      ]
+    : FALLBACK_MODELS;
 
   const failures = [agentsResult, modelsResult]
     .filter((result) => result.status === 'rejected')
@@ -314,7 +394,7 @@ export async function loadAgentDirectory(provider?: AgentRequestProvider): Promi
 
   return {
     agents: agents.length > 0 ? agents : FALLBACK_AGENTS,
-    models: models.length > 0 ? models : FALLBACK_MODELS,
+    models: availableModels,
     usingFallback: agents.length === 0 || models.length === 0,
     error: failures.length > 0 ? failures.join(' / ') : undefined,
   };
@@ -330,7 +410,6 @@ export function findCompatibleModels(directory: AgentDirectory, mediaTypes: stri
 }
 
 export function isCatalogItemRunnable(agent: AgentCatalogItem, directory: AgentDirectory) {
-  if (agent.capability.kind === 'local') return true;
   if (agent.capability.kind === 'workflow') {
     return Boolean(findWorkflowDefinition(directory, agent.capability.workflowType));
   }

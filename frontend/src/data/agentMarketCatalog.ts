@@ -3,7 +3,6 @@ export type AgentColor = 'blue' | 'violet' | 'amber' | 'emerald' | 'pink' | 'cya
 export type AgentCapability =
   | { kind: 'workflow'; workflowType: string }
   | { kind: 'media'; mediaTypes: string[]; preferredModel?: string }
-  | { kind: 'local' }
   | { kind: 'unavailable' };
 
 export type AgentCatalogItem = {
@@ -29,17 +28,6 @@ export const AGENT_STYLE: Record<AgentColor, { text: string; bg: string; border:
 
 export const AGENT_CATALOG: AgentCatalogItem[] = [
   {
-    id: 'script',
-    name: '脚本大师',
-    icon: '✍️',
-    color: 'blue',
-    desc: '长文/剧本/短视频脚本生成',
-    tags: ['文本', '脚本'],
-    calls: 1284,
-    rating: 4.9,
-    capability: { kind: 'local' },
-  },
-  {
     id: 'voice',
     name: '语音合成',
     icon: '🎤',
@@ -48,7 +36,7 @@ export const AGENT_CATALOG: AgentCatalogItem[] = [
     tags: ['音频', 'AI声音'],
     calls: 892,
     rating: 4.8,
-    capability: { kind: 'media', mediaTypes: ['tts', 'audio'], preferredModel: 'speech-2.8' },
+    capability: { kind: 'workflow', workflowType: 'speech_synth' },
   },
   {
     id: 'clone',
@@ -59,7 +47,7 @@ export const AGENT_CATALOG: AgentCatalogItem[] = [
     tags: ['音频', '克隆'],
     calls: 376,
     rating: 4.7,
-    capability: { kind: 'media', mediaTypes: ['audio', 'tts'] },
+    capability: { kind: 'unavailable' },
   },
   {
     id: 'video',
@@ -70,7 +58,7 @@ export const AGENT_CATALOG: AgentCatalogItem[] = [
     tags: ['视频', '生成'],
     calls: 654,
     rating: 4.7,
-    capability: { kind: 'workflow', workflowType: 'videoagent' },
+    capability: { kind: 'media', mediaTypes: ['video', 'videogen'], preferredModel: 'kwvideo-v2' },
   },
   {
     id: 'music',
@@ -81,7 +69,7 @@ export const AGENT_CATALOG: AgentCatalogItem[] = [
     tags: ['音乐', '氛围'],
     calls: 445,
     rating: 4.8,
-    capability: { kind: 'media', mediaTypes: ['music', 'audiogen'], preferredModel: 'suno-v3' },
+    capability: { kind: 'media', mediaTypes: ['music', 'audiogen'], preferredModel: 'suno-v4.5' },
   },
   {
     id: 'storyboard',
@@ -128,28 +116,6 @@ export const AGENT_CATALOG: AgentCatalogItem[] = [
     capability: { kind: 'workflow', workflowType: 'podcast' },
   },
   {
-    id: 'data',
-    name: '数据可视化',
-    icon: '📊',
-    color: 'cyan',
-    desc: '数据→图表·信息图·动态可视化',
-    tags: ['数据', '图表'],
-    calls: 312,
-    rating: 4.6,
-    capability: { kind: 'local' },
-  },
-  {
-    id: 'translate',
-    name: '多语翻译',
-    icon: '🌐',
-    color: 'blue',
-    desc: '保留语境的专业多语种翻译',
-    tags: ['文本', '翻译'],
-    calls: 1001,
-    rating: 4.7,
-    capability: { kind: 'local' },
-  },
-  {
     id: 'digihuman',
     name: '数字人',
     icon: '👤',
@@ -170,21 +136,6 @@ export const AGENT_CATALOG: AgentCatalogItem[] = [
     calls: 148,
     rating: 4.9,
     capability: { kind: 'workflow', workflowType: 'invoice' },
-  },
-  {
-    id: 'framedirector',
-    name: 'FrameDirector',
-    icon: '🎞️',
-    color: 'violet',
-    desc: '一句话生成多场景视频：剧本→分镜→渲染',
-    tags: ['视频', 'AI导演', '多场景'],
-    calls: 128,
-    rating: 4.9,
-    capability: {
-      kind: 'media',
-      mediaTypes: ['framedirector'],
-      preferredModel: 'framedirector-v1',
-    },
   },
 ];
 

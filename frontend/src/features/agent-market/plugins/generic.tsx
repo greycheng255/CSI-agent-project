@@ -11,7 +11,7 @@ import {
 
 export default function GenericPlugin(props: AgentPanelProps) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       {props.selectedModel && (
         <ModelSummary
           models={props.compatibleModels}
@@ -58,6 +58,7 @@ export default function GenericPlugin(props: AgentPanelProps) {
         onSubmit={props.onSubmit}
         error={props.runError}
         taskId={props.taskId}
+        accent={props.accent}
       />
     </div>
   );

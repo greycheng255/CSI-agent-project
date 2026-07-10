@@ -25,7 +25,7 @@ export type AgentPluginManifest = {
   version: string;
   description: string;
   entry: AgentPluginEntrypoint;
-  category: 'media' | 'workflow' | 'local' | 'generic';
+  category: 'media' | 'workflow' | 'unavailable' | 'generic';
   provider?: AgentPluginProviderConfig;
   agentIds?: string[];
   capabilityKinds?: AgentCapability['kind'][];
