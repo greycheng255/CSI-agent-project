@@ -4,7 +4,7 @@ import { ChoicePills, PanelHeader, PanelTextarea, SubmitBlock } from './shared';
 
 export default function FlashcardPlugin(props: AgentPanelProps) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <PanelHeader
         icon={<FileText className="h-5 w-5" />}
         title="速记卡片"
@@ -13,16 +13,16 @@ export default function FlashcardPlugin(props: AgentPanelProps) {
       />
       <PanelTextarea
         label="学习材料"
-        value={props.formValues.sourceMaterial || ''}
-        onChange={(value) => props.updateField('sourceMaterial', value)}
+        value={props.formValues.source_material || ''}
+        onChange={(value) => props.updateField('source_material', value)}
         placeholder="粘贴教材、文章、课程笔记或会议纪要..."
         rows={9}
       />
       <ChoicePills
         label="卡片类型"
-        value={props.formValues.cardStyle || '经典问答'}
+        value={props.formValues.card_style || '经典问答'}
         accent={props.accent}
-        onChange={(value) => props.updateField('cardStyle', value)}
+        onChange={(value) => props.updateField('card_style', value)}
         options={['经典问答', '填空补全', '概念配对', '判断正误'].map((value) => ({
           value,
           label: value,
@@ -41,6 +41,7 @@ export default function FlashcardPlugin(props: AgentPanelProps) {
         error={props.runError}
         taskId={props.taskId}
         label="生成闪卡"
+        accent={props.accent}
       />
     </div>
   );

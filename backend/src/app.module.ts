@@ -1,16 +1,25 @@
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
 
-const envPath = resolve(process.cwd(), '.env');
-if (existsSync(envPath)) {
-  for (const line of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const separator = trimmed.indexOf('=');
-    if (separator <= 0) continue;
-    const key = trimmed.slice(0, separator).trim();
-    const value = trimmed.slice(separator + 1).trim().replace(/^["']|["']$/g, '');
-    process.env[key] ??= value;
+const envPaths = [
+  resolve(process.cwd(), '.env'),
+  resolve(process.cwd(), '../frontend/.env'),
+  resolve(process.cwd(), 'frontend/.env'),
+];
+for (const envPath of new Set(envPaths)) {
+  if (existsSync(envPath)) {
+    for (const line of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const separator = trimmed.indexOf('=');
+      if (separator <= 0) continue;
+      const key = trimmed.slice(0, separator).trim();
+      const value = trimmed
+        .slice(separator + 1)
+        .trim()
+        .replace(/^["']|["']$/g, '');
+      process.env[key] ??= value;
+    }
   }
 }
 
@@ -66,7 +75,11 @@ import { AgentTag } from './agents/entities/agent-tag.entity';
 import { Payment } from './payment/entities/payment.entity';
 import { Payout } from './payment/entities/payout.entity';
 import { UserPaymentCode } from './payment/entities/user-payment-code.entity';
-import { UserBalance, BalanceRecord, Withdrawal } from './payment/entities/balance.entity';
+import {
+  UserBalance,
+  BalanceRecord,
+  Withdrawal,
+} from './payment/entities/balance.entity';
 import { PlatformPaymentCode } from './payment/entities/platform-payment-code.entity';
 import { OrderPayment } from './payment/entities/order-payment.entity';
 import {

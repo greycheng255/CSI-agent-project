@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Copy,
+  Download,
   ExternalLink,
   FolderOpen,
   Loader2,
@@ -29,47 +30,47 @@ import {
   AgentSpecificPanel,
   resolveAgentMarketPlugin,
 } from '../features/agent-market/plugins/registry';
+import { FlashcardStudyView } from '../features/agent-market/FlashcardStudyView';
+import { MindMapVisualization } from '../features/agent-market/MindMapVisualization';
 
 const CONTEXT_KEY = 'genesis-agent-market-context';
 
 const FIELD_LABELS: Record<string, string> = {
-  sourceMaterial: '素材内容',
-  cardStyle: '卡片类型',
+  source_material: '素材内容',
+  card_style: '卡片类型',
   count: '生成数量',
   layout: '布局',
   depth: '展开层级',
   style: '风格',
   duration: '时长',
-  hostVoice: '主持人音色',
-  guestVoice: '嘉宾音色',
+  host_voice: '主持人音色',
+  guest_voice: '嘉宾音色',
   text: '票据文本',
-  imageUrls: '图片 URL',
-  pdfUrl: 'PDF URL',
-  pdfName: 'PDF 文件名',
-  categoryHint: '类别提示',
-  imageUrl: '图片 URL',
-  audioUrl: '音频 URL',
+  image_urls: '图片 URL',
+  pdf_url: 'PDF URL',
+  pdf_name: 'PDF 文件名',
+  category_hint: '类别提示',
+  image_url: '图片 URL',
+  audio_url: '音频 URL',
   resolution: '分辨率',
-  videoType: '视频类型',
+  video_type: '视频类型',
   prompt: '提示词',
-  firstFrameUrl: '首帧 URL',
-  lastFrameUrl: '尾帧 URL',
+  first_frame_url: '首帧 URL',
+  last_frame_url: '尾帧 URL',
   size: '画幅/尺寸',
-  shotType: '镜头类型',
-  referenceUrls: '参考素材 URL',
+  shot_type: '镜头类型',
+  reference_urls: '参考素材 URL',
   audio: '生成声音',
   images: '参考图片 URL',
-  image_url: '参考图片 URL',
   quality: '质量',
   voice: '音色',
-  format: '格式',
+  voice_name: '音色名称',
+  model_id: '模型 ID',
+  model_name: '模型名称',
+  volume: '音量',
+  speed: '语速',
   tags: '风格标签',
   is_music: '音乐模式',
-  aspect_ratio: '画面比例',
-  duration_s: '视频秒数',
-  preview_only: '先生成预览',
-  visual_preset: '视觉预设',
-  include_bgm: '包含配乐',
 };
 
 type ContextState = {
@@ -201,7 +202,7 @@ function normalizeValue(name: string, schema: AgentParamSchema, raw: string) {
     const urls = parseList(raw);
     const lowerName = name.toLowerCase();
     if (lowerName.endsWith('url') || lowerName.endsWith('_url')) return urls[0] || '';
-    return urls;
+    return urls.length === 1 ? urls[0] : urls;
   }
 
   return raw;
@@ -220,6 +221,11 @@ function normalizeParams(params: AgentParamMap, values: Record<string, string>, 
 
   Object.entries(values).forEach(([name, raw]) => {
     if (name in params || !raw.trim()) return;
+    if (name === 'volume' || name === 'speed') {
+      const numeric = Number(raw);
+      normalized[name] = Number.isFinite(numeric) ? numeric : raw;
+      return;
+    }
     normalized[name] = raw.includes('\n') ? parseList(raw) : raw;
   });
 
@@ -272,6 +278,60 @@ function detectMediaKind(status: AgentTaskStatus, resultUrl: string) {
   return 'link';
 }
 
+function resultFilename(status: AgentTaskStatus, resultUrl: string, kind: string) {
+  const fallbackExtensions: Record<string, string> = {
+    image: 'png',
+    video: 'mp4',
+    audio: 'mp3',
+    link: 'bin',
+    structured: 'json',
+  };
+  let extension = fallbackExtensions[kind] || 'bin';
+
+  if (resultUrl) {
+    try {
+      const pathname = new URL(resultUrl, window.location.href).pathname;
+      const match = pathname.match(/\.([a-zA-Z0-9]{2,8})$/);
+      if (match) extension = match[1].toLowerCase();
+    } catch {
+      // 使用按结果类型推断的扩展名。
+    }
+  }
+
+  const resultType = (status.result_type || 'agent-result').replace(/[^a-zA-Z0-9_-]+/g, '-');
+  const taskSuffix = status.task_id ? `-${status.task_id.slice(0, 8)}` : '';
+  return `${resultType}${taskSuffix}.${extension}`;
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+}
+
+async function downloadRemoteResult(url: string, filename: string) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    saveBlob(await response.blob(), filename);
+  } catch {
+    // 某些对象存储未开放 CORS；退回浏览器原生下载/新窗口打开。
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.target = '_blank';
+    anchor.rel = 'noreferrer';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  }
+}
+
 function validateRequiredParams(params: AgentParamMap, values: Record<string, string>, skipPrompt: boolean) {
   for (const [name, schema] of Object.entries(params)) {
     if (skipPrompt && name === 'prompt') continue;
@@ -281,6 +341,82 @@ function validateRequiredParams(params: AgentParamMap, values: Record<string, st
   }
 
   return '';
+}
+
+function validateConditionalParams(agentId: string, values: Record<string, string>) {
+  if (agentId === 'video') {
+    const videoType = values.video_type || 't2v';
+    if (videoType === 'i2v' && !values.first_frame_url?.trim()) {
+      return '请填写首帧 URL';
+    }
+    if (videoType === 'r2v' && !values.reference_urls?.trim()) {
+      return '请填写至少一个参考素材 URL';
+    }
+    if (videoType === 'r2v' && parseList(values.reference_urls || '').length > 9) {
+      return 'Seedance 2.0 参考生最多支持 9 张参考图片';
+    }
+  }
+
+  if (
+    agentId === 'invoice' &&
+    !values.text?.trim() &&
+    !values.image_urls?.trim() &&
+    !values.pdf_url?.trim()
+  ) {
+    return '请提供票据文本、图片 URL 或 PDF URL';
+  }
+
+  return '';
+}
+
+function buildSunoPrompt(lyrics: string, stylePrompt: string, mode: string) {
+  const style = stylePrompt.trim();
+  const lyricText = lyrics.trim();
+  if (mode === 'instrumental') {
+    return `纯音乐，无人声。音乐描述：${style}`;
+  }
+  if (!lyricText) {
+    return `根据以下音乐描述生成一首完整歌曲，并自动创作适合的歌词：${style}`;
+  }
+  return `歌词：\n${lyricText}\n\n音乐描述：\n${style}`;
+}
+
+function sanitizeAgentParams(agentId: string, params: Record<string, unknown>) {
+  if (agentId === 'music') {
+    return {
+      mv: params.mv || 'chirp-v4-5',
+      make_instrumental: params.make_instrumental || 'song',
+      vocal_gender: params.vocal_gender || 'auto',
+      sample_rate: params.sample_rate || '44100',
+      bitrate: params.bitrate || '192000',
+      model_name: 'Suno Music Generation 4.5',
+    };
+  }
+
+  if (agentId !== 'video') return params;
+
+  const videoType = String(params.video_type || 't2v');
+  const rawResolution = String(params.resolution || '720p');
+  const common: Record<string, unknown> = {
+    version: params.version || '标准',
+    duration: params.duration || '5',
+    aspect_ratio: params.aspect_ratio || 'adaptive',
+    resolution: rawResolution.toLowerCase() === '4k' ? '4K' : rawResolution.toLowerCase(),
+  };
+
+  const rawImages = videoType === 'r2v'
+    ? params.reference_urls
+    : [params.first_frame_url, params.last_frame_url].filter(Boolean);
+  const images = Array.isArray(rawImages)
+    ? rawImages.filter(Boolean)
+    : typeof rawImages === 'string' && rawImages.trim()
+      ? [rawImages.trim()]
+      : [];
+  if (videoType !== 't2v' && images.length > 0) {
+    common.images = images.length === 1 ? images[0] : images;
+  }
+
+  return common;
 }
 
 function StatusPanel({
@@ -344,33 +480,6 @@ function StatusPanel({
   );
 }
 
-function TreeView({ node, depth = 0 }: { node: unknown; depth?: number }) {
-  if (!isRecord(node)) return null;
-
-  const data = isRecord(node.data) ? node.data : {};
-  const label =
-    (typeof data.label === 'string' && data.label) ||
-    (typeof node.label === 'string' && node.label) ||
-    (typeof node.title === 'string' && node.title) ||
-    '未命名节点';
-  const children = Array.isArray(node.children) ? node.children : [];
-
-  return (
-    <div className={depth === 0 ? '' : 'ml-4 border-l border-gray-800 pl-4'}>
-      <div className="rounded border border-gray-800 bg-gray-950 px-3 py-2 text-sm text-gray-300">
-        {label}
-      </div>
-      {children.length > 0 && (
-        <div className="mt-2 space-y-2">
-          {children.map((child, index) => (
-            <TreeView key={index} node={child} depth={depth + 1} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function StructuredResult({ data }: { data: unknown }) {
   if (!isRecord(data)) {
     return (
@@ -381,24 +490,11 @@ function StructuredResult({ data }: { data: unknown }) {
   }
 
   if (Array.isArray(data.cards)) {
-    return (
-      <div className="space-y-3">
-        {data.cards.map((card, index) => {
-          const item = isRecord(card) ? card : {};
-          return (
-            <div key={index} className="rounded-lg border border-gray-800 bg-black p-4">
-              <div className="text-sm font-bold text-gray-100">{String(item.front || `卡片 ${index + 1}`)}</div>
-              <div className="mt-2 text-sm leading-6 text-gray-400">{String(item.back || '')}</div>
-              {Boolean(item.tag) && <div className="mt-3 text-xs text-cyan-400">{String(item.tag)}</div>}
-            </div>
-          );
-        })}
-      </div>
-    );
+    return <FlashcardStudyView cards={data.cards} cardStyle={data.card_style} />;
   }
 
   if (data.tree) {
-    return <TreeView node={data.tree} />;
+    return <MindMapVisualization tree={data.tree} initialLayout={data.layout} />;
   }
 
   if (isRecord(data.invoice)) {
@@ -445,6 +541,31 @@ function StructuredResult({ data }: { data: unknown }) {
 function ResultPanel({ status }: { status: AgentTaskStatus }) {
   const resultUrl = pickResultUrl(status);
   const kind = resultUrl ? detectMediaKind(status, resultUrl) : 'structured';
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
+  const hasResultData = status.result_data !== null && status.result_data !== undefined;
+  const canDownload = Boolean(resultUrl || hasResultData);
+
+  const handleDownload = async () => {
+    if (!canDownload || downloading) return;
+
+    setDownloading(true);
+    setDownloadError('');
+    try {
+      if (resultUrl) {
+        await downloadRemoteResult(resultUrl, resultFilename(status, resultUrl, kind));
+      } else {
+        const blob = new Blob([jsonText(status.result_data)], {
+          type: 'application/json;charset=utf-8',
+        });
+        saveBlob(blob, resultFilename(status, '', 'structured'));
+      }
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : '结果下载失败，请稍后重试。');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <div className="rounded-xl border border-gray-800 bg-[#0a0a0a] p-5">
@@ -453,8 +574,27 @@ function ResultPanel({ status }: { status: AgentTaskStatus }) {
           <div className="text-xs font-bold uppercase tracking-[0.2em] text-gray-600">执行结果</div>
           <h3 className="mt-1 text-lg font-bold text-gray-100">生成完成</h3>
         </div>
-        <CheckCircle2 className="h-5 w-5 text-green-400" />
+        <div className="flex items-center gap-2">
+          {canDownload && (
+            <button
+              type="button"
+              onClick={() => void handleDownload()}
+              disabled={downloading}
+              className="inline-flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs font-bold text-green-400 transition-colors hover:bg-green-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {downloading ? '下载中...' : '下载结果'}
+            </button>
+          )}
+          <CheckCircle2 className="h-5 w-5 text-green-400" />
+        </div>
       </div>
+
+      {downloadError && (
+        <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300">
+          {downloadError}
+        </div>
+      )}
 
       {kind === 'image' && <img src={resultUrl} alt="生成结果" className="w-full rounded-lg border border-gray-800" />}
       {kind === 'video' && <video src={resultUrl} controls className="w-full rounded-lg border border-gray-800 bg-black" />}
@@ -471,7 +611,7 @@ function ResultPanel({ status }: { status: AgentTaskStatus }) {
         </a>
       )}
 
-      {status.result_data !== null && status.result_data !== undefined && (
+      {hasResultData && (
         <div className={resultUrl ? 'mt-5' : ''}>
           <StructuredResult data={status.result_data} />
         </div>
@@ -501,6 +641,7 @@ export default function AgentRun() {
   const [submitting, setSubmitting] = useState(false);
   const [polling, setPolling] = useState(false);
   const [runError, setRunError] = useState('');
+  const taskRunning = Boolean(taskId && !status?.is_final);
 
   useEffect(() => {
     let cancelled = false;
@@ -607,7 +748,7 @@ export default function AgentRun() {
   }, []);
 
   const handleSubmit = async () => {
-    if (!agent || !directory || !runnable) return;
+    if (!agent || !directory || !runnable || submitting || taskRunning) return;
 
     const workspaceId = context.workspaceId.trim();
     const tenantId = context.tenantId.trim();
@@ -624,6 +765,12 @@ export default function AgentRun() {
       return;
     }
 
+    const conditionalError = validateConditionalParams(agent.id, formValues);
+    if (conditionalError) {
+      setRunError(conditionalError);
+      return;
+    }
+
     if (agent.capability.kind === 'media' && !prompt.trim()) {
       setRunError('请填写提示词。');
       return;
@@ -637,7 +784,10 @@ export default function AgentRun() {
 
     try {
       if (agent.capability.kind === 'workflow') {
-        const params = normalizeParams(currentParams, formValues, false);
+        const params = sanitizeAgentParams(
+          agent.id,
+          normalizeParams(currentParams, formValues, false),
+        );
         const newTaskId = await createAgentTask({
           type: agent.capability.workflowType,
           params,
@@ -650,12 +800,25 @@ export default function AgentRun() {
       }
 
       if (agent.capability.kind === 'media') {
-        const params = normalizeParams(currentParams, formValues, true);
-        const type = selectedModel?.type;
+        const params = sanitizeAgentParams(
+          agent.id,
+          normalizeParams(currentParams, formValues, true),
+        );
+        const type = agent.id === 'music' ? 'music' : selectedModel?.type;
+        const model = agent.id === 'video'
+          ? formValues.video_type === 'r2v' ? 'kwvideo-v2-ref' : 'kwvideo-v2'
+          : agent.id === 'music' ? 'suno-v4.5' : selectedModelName;
+        const taskPrompt = agent.id === 'music'
+          ? buildSunoPrompt(
+              formValues.lyrics || '',
+              prompt,
+              formValues.make_instrumental || 'song',
+            )
+          : prompt.trim();
         const newTaskId = await createAgentTask({
           type,
-          model: selectedModelName,
-          prompt: prompt.trim(),
+          model,
+          prompt: taskPrompt,
           params,
           workspaceId,
           tenantId: tenantId || undefined,
@@ -840,9 +1003,7 @@ export default function AgentRun() {
                   ? 'Agent 工作流'
                   : agent.capability.kind === 'media'
                     ? '媒体生成'
-                    : agent.capability.kind === 'local'
-                      ? '本地任务包'
-                      : '待开放'}
+                    : '待开放'}
               </span>
             </div>
           </div>
@@ -870,7 +1031,7 @@ export default function AgentRun() {
             </div>
           )}
 
-          {!loading && !runnable && (
+          {!loading && !runnable && agent.capability.kind !== 'unavailable' && (
             <div className="rounded-xl border border-dashed border-gray-800 bg-black p-8 text-center">
               <AlertTriangle className="mx-auto h-8 w-8 text-yellow-400" />
               <h3 className="mt-4 text-lg font-bold text-gray-100">该模块暂未在第三方 Agent API 中开放</h3>
@@ -881,7 +1042,7 @@ export default function AgentRun() {
             </div>
           )}
 
-          {!loading && runnable && (
+          {!loading && (runnable || agent.capability.kind === 'unavailable') && (
             <div className="space-y-5">
               <AgentSpecificPanel
                 agentId={agent.id}
@@ -894,7 +1055,7 @@ export default function AgentRun() {
                 count={count}
                 setCount={setCount}
                 onSubmit={handleSubmit}
-                submitting={submitting}
+                submitting={submitting || taskRunning}
                 runError={runError}
                 taskId={taskId}
                 currentParams={currentParams}
@@ -905,7 +1066,7 @@ export default function AgentRun() {
                 setSelectedModelName={setSelectedModelName}
               />
 
-              {status?.is_final && status.status === 'done' && <ResultPanel status={status} />}
+              {runnable && status?.is_final && status.status === 'done' && <ResultPanel status={status} />}
             </div>
           )}
         </main>
