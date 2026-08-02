@@ -252,7 +252,7 @@ export function FlashcardStudyView({ cards: rawCards, cardStyle }: FlashcardStud
           onClick={() => changeCard(1)}
           disabled={safeIndex === cards.length - 1}
           aria-label="下一张"
-          className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-cyan-400/70 text-cyan-300 transition-colors hover:bg-cyan-400/10 disabled:cursor-not-allowed disabled:border-gray-700 disabled:text-gray-600 disabled:opacity-40 sm:h-14 sm:w-14"
+          className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-cyan-400/70 text-cyan-300 transition-colors hover:bg-[var(--brand-50)] disabled:cursor-not-allowed disabled:border-[color:var(--border)] disabled:text-[var(--text-400)] disabled:opacity-40 sm:h-14 sm:w-14"
         >
           <ChevronRight className="h-5 w-5" />
         </button>
