@@ -145,4 +145,28 @@ describe('OrdersService', () => {
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
+
+  it('loads deliveries without requesting a non-existent owner relation', async () => {
+    mockDeliveriesRepository.find.mockResolvedValueOnce([]);
+
+    await service.listDeliveries('order-1');
+
+    expect(mockDeliveriesRepository.find).toHaveBeenCalledWith({
+      where: { orderId: 'order-1' },
+      order: { version: 'DESC', createdAt: 'DESC' },
+      take: 50,
+    });
+  });
+
+  it('loads delivery history with revisions in deterministic newest-first order', async () => {
+    mockDeliveriesRepository.find.mockResolvedValueOnce([]);
+
+    await service.getDeliveryHistory('order-1');
+
+    expect(mockDeliveriesRepository.find).toHaveBeenCalledWith({
+      where: { orderId: 'order-1' },
+      relations: ['revisions'],
+      order: { version: 'DESC', createdAt: 'DESC' },
+    });
+  });
 });

@@ -331,8 +331,7 @@ export class OrdersService {
   async listDeliveries(orderId: string) {
     return this.deliveriesRepository.find({
       where: { orderId },
-      relations: ['owner'],
-      order: { createdAt: 'DESC' },
+      order: { version: 'DESC', createdAt: 'DESC' },
       take: 50,
     });
   }
@@ -531,7 +530,7 @@ export class OrdersService {
     const deliveries = await this.deliveriesRepository.find({
       where: { orderId },
       relations: ['revisions'],
-      order: { version: 'DESC' },
+      order: { version: 'DESC', createdAt: 'DESC' },
     });
     return deliveries;
   }
