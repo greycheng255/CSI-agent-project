@@ -1,7 +1,9 @@
 ﻿import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
+  OnApplicationBootstrap,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -62,6 +64,26 @@ type TaskWithMarketMeta = Task & {
   dealPriceCny?: number | null;
 };
 
+type MarketOrderSummary = {
+  id: string;
+  taskId: string;
+  status: OrderStatus;
+  amountCny: number;
+  bidPriceCny: number | null;
+  agentId: string | null;
+  agentName: string | null;
+};
+
+type MarketTaskPage = {
+  data: TaskWithMarketMeta[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+};
+
 type CreateTaskDto = {
   title: string;
   description?: string;
@@ -92,9 +114,28 @@ type UpdateTaskDto = {
 };
 
 @Injectable()
-export class TasksService {
+export class TasksService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(TasksService.name);
   private readonly legacyTaskWebhooksEnabled =
     process.env.LEGACY_TASK_WEBHOOKS_ENABLED === 'true';
+  private availableAgentCountCache:
+    | { value: number; expiresAt: number }
+    | undefined;
+  private availableAgentCountRequest: Promise<number> | undefined;
+  private readonly marketResultCache = new Map<
+    string,
+    {
+      value: MarketTaskPage;
+      expiresAt: number;
+      staleUntil: number;
+    }
+  >();
+  private readonly marketResultRequests = new Map<
+    string,
+    Promise<MarketTaskPage>
+  >();
+  private readonly marketCacheTtlMs = 30_000;
+  private readonly marketCacheStaleMs = 5 * 60_000;
 
   constructor(
     @InjectRepository(Task)
@@ -113,6 +154,26 @@ export class TasksService {
     private bidsRankingService: BidsRankingService,
   ) {}
 
+  async onApplicationBootstrap() {
+    if (process.env.TASK_MARKET_PRELOAD === 'false') return;
+
+    const startedAt = Date.now();
+    try {
+      await this.findMarketTasks({
+        sortBy: 'newest',
+        statusGroup: 'all',
+        page: 1,
+        limit: 50,
+      });
+      this.logger.log(
+        `Task market cache preloaded in ${Date.now() - startedAt}ms`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Task market cache preload skipped: ${message}`);
+    }
+  }
+
   private normalizeList(values?: unknown) {
     if (!Array.isArray(values)) return null;
     const normalized = Array.from(
@@ -124,6 +185,23 @@ export class TasksService {
       ),
     );
     return normalized.length > 0 ? normalized : null;
+  }
+
+  private marketCacheKey(filters?: TaskSearchFilters) {
+    return JSON.stringify({
+      keyword: filters?.keyword?.trim() || '',
+      minBudget: filters?.minBudget ?? null,
+      maxBudget: filters?.maxBudget ?? null,
+      tags: [...(filters?.tags || [])].sort(),
+      sortBy: filters?.sortBy || 'newest',
+      statusGroup: filters?.statusGroup || 'all',
+      page: filters?.page || 1,
+      limit: filters?.limit || 20,
+    });
+  }
+
+  private invalidateMarketCache() {
+    this.marketResultCache.clear();
   }
 
   private async sendWebhookWithRetry(deliveryId: string) {
@@ -248,6 +326,7 @@ export class TasksService {
       clientUserId: data.clientUserId || undefined,
     });
     const saved = await this.tasksRepository.save(task);
+    this.invalidateMarketCache();
     void this.notifyAgents(saved);
     return saved;
   }
@@ -264,10 +343,14 @@ export class TasksService {
     }
 
     if (filters?.minBudget !== undefined) {
-      qb.andWhere('task.budgetCny >= :minBudget', { minBudget: filters.minBudget });
+      qb.andWhere('task.budgetCny >= :minBudget', {
+        minBudget: filters.minBudget,
+      });
     }
     if (filters?.maxBudget !== undefined) {
-      qb.andWhere('task.budgetCny <= :maxBudget', { maxBudget: filters.maxBudget });
+      qb.andWhere('task.budgetCny <= :maxBudget', {
+        maxBudget: filters.maxBudget,
+      });
     }
 
     // 标签过滤走 SQL（PostgreSQL array overlap）
@@ -296,7 +379,10 @@ export class TasksService {
     return qb;
   }
 
-  private marketStatusFor(task: Task, order?: Order | null): MarketStatus {
+  private marketStatusFor(
+    task: Task,
+    order?: Pick<MarketOrderSummary, 'status'> | null,
+  ): MarketStatus {
     if (!order) {
       return task.status === TaskStatus.OPEN
         ? 'OPEN_FOR_BIDDING'
@@ -344,89 +430,146 @@ export class TasksService {
     return labels[status];
   }
 
+  private async getAvailableAgentCount() {
+    const now = Date.now();
+    if (
+      this.availableAgentCountCache &&
+      this.availableAgentCountCache.expiresAt > now
+    ) {
+      return this.availableAgentCountCache.value;
+    }
+    if (this.availableAgentCountRequest) {
+      return this.availableAgentCountRequest;
+    }
+
+    this.availableAgentCountRequest = this.agentsRepository
+      .createQueryBuilder('agent')
+      .select('COUNT(agent.id)', 'cnt')
+      .where('agent.approvalStatus = :approved', { approved: 'approved' })
+      .andWhere('agent.isActive = :active', { active: true })
+      .andWhere('agent.runtimeStatus IN (:...statuses)', {
+        statuses: ['online', 'degraded'],
+      })
+      .getRawOne<{ cnt: string }>()
+      .then((row) => {
+        const value = Number.parseInt(row?.cnt || '0', 10);
+        this.availableAgentCountCache = {
+          value,
+          expiresAt: Date.now() + 30_000,
+        };
+        return value;
+      })
+      .finally(() => {
+        this.availableAgentCountRequest = undefined;
+      });
+
+    return this.availableAgentCountRequest;
+  }
+
+  private async findMarketOrderSummaries(taskIds: string[]) {
+    const rows = await this.ordersRepository
+      .createQueryBuilder('marketOrder')
+      .innerJoin('marketOrder.task', 'marketTask')
+      .leftJoin('marketOrder.bid', 'marketBid')
+      .leftJoin('marketBid.agent', 'marketAgent')
+      .select('marketOrder.id', 'orderId')
+      .addSelect('marketTask.id', 'taskId')
+      .addSelect('marketOrder.status', 'orderStatus')
+      .addSelect('marketOrder.amountCny', 'amountCny')
+      .addSelect('marketBid.priceCny', 'bidPriceCny')
+      .addSelect('marketAgent.id', 'agentId')
+      .addSelect('marketAgent.name', 'agentName')
+      .where('marketTask.id IN (:...taskIds)', { taskIds })
+      .orderBy('marketOrder.createdAt', 'DESC')
+      .getRawMany<{
+        orderId: string;
+        taskId: string;
+        orderStatus: OrderStatus;
+        amountCny: number | string;
+        bidPriceCny: number | string | null;
+        agentId: string | null;
+        agentName: string | null;
+      }>();
+
+    return rows.map(
+      (row): MarketOrderSummary => ({
+        id: row.orderId,
+        taskId: row.taskId,
+        status: row.orderStatus,
+        amountCny: Number(row.amountCny),
+        bidPriceCny: row.bidPriceCny === null ? null : Number(row.bidPriceCny),
+        agentId: row.agentId,
+        agentName: row.agentName,
+      }),
+    );
+  }
+
   private async enrichMarketTasks(tasks: Task[]) {
     if (tasks.length === 0) return [];
     const taskIds = tasks.map((t) => t.id);
 
-    const [activeBidStats, totalBidStats, orders, agentCount] =
-      await Promise.all([
-        this.bidsRepository
-          .createQueryBuilder('bid')
-          .select('bid.task_id', 'taskId')
-          .addSelect('COUNT(bid.id)', 'count')
-          .addSelect('MIN(bid.priceCny)', 'minPrice')
-          .where('bid.task_id IN (:...taskIds)', { taskIds })
-          .andWhere('bid.status = :status', { status: BidStatus.SUBMITTED })
-          .groupBy('bid.task_id')
-          .getRawMany<{
-            taskId: string;
-            count: string;
-            minPrice: string | null;
-          }>(),
-        this.bidsRepository
-          .createQueryBuilder('bid')
-          .select('bid.task_id', 'taskId')
-          .addSelect('COUNT(bid.id)', 'count')
-          .where('bid.task_id IN (:...taskIds)', { taskIds })
-          .groupBy('bid.task_id')
-          .getRawMany<{ taskId: string; count: string }>(),
-        this.ordersRepository.find({
-          where: taskIds.map((id) => ({ task: { id } })),
-          relations: ['task', 'bid', 'bid.agent'],
-          order: { createdAt: 'DESC' },
-        }),
-        this.agentsRepository
-          .createQueryBuilder('agent')
-          .select('COUNT(agent.id)', 'cnt')
-          .where('agent.approvalStatus = :approved', { approved: 'approved' })
-          .andWhere('agent.isActive = :active', { active: true })
-          .andWhere('agent.runtimeStatus IN (:...statuses)', {
-            statuses: ['online', 'degraded'],
-          })
-          .getRawOne<{ cnt: string }>(),
-      ]);
+    const [bidStats, orders, totalAgents] = await Promise.all([
+      this.bidsRepository
+        .createQueryBuilder('bid')
+        .select('bid.task_id', 'taskId')
+        .addSelect('COUNT(bid.id)', 'totalCount')
+        .addSelect(
+          'COUNT(CASE WHEN bid.status = :submittedStatus THEN 1 END)',
+          'activeCount',
+        )
+        .addSelect(
+          'MIN(CASE WHEN bid.status = :submittedStatus THEN bid.priceCny ELSE NULL END)',
+          'minPrice',
+        )
+        .where('bid.task_id IN (:...taskIds)', {
+          taskIds,
+          submittedStatus: BidStatus.SUBMITTED,
+        })
+        .groupBy('bid.task_id')
+        .getRawMany<{
+          taskId: string;
+          totalCount: string;
+          activeCount: string;
+          minPrice: string | null;
+        }>(),
+      this.findMarketOrderSummaries(taskIds),
+      this.getAvailableAgentCount(),
+    ]);
 
-    const activeBidMap = new Map<
+    const bidStatsMap = new Map<
       string,
-      { count: number; minPrice: number | null }
+      { activeCount: number; totalCount: number; minPrice: number | null }
     >();
-    for (const row of activeBidStats) {
-      activeBidMap.set(row.taskId, {
-        count: parseInt(row.count, 10),
+    for (const row of bidStats) {
+      bidStatsMap.set(row.taskId, {
+        activeCount: Number.parseInt(row.activeCount, 10),
+        totalCount: Number.parseInt(row.totalCount, 10),
         minPrice: row.minPrice ? Number(row.minPrice) : null,
       });
     }
 
-    const totalBidMap = new Map<string, number>();
-    for (const row of totalBidStats) {
-      totalBidMap.set(row.taskId, parseInt(row.count, 10));
-    }
-
-    const orderMap = new Map<string, Order>();
+    const orderMap = new Map<string, MarketOrderSummary>();
     for (const order of orders) {
-      const taskId = order.task?.id;
-      if (taskId && !orderMap.has(taskId)) {
-        orderMap.set(taskId, order);
+      if (!orderMap.has(order.taskId)) {
+        orderMap.set(order.taskId, order);
       }
     }
 
-    const totalAgents = parseInt(agentCount?.cnt || '0', 10);
-
     return tasks.map((task): TaskWithMarketMeta => {
-      const stats = activeBidMap.get(task.id);
+      const stats = bidStatsMap.get(task.id);
       const order = orderMap.get(task.id) || null;
       const marketStatus = this.marketStatusFor(task, order);
-      const selectedAgent = order?.bid?.agent
+      const selectedAgent = order?.agentId
         ? {
-            id: order.bid.agent.id,
-            name: order.bid.agent.name || null,
+            id: order.agentId,
+            name: order.agentName,
           }
         : null;
 
       return {
         ...task,
-        bidsCount: stats?.count ?? 0,
-        totalBidsCount: totalBidMap.get(task.id) ?? 0,
+        bidsCount: stats?.activeCount ?? 0,
+        totalBidsCount: stats?.totalCount ?? 0,
         latestBid: stats?.minPrice ?? null,
         matchedAgents: totalAgents,
         marketStatus,
@@ -435,7 +578,7 @@ export class TasksService {
         orderId: order?.id || null,
         orderStatus: order?.status || null,
         selectedAgent,
-        dealPriceCny: order?.amountCny ?? order?.bid?.priceCny ?? null,
+        dealPriceCny: order?.amountCny ?? order?.bidPriceCny ?? null,
       };
     });
   }
@@ -466,14 +609,63 @@ export class TasksService {
     };
   }
 
-  async findMarketTasks(filters?: TaskSearchFilters) {
+  async findMarketTasks(filters?: TaskSearchFilters): Promise<MarketTaskPage> {
+    const cacheKey = this.marketCacheKey(filters);
+    const cached = this.marketResultCache.get(cacheKey);
+    const now = Date.now();
+    if (cached && cached.expiresAt > now) {
+      return cached.value;
+    }
+    if (cached && cached.staleUntil > now) {
+      void this.loadMarketResult(cacheKey, filters).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn(`Task market background refresh failed: ${message}`);
+      });
+      return cached.value;
+    }
+
+    return this.loadMarketResult(cacheKey, filters);
+  }
+
+  private loadMarketResult(
+    cacheKey: string,
+    filters?: TaskSearchFilters,
+  ): Promise<MarketTaskPage> {
+    const pending = this.marketResultRequests.get(cacheKey);
+    if (pending) return pending;
+
+    const request = this.findMarketTasksUncached(filters)
+      .then((value) => {
+        this.marketResultCache.set(cacheKey, {
+          value,
+          expiresAt: Date.now() + this.marketCacheTtlMs,
+          staleUntil:
+            Date.now() + this.marketCacheTtlMs + this.marketCacheStaleMs,
+        });
+        return value;
+      })
+      .finally(() => {
+        this.marketResultRequests.delete(cacheKey);
+      });
+    this.marketResultRequests.set(cacheKey, request);
+    return request;
+  }
+
+  private async findMarketTasksUncached(
+    filters?: TaskSearchFilters,
+  ): Promise<MarketTaskPage> {
     const statusGroup = filters?.statusGroup || 'all';
     const qb = this.tasksRepository
       .createQueryBuilder('task')
       .leftJoinAndSelect('task.client', 'client')
-      .leftJoin('task.orders', 'marketOrder')
-      .where('task.status != :draft', { draft: TaskStatus.DRAFT })
-      .distinct(true);
+      .where('task.status != :draft', { draft: TaskStatus.DRAFT });
+
+    const requiresOrderJoin = ['executing', 'completed', 'abnormal'].includes(
+      statusGroup,
+    );
+    if (requiresOrderJoin) {
+      qb.leftJoin('task.orders', 'marketOrder').distinct(true);
+    }
 
     this.applyMarketFilters(qb, filters);
 
@@ -561,7 +753,9 @@ export class TasksService {
       throw new BadRequestException('Task has no publisher');
     }
     if (userId !== taskClientId) {
-      throw new BadRequestException('Only the task publisher can update this task');
+      throw new BadRequestException(
+        'Only the task publisher can update this task',
+      );
     }
   }
 
@@ -597,6 +791,7 @@ export class TasksService {
     }
 
     const saved = await this.tasksRepository.save(task);
+    this.invalidateMarketCache();
     return this.findOne(saved.id);
   }
 
@@ -620,6 +815,7 @@ export class TasksService {
       .andWhere('status = :status', { status: BidStatus.SUBMITTED })
       .execute();
 
+    this.invalidateMarketCache();
     return saved;
   }
 
@@ -696,6 +892,7 @@ export class TasksService {
       .andWhere('status = :status', { status: BidStatus.SUBMITTED })
       .execute();
 
+    this.invalidateMarketCache();
     return savedOrder;
   }
 

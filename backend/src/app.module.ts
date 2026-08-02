@@ -99,9 +99,15 @@ import {
   MCPAppToolPermission,
   MCPTaskBinding,
 } from './mcp-integrations/entities';
+import { DatabaseWarmupService } from './database-warmup.service';
 
 // 根据环境变量选择数据库类型
 const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
+const parsePoolSetting = (value: string | undefined, fallback: number) => {
+  const parsed = Number.parseInt(value || '', 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+};
+
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -118,6 +124,18 @@ const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
             password: process.env.DB_PASSWORD || 'genesis_password',
             database: process.env.DB_NAME || 'genesis_db',
             extra: {
+              max: parsePoolSetting(process.env.DB_POOL_MAX, 10),
+              min: parsePoolSetting(process.env.DB_POOL_MIN, 4),
+              idleTimeoutMillis: parsePoolSetting(
+                process.env.DB_POOL_IDLE_TIMEOUT_MS,
+                60_000,
+              ),
+              connectionTimeoutMillis: parsePoolSetting(
+                process.env.DB_POOL_CONNECTION_TIMEOUT_MS,
+                5_000,
+              ),
+              keepAlive: true,
+              keepAliveInitialDelayMillis: 10_000,
               options: `-c timezone=${process.env.APP_TIME_ZONE || 'Asia/Shanghai'}`,
             },
           }),
@@ -186,6 +204,6 @@ const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
     MetricsModule, // 业务指标模块
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, DatabaseWarmupService],
 })
 export class AppModule {}

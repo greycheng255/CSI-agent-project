@@ -24,7 +24,9 @@
     "test:mcp-integrations": "node scripts/mcp-integrations-acceptance-test.js",
     "test:wp6-agent": "node scripts/wp6-agent-spec-test.js",
     "test:hiclaw-mcp": "node scripts/hiclaw-mcp-workflow-test.js",
-    "test:hiclaw-events": "node scripts/hiclaw-event-consumption-e2e.js"
+    "test:hiclaw-events": "node scripts/hiclaw-event-consumption-e2e.js",
+    "db:optimize-task-market": "node scripts/optimize-task-market-indexes.js",
+    "db:migrate-order-fulfillment": "node scripts/wp4-order-fulfillment-migration.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1084.0",

@@ -22,11 +22,14 @@ function createListQb(tasks: Task[], total = tasks.length) {
 
 function createRawQb<T>(rows: T) {
   const qb = {
+    innerJoin: jest.fn(() => qb),
+    leftJoin: jest.fn(() => qb),
     select: jest.fn(() => qb),
     addSelect: jest.fn(() => qb),
     where: jest.fn(() => qb),
     andWhere: jest.fn(() => qb),
     groupBy: jest.fn(() => qb),
+    orderBy: jest.fn(() => qb),
     getRawMany: jest.fn(async () => rows),
     getRawOne: jest.fn(async () => rows),
   };
@@ -91,6 +94,7 @@ describe('TasksService market queries', () => {
       create: jest.fn(),
     };
     ordersRepository = {
+      createQueryBuilder: jest.fn(),
       find: jest.fn(),
       findOne: jest.fn(),
       save: jest.fn(),
@@ -132,13 +136,42 @@ describe('TasksService market queries', () => {
     tasksRepository.createQueryBuilder.mockReturnValue(
       createListQb(params.tasks),
     );
-    bidsRepository.createQueryBuilder
-      .mockReturnValueOnce(createRawQb(params.activeBidStats || []))
-      .mockReturnValueOnce(createRawQb(params.totalBidStats || []));
+    const taskIds = new Set([
+      ...(params.activeBidStats || []).map((row) => row.taskId),
+      ...(params.totalBidStats || []).map((row) => row.taskId),
+    ]);
+    const activeBidMap = new Map(
+      (params.activeBidStats || []).map((row) => [row.taskId, row]),
+    );
+    const totalBidMap = new Map(
+      (params.totalBidStats || []).map((row) => [row.taskId, row]),
+    );
+    bidsRepository.createQueryBuilder.mockReturnValue(
+      createRawQb(
+        Array.from(taskIds).map((taskId) => ({
+          taskId,
+          activeCount: activeBidMap.get(taskId)?.count || '0',
+          totalCount: totalBidMap.get(taskId)?.count || '0',
+          minPrice: activeBidMap.get(taskId)?.minPrice || null,
+        })),
+      ),
+    );
     agentsRepository.createQueryBuilder.mockReturnValue(
       createRawQb({ cnt: '3' }),
     );
-    ordersRepository.find.mockResolvedValue(params.orders || []);
+    ordersRepository.createQueryBuilder.mockReturnValue(
+      createRawQb(
+        (params.orders || []).map((order) => ({
+          orderId: order.id,
+          taskId: order.task.id,
+          orderStatus: order.status,
+          amountCny: order.amountCny,
+          bidPriceCny: order.bid?.priceCny ?? null,
+          agentId: order.bid?.agent?.id ?? null,
+          agentName: order.bid?.agent?.name ?? null,
+        })),
+      ),
+    );
   }
 
   it('keeps the MCP open scan query restricted to OPEN tasks', async () => {
@@ -171,6 +204,25 @@ describe('TasksService market queries', () => {
     expect(item.isAcceptingBids).toBe(true);
     expect(item.bidsCount).toBe(1);
     expect(item.latestBid).toBe(700);
+  });
+
+  it('coalesces and caches identical market requests', async () => {
+    const task = createTask('cached-market', TaskStatus.OPEN);
+    prepareQuery({ tasks: [task] });
+
+    const [first, second] = await Promise.all([
+      service.findMarketTasks({ statusGroup: 'all', limit: 50 }),
+      service.findMarketTasks({ statusGroup: 'all', limit: 50 }),
+    ]);
+    const cached = await service.findMarketTasks({
+      statusGroup: 'all',
+      limit: 50,
+    });
+
+    expect(first.data[0].id).toBe(task.id);
+    expect(second).toBe(first);
+    expect(cached).toBe(first);
+    expect(tasksRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
   });
 
   it.each([
