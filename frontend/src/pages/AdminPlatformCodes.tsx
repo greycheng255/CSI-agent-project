@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
-import { useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { API_BASE } from '../config/api';
-import { QrCode, Plus, Trash2, Edit2, Eye, EyeOff } from 'lucide-react';
+import { CircleAlert, Inbox, Loader2, QrCode, Plus, Trash2, Edit2, Eye, EyeOff } from 'lucide-react';
+import { WorkbenchPageHeader } from '../components/workbench/WorkbenchPrimitives';
 
 
 interface PlatformCode {
@@ -15,9 +16,9 @@ interface PlatformCode {
   createdAt: string;
 }
 
+/* eslint-disable react-hooks/exhaustive-deps -- the initial platform-code fetch is intentionally keyed only by the admin session */
 export default function AdminPlatformCodes() {
   const { adminToken, admin } = useAuthStore();
-  const navigate = useNavigate();
   const [codes, setCodes] = useState<PlatformCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -37,20 +38,7 @@ export default function AdminPlatformCodes() {
 
   // 检查是否为管理员
   if (!admin) {
-    return (
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-red-900/50 border border-red-500 text-red-200 px-6 py-8 rounded-lg text-center">
-          <h2 className="text-xl font-bold mb-2">访问被拒绝</h2>
-          <p>请先登录管理员账号。</p>
-          <button
-            onClick={() => navigate('/admin/login')}
-            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-          >
-            前往登录
-          </button>
-        </div>
-      </div>
-    );
+    return <Navigate to="/login" replace />;
   }
 
   const fetchPlatformCodes = async () => {
@@ -209,28 +197,25 @@ export default function AdminPlatformCodes() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white text-sm text-[var(--text-500)]">
+        <Loader2 className="mr-3 h-5 w-5 animate-spin text-[var(--brand-500)]" />正在读取平台收款码...
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
-        <QrCode className="w-6 h-6" />
-        平台收款码管理
-      </h1>
+    <div className="mx-auto w-full max-w-[1440px] space-y-6">
+      <WorkbenchPageHeader icon={QrCode} eyebrow="平台收款码" title="平台收款配置" description="维护订单支付环节向雇主展示的平台支付宝与微信收款码。" />
 
       {error && (
-        <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded mb-4">
+        <div className="flex items-center gap-2 rounded-xl border border-[color:var(--state-error)] bg-[var(--state-error-surface)] px-4 py-3 text-sm text-[var(--state-error)]"><CircleAlert className="h-4 w-4" />
           {error}
         </div>
       )}
 
       {/* 添加/编辑表单 */}
-      <div className="bg-gray-800 rounded-lg p-6 mb-6">
-        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+      <section className="rounded-2xl border border-[color:var(--border)] bg-white p-6">
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-[var(--text-900)]">
           {editingCode ? <Edit2 className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
           {editingCode ? '编辑收款码' : '添加平台收款码'}
         </h2>
@@ -238,13 +223,13 @@ export default function AdminPlatformCodes() {
         <form onSubmit={editingCode ? handleUpdate : handleUpload} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="mb-1 block text-sm font-medium text-[var(--text-600)]">
                 收款码类型
               </label>
               <select
                 value={selectedType}
                 onChange={(e) => setSelectedType(e.target.value as 'ALIPAY' | 'WECHAT')}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                className="field-input"
                 disabled={!!editingCode}
               >
                 <option value="ALIPAY">支付宝</option>
@@ -253,7 +238,7 @@ export default function AdminPlatformCodes() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="mb-1 block text-sm font-medium text-[var(--text-600)]">
                 账号名称
               </label>
               <input
@@ -261,25 +246,25 @@ export default function AdminPlatformCodes() {
                 value={accountName}
                 onChange={(e) => setAccountName(e.target.value)}
                 placeholder="例如：Genesis平台支付宝"
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                className="field-input"
                 required
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
+            <label className="mb-1 block text-sm font-medium text-[var(--text-600)]">
               {editingCode ? '更新收款码图片（可选）' : '收款码图片'}
             </label>
             <input
               type="file"
               accept="image/*"
               onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+              className="field-input"
               required={!editingCode}
             />
             {selectedFile && (
-              <p className="text-sm text-gray-400 mt-1">
+              <p className="mt-1 text-sm text-[var(--text-500)]">
                 已选择: {selectedFile.name}
               </p>
             )}
@@ -294,7 +279,7 @@ export default function AdminPlatformCodes() {
                 onChange={(e) => setEditingCode({ ...editingCode, isActive: e.target.checked })}
                 className="w-4 h-4"
               />
-              <label htmlFor="isActive" className="text-sm text-gray-300">
+              <label htmlFor="isActive" className="text-sm text-[var(--text-600)]">
                 启用此收款码
               </label>
             </div>
@@ -304,7 +289,7 @@ export default function AdminPlatformCodes() {
             <button
               type="submit"
               disabled={uploading}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50"
+              className="btn-cs btn-primary btn-sm disabled:opacity-50"
             >
               {uploading ? '处理中...' : editingCode ? '更新' : '上传'}
             </button>
@@ -312,42 +297,45 @@ export default function AdminPlatformCodes() {
               <button
                 type="button"
                 onClick={cancelEdit}
-                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg"
+                className="btn-cs btn-ghost-dark btn-sm"
               >
                 取消
               </button>
             )}
           </div>
         </form>
-      </div>
+      </section>
 
       {/* 收款码列表 */}
-      <div className="bg-gray-800 rounded-lg overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-700">
+      <section className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white">
+        <div className="border-b border-[color:var(--border)] px-5 py-4"><h2 className="font-semibold text-[var(--text-800)]">已配置收款码</h2><p className="mt-1 text-xs text-[var(--text-500)]">共 {codes.length} 条配置</p></div>
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px]">
+          <thead className="bg-[var(--background-100)]">
             <tr>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">类型</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">账号名称</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">收款码</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">状态</th>
-              <th className="px-4 py-3 text-left text-sm font-medium text-gray-300">操作</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-500)]">类型</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-500)]">账号名称</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-500)]">收款码</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-500)]">状态</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-500)]">操作</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-700">
+          <tbody className="divide-y divide-[color:var(--border)]">
             {codes.map((code) => (
-              <tr key={code.id} className="hover:bg-gray-700/50">
+              <tr key={code.id} className="hover:bg-[var(--background-100)]">
                 <td className="px-4 py-3">
                   <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
                     code.type === 'ALIPAY' 
-                      ? 'bg-blue-900/50 text-blue-300' 
-                      : 'bg-green-900/50 text-green-300'
+                      ? 'bg-[var(--brand-50)] text-[var(--brand-700)]'
+                      : 'bg-[var(--state-success-surface)] text-[var(--state-success-text)]'
                   }`}>
                     {code.type === 'ALIPAY' ? '支付宝' : '微信支付'}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-300">{code.accountName}</td>
+                <td className="px-4 py-3 text-sm text-[var(--text-700)]">{code.accountName}</td>
                 <td className="px-4 py-3">
-                  <img 
+                      <img
+                        loading="lazy"
                     src={code.qrCodeUrl} 
                     alt="收款码" 
                     className="w-16 h-16 object-cover rounded"
@@ -358,8 +346,8 @@ export default function AdminPlatformCodes() {
                     onClick={() => toggleActive(code)}
                     className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
                       code.isActive
-                        ? 'bg-green-900/50 text-green-300 hover:bg-green-900/70'
-                        : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                        ? 'bg-[var(--state-success-surface)] text-[var(--state-success-text)]'
+                        : 'bg-[var(--background-100)] text-[var(--text-500)]'
                     }`}
                   >
                     {code.isActive ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
@@ -370,14 +358,14 @@ export default function AdminPlatformCodes() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => startEdit(code)}
-                      className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--brand-600)] hover:bg-[var(--brand-50)]"
                       title="编辑"
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(code.id)}
-                      className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--state-error)] hover:bg-[var(--state-error-surface)]"
                       title="删除"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -387,14 +375,12 @@ export default function AdminPlatformCodes() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
         
         {codes.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            暂无平台收款码，请添加一个。
-          </div>
+          <div className="flex flex-col items-center px-6 py-12 text-center"><span className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-[var(--background-100)] text-[var(--text-400)]"><Inbox className="h-5 w-5" /></span><p className="font-medium text-[var(--text-700)]">暂无平台收款码</p><p className="mt-1 text-sm text-[var(--text-500)]">请先添加支付宝或微信收款码，供订单支付流程使用。</p></div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

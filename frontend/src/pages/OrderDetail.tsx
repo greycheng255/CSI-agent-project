@@ -1,12 +1,28 @@
 ﻿import { useCallback, useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ShieldCheck, Loader2, CheckCircle2, Camera, Clock, AlertCircle, FileText, ChevronDown, ChevronUp, MessageSquare, RefreshCw } from 'lucide-react';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import {
+  AlertCircle,
+  ArrowLeft,
+  Camera,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Loader2,
+  MessageSquare,
+  Package,
+  RefreshCw,
+  ShieldCheck,
+  UserCircle2,
+} from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
 import DeliveryHistory from '../components/DeliveryHistory';
 import DeliveryForm from '../components/DeliveryForm';
 import AcceptanceChecklist from '../components/AcceptanceChecklist';
 import { acceptDelivery, rejectDelivery } from '../api/deliveryApi';
+import type { Delivery } from '../types/delivery';
+import { formatShanghaiDateTime } from '../utils/date';
 
 type OrderStatus =
   | 'PENDING_PAYMENT'
@@ -107,6 +123,7 @@ type Order = {
     phases: ApiPhase[];
   };
   executionPhases?: ExecutionPhase[];
+  deliveryHistory?: Delivery[];
 };
 
 type PlatformPaymentCode = {
@@ -270,9 +287,18 @@ export default function OrderDetail() {
 
   const fetchOrder = useCallback(() => {
     if (!id) return;
+    setLoading(true);
     fetch(`${apiBase}/api/v1/orders/${id}`)
-      .then((res) => res.json())
-      .then(async (data: Order) => {
+      .then((res) => {
+        if (!res.ok) throw new Error('获取订单详情失败');
+        return res.json();
+      })
+      .then(async (response: Order | Order[]) => {
+        const data = Array.isArray(response)
+          ? response.find((item) => item.id === id)
+          : response;
+        if (!data?.id) throw new Error('未找到订单');
+
         if (data.execution?.phases?.length) {
           data.executionPhases = data.execution.phases.map((phase: ApiPhase) => ({
             id: phase.id,
@@ -298,6 +324,13 @@ export default function OrderDetail() {
               result: subTask.result,
             })),
           }));
+          setOrder(data);
+          setLoading(false);
+          return;
+        }
+        // 非执行中的订单优先展示履约结果与资金信息，避免等待无意义的进度请求。
+        if (data.status !== 'IN_PROGRESS') {
+          data.executionPhases = [];
           setOrder(data);
           setLoading(false);
           return;
@@ -352,7 +385,10 @@ export default function OrderDetail() {
         setOrder(data);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        setOrder(null);
+        setLoading(false);
+      });
   }, [apiBase, id]);
 
   // 获取平台收款码
@@ -567,40 +603,40 @@ export default function OrderDetail() {
   const statusView = (status: OrderStatus) => {
     switch (status) {
       case 'PENDING_PAYMENT':
-        return { label: '待支付', color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/20' };
+        return { label: '待支付', cls: 'bg-[color:var(--state-warning-surface)] text-[color:var(--state-warning)]' };
       case 'IN_PROGRESS':
-        return { label: '进行中', color: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-400/20' };
+        return { label: '进行中', cls: 'bg-[color:var(--brand-50)] text-[color:var(--brand-700)]' };
       case 'DELIVERED':
-        return { label: '待验收', color: 'text-purple-400', bg: 'bg-purple-400/10', border: 'border-purple-400/20' };
+        return { label: '待验收', cls: 'bg-[#f3efff] text-[#6544a5]' };
       case 'ACCEPTED':
-        return { label: '已验收', color: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/20' };
+        return { label: '已验收', cls: 'bg-[color:var(--state-success-surface)] text-[color:var(--state-success-text)]' };
       case 'PENDING_RELEASE':
-        return { label: '待放款', color: 'text-orange-400', bg: 'bg-orange-400/10', border: 'border-orange-400/20' };
+        return { label: '待放款', cls: 'bg-[color:var(--state-warning-surface)] text-[color:var(--state-warning)]' };
       case 'COMPLETED':
-        return { label: '已完成', color: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/20' };
+        return { label: '已完成', cls: 'bg-[color:var(--state-success-surface)] text-[color:var(--state-success-text)]' };
       case 'REJECTED':
-        return { label: '已拒绝', color: 'text-red-400', bg: 'bg-red-400/10', border: 'border-red-400/20' };
+        return { label: '已拒绝', cls: 'bg-[color:var(--state-error-surface)] text-[color:var(--state-error)]' };
       case 'ARBITRATING':
-        return { label: '仲裁中', color: 'text-red-400', bg: 'bg-red-400/10', border: 'border-red-400/20' };
+        return { label: '仲裁中', cls: 'bg-[color:var(--state-error-surface)] text-[color:var(--state-error)]' };
       case 'REFUNDED':
-        return { label: '已退款', color: 'text-gray-400', bg: 'bg-gray-400/10', border: 'border-gray-400/20' };
+        return { label: '已退款', cls: 'bg-[color:var(--background-200)] text-[color:var(--text-500)]' };
       case 'CANCELED':
-        return { label: '已取消', color: 'text-gray-400', bg: 'bg-gray-400/10', border: 'border-gray-400/20' };
+        return { label: '已取消', cls: 'bg-[color:var(--background-200)] text-[color:var(--text-500)]' };
       default:
-        return { label: status, color: 'text-gray-400', bg: 'bg-gray-400/10', border: 'border-gray-400/20' };
+        return { label: status, cls: 'bg-[color:var(--background-200)] text-[color:var(--text-500)]' };
     }
   };
 
   const getPhaseStatusColor = (status: string) => {
     switch (status) {
       case 'COMPLETED':
-        return 'text-green-400 bg-green-400/10 border-green-400/20';
+        return 'bg-[color:var(--state-success-surface)] text-[color:var(--state-success-text)]';
       case 'IN_PROGRESS':
-        return 'text-blue-400 bg-blue-400/10 border-blue-400/20';
+        return 'bg-[color:var(--brand-50)] text-[color:var(--brand-700)]';
       case 'FAILED':
-        return 'text-red-400 bg-red-400/10 border-red-400/20';
+        return 'bg-[color:var(--state-error-surface)] text-[color:var(--state-error)]';
       default:
-        return 'text-gray-400 bg-gray-400/10 border-gray-400/20';
+        return 'bg-[color:var(--background-200)] text-[color:var(--text-500)]';
     }
   };
 
@@ -619,16 +655,23 @@ export default function OrderDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      <div className="w-full space-y-4 py-8" aria-label="正在加载订单详情">
+        <div className="h-8 w-48 animate-pulse rounded bg-[color:var(--background-200)]" />
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="h-96 animate-pulse rounded-2xl bg-[color:var(--background-200)]" />
+          <div className="h-80 animate-pulse rounded-2xl bg-[color:var(--background-200)]" />
+        </div>
       </div>
     );
   }
 
   if (!order) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center text-gray-400">
-        订单不存在
+      <div className="rounded-2xl border border-dashed border-[color:var(--background-400)] px-6 py-16 text-center">
+        <Package className="mx-auto h-9 w-9 text-[color:var(--text-400)]" />
+        <h1 className="mt-4 text-xl font-bold text-[color:var(--text-900)]">未找到订单</h1>
+        <p className="mt-2 text-sm text-[color:var(--text-500)]">订单可能已取消，或当前链接无效。</p>
+        <Link to="/market" className="btn-cs btn-primary mt-6">返回任务大厅</Link>
       </div>
     );
   }
@@ -639,200 +682,180 @@ export default function OrderDetail() {
   const isClient = user?.id === order.client?.id;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-gray-100">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* 订单标题和状态 */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${sv.bg} ${sv.color} border ${sv.border}`}>
-              {sv.label}
-            </span>
-            <span className="text-gray-500 text-sm">订单号: {order.id.slice(0, 16)}...</span>
-          </div>
-          <h1 className="text-2xl font-bold text-white mb-2">
-            {order.task?.title || '未知任务'}
-          </h1>
-          {order.task?.description && (
-            <p className="text-gray-400">{order.task.description}</p>
-          )}
-        </div>
+    <div className="w-full pb-10">
+      <Link
+        to={order.task?.id ? `/tasks/${order.task.id}` : '/market'}
+        className="inline-flex min-h-11 items-center gap-2 rounded-lg px-1 text-sm font-semibold text-[color:var(--brand-600)] transition-colors hover:text-[color:var(--brand-700)]"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        {order.task?.id ? '返回任务详情' : '返回任务大厅'}
+      </Link>
 
-        {/* 总体进度 */}
-        {order.status === 'IN_PROGRESS' && (
-          <div className="bg-[#111] border border-gray-800 rounded-lg p-6 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <Clock className="w-5 h-5 text-blue-400" />
-                <h2 className="text-lg font-semibold text-white">任务执行进度</h2>
-              </div>
-              <span className="text-2xl font-bold text-blue-400">{totalProgress}%</span>
+      <div className="mt-3 grid items-start gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(360px,1fr)] xl:gap-6">
+        <main className="min-w-0 self-start rounded-2xl border border-[color:var(--border)] bg-white px-5 py-6 md:px-7">
+          <header className="border-b border-[color:var(--border)] pb-6">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="font-mono text-xs text-[color:var(--text-500)]">ORDER#{order.id.slice(0, 12)}</span>
+              <span className={`inline-flex min-h-7 items-center rounded-full px-2.5 text-xs font-semibold ${sv.cls}`}>
+                {sv.label}
+              </span>
             </div>
-            <div className="w-full bg-gray-800 rounded-full h-3 mb-4">
-              <div 
-                className="bg-blue-500 h-3 rounded-full transition-all duration-500"
-                style={{ width: `${totalProgress}%` }}
-              />
+            <h1 className="max-w-4xl text-2xl font-bold tracking-tight text-[color:var(--text-900)] md:text-[28px]">
+              {order.task?.title || '未知任务'}
+            </h1>
+            {order.task?.description && (
+              <p className="mt-3 max-w-[75ch] text-sm leading-7 text-[color:var(--text-600)]">
+                {order.task.description}
+              </p>
+            )}
+            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-[color:var(--text-500)]">
+              <span className="inline-flex items-center gap-1.5">
+                <UserCircle2 className="h-4 w-4" />
+                任务方 {order.client?.id ? '雇主用户' : '信息暂不可见'}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Package className="h-4 w-4" />
+                执行智能体 {order.bid?.agent?.name || '尚未分配'}
+              </span>
             </div>
-            <p className="text-sm text-gray-400">
-              预计工时: {order.bid?.pricingMeta?.evaluation?.estimatedHours || '-'} 小时 | 
-              复杂度: {order.bid?.pricingMeta?.evaluation?.complexityCn || '-'}
-            </p>
-          </div>
-        )}
+          </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* 左侧：执行计划和进度 */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* 执行阶段 */}
-            {order.executionPhases && order.executionPhases.length > 0 && (
-              <div className="bg-[#111] border border-gray-800 rounded-lg p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-blue-400" />
-                    执行计划
-                  </h2>
-                  {/* 重试按钮 - 始终显示，用户可以手动触发重试 */}
-                  <button
-                    onClick={handleRetry}
-                    disabled={retrying}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                  >
-                    {retrying ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-4 h-4" />
-                    )}
-                    {retrying ? '重试中...' : '重新执行'}
-                  </button>
+          <div className="divide-y divide-[color:var(--border)]">
+            {order.status === 'IN_PROGRESS' && (
+              <section className="py-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <h2 className="flex items-center gap-2 text-base font-bold text-[color:var(--text-900)]">
+                      <Clock className="h-4 w-4 text-[color:var(--brand-500)]" />
+                      执行进度
+                    </h2>
+                    <p className="mt-1 text-sm text-[color:var(--text-500)]">
+                      预计 {order.bid?.pricingMeta?.evaluation?.estimatedHours || '-'} 小时 ·
+                      复杂度 {order.bid?.pricingMeta?.evaluation?.complexityCn || '-'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <strong className="text-2xl text-[color:var(--brand-700)]">{totalProgress}%</strong>
+                    <button
+                      onClick={handleRetry}
+                      disabled={retrying}
+                      className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[color:var(--brand-300)] px-3 text-sm font-semibold text-[color:var(--brand-700)] transition-colors hover:bg-[color:var(--brand-50)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {retrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                      {retrying ? '重试中...' : '重新执行'}
+                    </button>
+                  </div>
                 </div>
-                <div className="space-y-4">
-                  {order.executionPhases.map((phase, index) => (
-                    <div key={phase.id} className="border border-gray-800 rounded-lg overflow-hidden">
-                      {/* 阶段头部 */}
-                      <button
-                        onClick={() => togglePhase(phase.id)}
-                        className="w-full px-4 py-3 flex items-center justify-between bg-gray-800/30 hover:bg-gray-800/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-gray-500 text-sm">{index + 1}</span>
-                          <div className="text-left">
-                            <p className="font-medium text-white">{phase.name}</p>
-                            <p className="text-sm text-gray-400">{phase.description}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className={`px-2 py-1 rounded text-xs ${getPhaseStatusColor(phase.status)}`}>
-                            {getPhaseStatusLabel(phase.status)}
+                <div className="mt-4 h-2.5 w-full rounded-full bg-[color:var(--background-200)]">
+                  <div
+                    className="h-2.5 rounded-full bg-[color:var(--brand-500)] transition-all duration-500"
+                    style={{ width: `${totalProgress}%` }}
+                  />
+                </div>
+
+                {order.executionPhases && order.executionPhases.length > 0 && (
+                  <div className="mt-5 divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
+                    {order.executionPhases.map((phase, index) => (
+                      <article key={phase.id}>
+                        <button
+                          onClick={() => togglePhase(phase.id)}
+                          className="flex min-h-16 w-full items-center justify-between gap-3 px-1 py-3 text-left transition-colors hover:bg-[color:var(--background-100)]"
+                        >
+                          <span className="flex min-w-0 items-start gap-3">
+                            <span className="mt-0.5 text-xs text-[color:var(--text-500)]">{index + 1}</span>
+                            <span className="min-w-0">
+                              <span className="block font-medium text-[color:var(--text-800)]">{phase.name}</span>
+                              <span className="mt-0.5 block truncate text-xs text-[color:var(--text-500)]">{phase.description}</span>
+                            </span>
                           </span>
-                          <span className="text-sm text-gray-400">{phase.progress}%</span>
-                          {expandedPhases.includes(phase.id) ? (
-                            <ChevronUp className="w-4 h-4 text-gray-400" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4 text-gray-400" />
-                          )}
-                        </div>
-                      </button>
-                      
-                      {/* 阶段详情 */}
-                      {expandedPhases.includes(phase.id) && (
-                        <div className="px-4 py-3 border-t border-gray-800">
-                          {/* 进度条 */}
-                          <div className="w-full bg-gray-800 rounded-full h-2 mb-4">
-                            <div 
-                              className={`h-2 rounded-full transition-all duration-500 ${
-                                phase.status === 'COMPLETED' ? 'bg-green-500' : 
-                                phase.status === 'IN_PROGRESS' ? 'bg-blue-500' : 
-                                phase.status === 'FAILED' ? 'bg-red-500' : 'bg-gray-600'
-                              }`}
-                              style={{ width: `${phase.progress}%` }}
-                            />
-                          </div>
-                          
-                          {/* 子任务列表 */}
-                          <div className="space-y-2">
-                            {phase.subTasks.map((task) => (
-                              <div key={task.id} className="flex items-start gap-3 p-2 bg-gray-800/20 rounded">
-                                <div className={`mt-0.5 w-2 h-2 rounded-full ${
-                                  task.status === 'COMPLETED' ? 'bg-green-500' :
-                                  task.status === 'IN_PROGRESS' ? 'bg-blue-500 animate-pulse' :
-                                  task.status === 'FAILED' ? 'bg-red-500' :
-                                  'bg-gray-600'
-                                }`} />
-                                <div className="flex-1">
-                                  <p className="text-sm text-white">{task.name}</p>
-                                  <p className="text-xs text-gray-400">{task.description}</p>
-                                  {task.logs && task.logs.length > 0 && (
-                                    <div className="mt-2 space-y-1">
-                                      {task.logs.map((log, i) => (
-                                        <p key={i} className="text-xs text-gray-500">• {log}</p>
-                                      ))}
-                                    </div>
-                                  )}
+                          <span className="flex shrink-0 items-center gap-3">
+                            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getPhaseStatusColor(phase.status)}`}>
+                              {getPhaseStatusLabel(phase.status)}
+                            </span>
+                            <span className="text-sm text-[color:var(--text-500)]">{phase.progress}%</span>
+                            {expandedPhases.includes(phase.id)
+                              ? <ChevronUp className="h-4 w-4 text-[color:var(--text-500)]" />
+                              : <ChevronDown className="h-4 w-4 text-[color:var(--text-500)]" />}
+                          </span>
+                        </button>
+                        {expandedPhases.includes(phase.id) && (
+                          <div className="border-t border-[color:var(--border)] bg-[color:var(--background-100)] px-4 py-4">
+                            <div className="space-y-3">
+                              {phase.subTasks.map((task) => (
+                                <div key={task.id} className="flex items-start gap-3">
+                                  <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                                    task.status === 'COMPLETED' ? 'bg-[color:var(--state-success)]' :
+                                    task.status === 'IN_PROGRESS' ? 'bg-[color:var(--brand-500)]' :
+                                    task.status === 'FAILED' ? 'bg-[color:var(--state-error)]' :
+                                    'bg-[color:var(--background-500)]'
+                                  }`} />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium text-[color:var(--text-800)]">{task.name}</p>
+                                    <p className="text-xs text-[color:var(--text-500)]">{task.description}</p>
+                                    {task.logs?.map((log, logIndex) => (
+                                      <p key={logIndex} className="mt-1 text-xs text-[color:var(--text-500)]">• {log}</p>
+                                    ))}
+                                  </div>
+                                  <span className="text-xs text-[color:var(--text-500)]">{task.progress}%</span>
                                 </div>
-                                <span className="text-xs text-gray-500">{task.progress}%</span>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
             )}
 
-            {/* 求助功能（仅开发者可见） */}
             {isOwner && order.status === 'IN_PROGRESS' && (
-              <div className="bg-[#111] border border-gray-800 rounded-lg p-6">
-                <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                  <AlertCircle className="w-5 h-5 text-yellow-400" />
-                  需要帮助？
+              <section className="py-6">
+                <h2 className="flex items-center gap-2 text-base font-bold text-[color:var(--text-900)]">
+                  <AlertCircle className="h-4 w-4 text-[color:var(--state-warning)]" />
+                  执行求助
                 </h2>
-                <p className="text-sm text-gray-400 mb-4">
-                  如果在执行任务过程中遇到困难，可以向雇主发送求助消息
-                </p>
-                <div className="flex gap-2">
+                <p className="mt-1 text-sm text-[color:var(--text-500)]">遇到阻碍时可向任务方发送说明。</p>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <input
                     type="text"
                     value={helpMessage}
-                    onChange={(e) => setHelpMessage(e.target.value)}
+                    onChange={(event) => setHelpMessage(event.target.value)}
                     placeholder="描述您遇到的问题..."
-                    className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                    className="h-11 flex-1 rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--text-800)] outline-none placeholder:text-[color:var(--text-500)] focus:border-[color:var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
                   />
                   <button
                     onClick={handleSendHelp}
                     disabled={sendingHelp || !helpMessage.trim()}
-                    className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[color:var(--state-warning)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {sendingHelp ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <MessageSquare className="w-4 h-4" />
-                    )}
+                    {sendingHelp ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
                     发送求助
                   </button>
                 </div>
-              </div>
+              </section>
             )}
 
-            {/* 交付历史（所有用户可见） */}
-            {(order.status === 'DELIVERED' || order.status === 'ACCEPTED' || order.status === 'PENDING_RELEASE' || order.status === 'COMPLETED' || order.status === 'REJECTED' || order.status === 'ARBITRATING') && (
-              <DeliveryHistory orderId={order.id} />
+            {['DELIVERED', 'ACCEPTED', 'PENDING_RELEASE', 'COMPLETED', 'REJECTED', 'ARBITRATING'].includes(order.status) && (
+              <DeliveryHistory
+                orderId={order.id}
+                initialDeliveries={order.deliveryHistory}
+                embedded
+              />
             )}
 
-            {/* 验收检查清单（雇主和开发者可见） */}
-            {(isClient || isOwner) && (order.status === 'DELIVERED' || order.status === 'ACCEPTED' || order.status === 'PENDING_RELEASE' || order.status === 'COMPLETED') && (
+            {(isClient || isOwner) && ['DELIVERED', 'ACCEPTED', 'PENDING_RELEASE', 'COMPLETED'].includes(order.status) && (
               <AcceptanceChecklist
                 orderId={order.id}
                 userId={user?.id || ''}
                 isClient={isClient}
                 orderStatus={order.status}
                 onStatusChange={fetchOrder}
+                embedded
               />
             )}
 
-            {/* 交付表单（仅开发者可见） */}
-            {isOwner && (order.status === 'IN_PROGRESS' || order.status === 'DELIVERED') && (
+            {isOwner && ['IN_PROGRESS', 'DELIVERED'].includes(order.status) && (
               <DeliveryForm
                 orderId={order.id}
                 userId={user?.id || ''}
@@ -841,17 +864,15 @@ export default function OrderDetail() {
                   alert('交付提交成功！');
                 }}
                 onCancel={() => {}}
+                embedded
               />
             )}
 
-            {/* 验收操作区域（仅雇主可见） */}
             {isClient && order.status === 'DELIVERED' && (
-              <div className="bg-[#111] border border-gray-800 rounded-lg p-6">
-                <h2 className="text-lg font-semibold text-white mb-4">验收操作</h2>
-                <p className="text-sm text-gray-400 mb-4">
-                  请先在上方检查清单中逐项确认，然后再进行验收操作。
-                </p>
-                <div className="flex gap-3">
+              <section className="py-6">
+                <h2 className="text-base font-bold text-[color:var(--text-900)]">验收操作</h2>
+                <p className="mt-1 text-sm text-[color:var(--text-500)]">请先逐项核对检查清单，再确认验收或退回修改。</p>
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
                   <button
                     onClick={async () => {
                       if (!window.confirm('确认验收此交付？资金将释放给开发者。')) return;
@@ -867,34 +888,28 @@ export default function OrderDetail() {
                       }
                     }}
                     disabled={accepting}
-                    className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                    className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[color:var(--state-success-text)] px-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {accepting ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4" />
-                    )}
+                    {accepting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                     确认验收
                   </button>
                   <button
                     onClick={() => document.getElementById('reject-section')?.scrollIntoView({ behavior: 'smooth' })}
-                    className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-600/30 rounded-lg font-medium transition-colors"
+                    className="min-h-11 rounded-xl bg-[color:var(--state-error-surface)] px-4 font-semibold text-[color:var(--state-error)]"
                   >
                     退回修改
                   </button>
                 </div>
-                
-                {/* 退回修改/拒绝区域 */}
-                <div id="reject-section" className="mt-4 pt-4 border-t border-gray-800">
-                  <label className="block text-sm text-gray-400 mb-2">原因说明</label>
+                <div id="reject-section" className="mt-4 border-t border-[color:var(--border)] pt-4">
+                  <label className="mb-2 block text-sm font-medium text-[color:var(--text-600)]">原因说明</label>
                   <textarea
                     value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
+                    onChange={(event) => setRejectReason(event.target.value)}
                     placeholder="说明需要修改的地方..."
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-red-500 mb-3"
+                    className="mb-3 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 py-2 text-sm text-[color:var(--text-800)] outline-none placeholder:text-[color:var(--text-500)] focus:border-[color:var(--state-error)] focus:ring-4 focus:ring-red-500/10"
                     rows={2}
                   />
-                  <div className="flex gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row">
                     <button
                       onClick={async () => {
                         if (!rejectReason.trim()) {
@@ -904,10 +919,7 @@ export default function OrderDetail() {
                         if (!window.confirm('退回给开发者修改？开发者可以重新提交交付。')) return;
                         setRejecting(true);
                         try {
-                          await rejectDelivery(order.id, user?.id || '', {
-                            reason: rejectReason,
-                            requireRevision: true,
-                          });
+                          await rejectDelivery(order.id, user?.id || '', { reason: rejectReason, requireRevision: true });
                           fetchOrder();
                           alert('已退回给开发者修改');
                         } catch (err) {
@@ -917,13 +929,9 @@ export default function OrderDetail() {
                         }
                       }}
                       disabled={rejecting}
-                      className="flex-1 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                      className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[color:var(--state-warning)] px-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {rejecting ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <AlertCircle className="w-4 h-4" />
-                      )}
+                      {rejecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertCircle className="h-4 w-4" />}
                       退回修改
                     </button>
                     <button
@@ -935,10 +943,7 @@ export default function OrderDetail() {
                         if (!window.confirm('确认拒绝并发起仲裁？这将进入平台仲裁流程。')) return;
                         setRejecting(true);
                         try {
-                          await rejectDelivery(order.id, user?.id || '', {
-                            reason: rejectReason,
-                            requireRevision: false,
-                          });
+                          await rejectDelivery(order.id, user?.id || '', { reason: rejectReason, requireRevision: false });
                           fetchOrder();
                           alert('已拒绝并发起仲裁');
                         } catch (err) {
@@ -948,183 +953,179 @@ export default function OrderDetail() {
                         }
                       }}
                       disabled={rejecting}
-                      className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                      className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[color:var(--state-error)] px-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {rejecting ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <AlertCircle className="w-4 h-4" />
-                      )}
+                      {rejecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertCircle className="h-4 w-4" />}
                       拒绝并仲裁
                     </button>
                   </div>
                 </div>
-              </div>
+              </section>
             )}
           </div>
+        </main>
 
-          {/* 右侧：订单信息 */}
-          <div className="space-y-6">
-            {/* 订单金额 */}
-            <div className="bg-[#111] border border-gray-800 rounded-lg p-6">
-              <h2 className="text-lg font-semibold text-white mb-4">订单金额</h2>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">任务金额</span>
-                  <span className="text-white">¥{order.amountCny}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">平台服务费</span>
-                  <span className="text-gray-400">-¥{order.platformFeeCny || 0}</span>
-                </div>
-                <div className="flex justify-between pt-3 border-t border-gray-800">
-                  <span className="text-white font-medium">开发者实得</span>
-                  <span className="text-green-400 font-bold">¥{order.payoutCny || order.amountCny}</span>
-                </div>
+        <aside className="self-start rounded-2xl border border-[color:var(--border)] bg-white px-5 py-6 md:px-6 lg:sticky lg:top-20">
+          <section>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium text-[color:var(--text-500)]">订单金额</p>
+                <p className="mt-1 text-3xl font-bold tracking-tight text-[color:var(--text-900)]">
+                  ¥{order.amountCny.toLocaleString('zh-CN')}
+                </p>
               </div>
+              <span className={`inline-flex min-h-7 items-center rounded-full px-2.5 text-xs font-semibold ${sv.cls}`}>
+                {sv.label}
+              </span>
             </div>
-
-            {/* 参与方 */}
-            <div className="bg-[#111] border border-gray-800 rounded-lg p-6">
-              <h2 className="text-lg font-semibold text-white mb-4">参与方</h2>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm text-gray-400">开发者 (Agent)</p>
-                  <p className="text-white">{order.bid?.agent?.name || '未知'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-400">雇主</p>
-                  <p className="text-white">{order.client?.id ? '雇主用户' : '未知'}</p>
-                </div>
+            <dl className="mt-5 divide-y divide-[color:var(--border)] border-y border-[color:var(--border)] text-sm">
+              <div className="flex items-center justify-between gap-4 py-3.5">
+                <dt className="text-[color:var(--text-500)]">平台服务费</dt>
+                <dd className="font-semibold text-[color:var(--text-700)]">-¥{order.platformFeeCny ?? 0}</dd>
               </div>
-            </div>
-
-            {/* 时间线 */}
-            <div className="bg-[#111] border border-gray-800 rounded-lg p-6">
-              <h2 className="text-lg font-semibold text-white mb-4">时间线</h2>
-              <div className="space-y-3 text-sm">
-                {order.escrowedAt && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">开始时间</span>
-                    <span className="text-white">{new Date(order.escrowedAt).toLocaleString('zh-CN')}</span>
-                  </div>
-                )}
-                {order.deliveredAt && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">交付时间</span>
-                    <span className="text-white">{new Date(order.deliveredAt).toLocaleString('zh-CN')}</span>
-                  </div>
-                )}
-                {order.acceptedAt && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">验收时间</span>
-                    <span className="text-white">{new Date(order.acceptedAt).toLocaleString('zh-CN')}</span>
-                  </div>
-                )}
+              <div className="flex items-center justify-between gap-4 py-3.5">
+                <dt className="text-[color:var(--text-500)]">执行方实得</dt>
+                <dd className="font-bold text-[color:var(--state-success-text)]">
+                  ¥{(order.payoutCny ?? order.amountCny).toLocaleString('zh-CN')}
+                </dd>
               </div>
-            </div>
+            </dl>
+          </section>
 
-            {/* 支付区域（仅雇主可见） */}
-            {isClient && order.status === 'PENDING_PAYMENT' && (
-              <div className="bg-[#111] border border-gray-800 rounded-lg p-6">
-                <h2 className="text-lg font-semibold text-white mb-4">支付订单</h2>
-                
-                {/* 选择支付方式 */}
-                <div className="mb-4">
-                  <label className="block text-sm text-gray-400 mb-2">选择支付方式</label>
-                  <div className="space-y-2">
-                    {platformCodes.map((code) => (
-                      <button
-                        key={code.id}
-                        onClick={() => setSelectedCode(code)}
-                        className={`w-full p-3 border rounded-lg flex items-center gap-3 transition-colors ${
-                          selectedCode?.id === code.id
-                            ? 'border-blue-500 bg-blue-500/10'
-                            : 'border-gray-700 hover:border-gray-600'
-                        }`}
-                      >
-                        <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
-                          {code.type === 'ALIPAY' ? (
-                            <span className="text-blue-400 text-xs">支付宝</span>
-                          ) : (
-                            <span className="text-green-400 text-xs">微信</span>
-                          )}
-                        </div>
-                        <div className="text-left">
-                          <p className="text-white text-sm">{code.accountName}</p>
-                          <p className="text-gray-500 text-xs">{code.type === 'ALIPAY' ? '支付宝' : '微信支付'}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+          <section className="border-b border-[color:var(--border)] py-6">
+            <h2 className="flex items-center gap-2 text-base font-bold text-[color:var(--text-900)]">
+              <UserCircle2 className="h-4 w-4 text-[color:var(--brand-500)]" />
+              参与方
+            </h2>
+            <dl className="mt-3 divide-y divide-[color:var(--border)] text-sm">
+              <div className="flex items-center justify-between gap-4 py-3">
+                <dt className="text-[color:var(--text-500)]">执行智能体</dt>
+                <dd className="min-w-0 truncate text-right font-semibold text-[color:var(--text-700)]">
+                  {order.bid?.agent?.name || '尚未分配'}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4 py-3">
+                <dt className="text-[color:var(--text-500)]">任务方</dt>
+                <dd className="font-semibold text-[color:var(--text-700)]">
+                  {order.client?.id ? '雇主用户' : '信息暂不可见'}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="border-b border-[color:var(--border)] py-6">
+            <h2 className="flex items-center gap-2 text-base font-bold text-[color:var(--text-900)]">
+              <Clock className="h-4 w-4 text-[color:var(--brand-500)]" />
+              履约时间
+            </h2>
+            <dl className="mt-3 divide-y divide-[color:var(--border)] text-sm">
+              {order.escrowedAt && (
+                <div className="flex items-center justify-between gap-4 py-3">
+                  <dt className="text-[color:var(--text-500)]">开始执行</dt>
+                  <dd className="text-right font-medium text-[color:var(--text-700)]">{formatShanghaiDateTime(order.escrowedAt)}</dd>
                 </div>
+              )}
+              {order.deliveredAt && (
+                <div className="flex items-center justify-between gap-4 py-3">
+                  <dt className="text-[color:var(--text-500)]">提交交付</dt>
+                  <dd className="text-right font-medium text-[color:var(--text-700)]">{formatShanghaiDateTime(order.deliveredAt)}</dd>
+                </div>
+              )}
+              {order.acceptedAt && (
+                <div className="flex items-center justify-between gap-4 py-3">
+                  <dt className="text-[color:var(--text-500)]">完成验收</dt>
+                  <dd className="text-right font-medium text-[color:var(--text-700)]">{formatShanghaiDateTime(order.acceptedAt)}</dd>
+                </div>
+              )}
+              {order.releasedAt && (
+                <div className="flex items-center justify-between gap-4 py-3">
+                  <dt className="text-[color:var(--text-500)]">款项结算</dt>
+                  <dd className="text-right font-medium text-[color:var(--text-700)]">{formatShanghaiDateTime(order.releasedAt)}</dd>
+                </div>
+              )}
+              {!order.escrowedAt && !order.deliveredAt && !order.acceptedAt && !order.releasedAt && (
+                <div className="py-3 text-[color:var(--text-500)]">付款后将生成履约时间信息。</div>
+              )}
+            </dl>
+          </section>
 
-                {/* 收款码 */}
-                {selectedCode && (
-                  <div className="mb-4">
-                    <p className="text-sm text-gray-400 mb-2">扫码支付 ¥{order.amountCny}</p>
-                    <div className="bg-white p-4 rounded-lg flex items-center justify-center">
-                      <img 
-                        src={selectedCode.qrCodeUrl} 
-                        alt="收款码" 
-                        className="max-w-[200px] max-h-[200px]"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* 上传支付凭证 */}
-                <div className="mb-4">
-                  <label className="block text-sm text-gray-400 mb-2">上传支付凭证</label>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleProofFileChange}
-                    className="hidden"
-                  />
+          {isClient && order.status === 'PENDING_PAYMENT' && (
+            <section className="border-b border-[color:var(--border)] py-6">
+              <h2 className="flex items-center gap-2 text-base font-bold text-[color:var(--text-900)]">
+                <ShieldCheck className="h-4 w-4 text-[color:var(--brand-500)]" />
+                支付订单
+              </h2>
+              <p className="mt-1 text-sm text-[color:var(--text-500)]">选择收款方式并上传支付凭证。</p>
+              <div className="mt-4 space-y-2">
+                {platformCodes.map((code) => (
                   <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full p-4 border-2 border-dashed border-gray-700 rounded-lg flex flex-col items-center gap-2 hover:border-gray-600 transition-colors"
+                    key={code.id}
+                    onClick={() => setSelectedCode(code)}
+                    className={`flex min-h-14 w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
+                      selectedCode?.id === code.id
+                        ? 'border-[color:var(--brand-400)] bg-[color:var(--brand-50)]'
+                        : 'border-[color:var(--border)] hover:border-[color:var(--brand-300)]'
+                    }`}
                   >
-                    {paymentProofPreview ? (
-                      <img src={paymentProofPreview} alt="预览" className="max-h-32 rounded" />
-                    ) : (
-                      <>
-                        <Camera className="w-8 h-8 text-gray-600" />
-                        <span className="text-gray-400 text-sm">点击上传支付截图</span>
-                      </>
-                    )}
+                    <span className="text-sm font-semibold text-[color:var(--text-700)]">
+                      {code.type === 'ALIPAY' ? '支付宝' : '微信'}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-xs text-[color:var(--text-500)]">{code.accountName}</span>
                   </button>
+                ))}
+              </div>
+              {selectedCode && (
+                <div className="mt-4 text-center">
+                  <p className="mb-2 text-sm font-medium text-[color:var(--text-700)]">扫码支付 ¥{order.amountCny}</p>
+                      <img
+                        loading="lazy"
+                    src={selectedCode.qrCodeUrl}
+                    alt="收款码"
+                    className="mx-auto max-h-[200px] max-w-[200px] rounded-lg"
+                  />
                 </div>
-
+              )}
+              <div className="mt-4">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProofFileChange}
+                  className="hidden"
+                />
                 <button
-                  onClick={handleSubmitPayment}
-                  disabled={uploadingProof || !selectedCode || !paymentProof}
-                  className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex min-h-24 w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[color:var(--background-400)] p-4 transition-colors hover:border-[color:var(--brand-400)]"
                 >
-                  {uploadingProof ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <ShieldCheck className="w-4 h-4" />
-                  )}
-                  确认已支付
+                  {paymentProofPreview
+                    ? <img src={paymentProofPreview} alt="支付凭证预览" className="max-h-32 rounded-lg" />
+                    : <>
+                        <Camera className="h-6 w-6 text-[color:var(--brand-600)]" />
+                        <span className="text-sm text-[color:var(--text-500)]">点击上传支付截图</span>
+                      </>}
                 </button>
               </div>
-            )}
-
-            {/* 取消订单 */}
-            {(isClient || isOwner) && ['PENDING_PAYMENT', 'IN_PROGRESS'].includes(order.status) && (
               <button
-                onClick={handleCancel}
-                disabled={canceling}
-                className="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 disabled:bg-gray-800 text-gray-400 rounded-lg text-sm transition-colors"
+                onClick={handleSubmitPayment}
+                disabled={uploadingProof || !selectedCode || !paymentProof}
+                className="btn-cs btn-primary mt-4 w-full"
               >
-                {canceling ? <Loader2 className="w-4 h-4 animate-spin inline" /> : '取消订单'}
+                {uploadingProof ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                确认已支付
               </button>
-            )}
-          </div>
-        </div>
+            </section>
+          )}
+
+          {(isClient || isOwner) && ['PENDING_PAYMENT', 'IN_PROGRESS'].includes(order.status) && (
+            <button
+              onClick={handleCancel}
+              disabled={canceling}
+              className="mt-5 flex min-h-11 w-full items-center justify-center rounded-xl border border-[color:var(--state-error)] px-4 text-sm font-medium text-[color:var(--state-error)] transition-colors hover:bg-[color:var(--state-error-surface)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {canceling ? <Loader2 className="h-4 w-4 animate-spin" /> : '取消订单'}
+            </button>
+          )}
+        </aside>
       </div>
     </div>
   );

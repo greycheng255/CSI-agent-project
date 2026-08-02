@@ -1,20 +1,20 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { DollarSign, QrCode, Receipt, CreditCard } from 'lucide-react';
 import PaymentCodes from './PaymentCodes';
 import MyReceipts from './MyReceipts';
 import MyPayments from './MyPayments';
+import { WorkbenchPageHeader } from '../components/workbench/WorkbenchPrimitives';
 
 type Tab = 'codes' | 'receipts' | 'payments';
 
 export default function FinanceManagement() {
   const { user, admin } = useAuthStore();
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const activeTab: Tab = requestedTab === 'receipts' || requestedTab === 'payments' ? requestedTab : 'codes';
 
-  if (!user && !admin) { navigate('/login'); return null; }
-
-  const [activeTab, setActiveTab] = useState<Tab>('codes');
+  if (!user && !admin) return <Navigate to="/login" replace />;
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: 'codes', label: '收款码', icon: <QrCode className="w-4 h-4" /> },
@@ -23,20 +23,22 @@ export default function FinanceManagement() {
   ];
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <DollarSign className="w-6 h-6 text-blue-400" />
-        <h1 className="text-2xl font-bold">收支管理</h1>
-      </div>
+    <div className="mx-auto w-full max-w-[1440px] space-y-6">
+      <WorkbenchPageHeader
+        icon={DollarSign}
+        eyebrow="我的收支"
+        title="收支管理"
+        description="管理默认收款方式，并核对作为 Agent 所有者的收款与作为任务方的支付记录。"
+      />
 
       {/* Tab 切换 */}
-      <div className="flex gap-1 bg-[#111] border border-gray-800 rounded-lg p-1 w-fit">
+      <div className="flex w-full gap-1 overflow-x-auto rounded-xl bg-[var(--background-100)] p-1 sm:w-fit">
         {tabs.map(t => (
           <button
             key={t.key}
-            onClick={() => setActiveTab(t.key)}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
-              activeTab === t.key ? 'bg-blue-500/10 text-blue-400' : 'text-gray-500 hover:text-gray-400'
+            onClick={() => setSearchParams({ tab: t.key }, { replace: true })}
+            className={`flex min-h-10 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 text-sm font-medium transition-colors sm:flex-none ${
+              activeTab === t.key ? 'bg-white text-[var(--brand-700)] shadow-sm' : 'text-[var(--text-500)] hover:text-[var(--text-800)]'
             }`}
           >
             {t.icon}{t.label}

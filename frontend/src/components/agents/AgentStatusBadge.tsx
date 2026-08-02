@@ -3,42 +3,42 @@ import type { AgentApprovalStatus, AgentRuntimeStatus, AgentType } from '../../t
 const approvalMap: Record<string, { label: string; className: string }> = {
   pending_review: {
     label: '待审核',
-    className: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300',
+    className: 'border-[#f3d79a] bg-[var(--state-warning-surface)] text-[var(--state-warning)]',
   },
   approved: {
     label: '已通过',
-    className: 'border-green-500/30 bg-green-500/10 text-green-300',
+    className: 'border-[#bde9c9] bg-[var(--state-success-surface)] text-[var(--state-success-text)]',
   },
   rejected: {
     label: '已驳回',
-    className: 'border-red-500/30 bg-red-500/10 text-red-300',
+    className: 'border-[#ffc6c1] bg-[var(--state-error-surface)] text-[var(--state-error)]',
   },
   disabled: {
     label: '已禁用',
-    className: 'border-gray-600 bg-gray-800 text-gray-300',
+    className: 'border-[color:var(--border)] bg-[var(--background-100)] text-[var(--text-600)]',
   },
 };
 
 const runtimeMap: Record<string, { label: string; className: string }> = {
   online: {
     label: '在线',
-    className: 'border-green-500/30 bg-green-500/10 text-green-300',
+    className: 'border-[#bde9c9] bg-[var(--state-success-surface)] text-[var(--state-success-text)]',
   },
   degraded: {
     label: '降级',
-    className: 'border-orange-500/30 bg-orange-500/10 text-orange-300',
+    className: 'border-[#f3d79a] bg-[var(--state-warning-surface)] text-[var(--state-warning)]',
   },
   offline: {
     label: '离线',
-    className: 'border-gray-600 bg-gray-800 text-gray-300',
+    className: 'border-[color:var(--border)] bg-[var(--background-100)] text-[var(--text-600)]',
   },
   timeout: {
     label: '超时',
-    className: 'border-red-500/30 bg-red-500/10 text-red-300',
+    className: 'border-[#ffc6c1] bg-[var(--state-error-surface)] text-[var(--state-error)]',
   },
   unknown: {
     label: '未知',
-    className: 'border-gray-700 bg-gray-900 text-gray-400',
+    className: 'border-[color:var(--border)] bg-[var(--background-100)] text-[var(--text-500)]',
   },
 };
 
@@ -62,7 +62,7 @@ export function AgentStatusBadge({
 
   if (type === 'agentType') {
     return (
-      <span className="inline-flex items-center rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-300">
+      <span className="inline-flex items-center rounded-full border border-[var(--brand-200)] bg-[var(--brand-50)] px-2.5 py-1 text-xs text-[var(--brand-700)]">
         {typeMap[value] || value}
       </span>
     );
@@ -71,8 +71,8 @@ export function AgentStatusBadge({
   const item = type === 'approval' ? approvalMap[value] : runtimeMap[value];
   return (
     <span
-      className={`inline-flex items-center rounded border px-2 py-0.5 text-xs ${
-        item?.className || 'border-gray-700 bg-gray-900 text-gray-400'
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs ${
+        item?.className || 'border-[color:var(--border)] bg-[var(--background-100)] text-[var(--text-500)]'
       }`}
     >
       {item?.label || value}

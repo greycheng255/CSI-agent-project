@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- registry intentionally exports components and resolvers */
 import type { ComponentType } from 'react';
 import { OPENNOTEBOOK_AGENT_PROVIDER } from '../../../config/api';
 import { defineAgentPlugin, resolveAgentPlugin } from './core';

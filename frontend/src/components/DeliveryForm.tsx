@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Upload, Eye, Code, FileText, Link as LinkIcon, Image as ImageIcon } from 'lucide-react';
+import { Upload, Eye, Code, FileText, Link as LinkIcon, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { submitDelivery } from '../api/deliveryApi';
 
 interface DeliveryFormProps {
@@ -7,11 +7,18 @@ interface DeliveryFormProps {
   userId: string;
   onSuccess: () => void;
   onCancel: () => void;
+  embedded?: boolean;
 }
 
 type PreviewType = 'code' | 'text' | 'link' | 'image';
 
-export default function DeliveryForm({ orderId, userId, onSuccess, onCancel }: DeliveryFormProps) {
+export default function DeliveryForm({
+  orderId,
+  userId,
+  onSuccess,
+  onCancel,
+  embedded = false,
+}: DeliveryFormProps) {
   const [deliverySummary, setDeliverySummary] = useState('');
   const [deliveryUrl, setDeliveryUrl] = useState('');
   const [artifactUrlsText, setArtifactUrlsText] = useState('');
@@ -23,6 +30,9 @@ export default function DeliveryForm({ orderId, userId, onSuccess, onCancel }: D
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [showPreview, setShowPreview] = useState(false);
+  const containerClass = embedded
+    ? 'py-6'
+    : 'rounded-2xl border border-[color:var(--border)] bg-white p-5 md:p-6';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,7 +116,8 @@ export default function DeliveryForm({ orderId, userId, onSuccess, onCancel }: D
         );
       case 'image':
         return (
-          <img
+                    <img
+                      loading="lazy"
             src={previewContent}
             alt="预览"
             className="max-w-full h-auto rounded-lg"
@@ -119,7 +130,7 @@ export default function DeliveryForm({ orderId, userId, onSuccess, onCancel }: D
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <section className={containerClass}>
       <h3 className="text-lg font-semibold text-gray-900 mb-4">提交交付物</h3>
 
       {error && (
@@ -307,7 +318,7 @@ export default function DeliveryForm({ orderId, userId, onSuccess, onCancel }: D
           >
             {submitting ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                 提交中...
               </>
             ) : (
@@ -319,6 +330,6 @@ export default function DeliveryForm({ orderId, userId, onSuccess, onCancel }: D
           </button>
         </div>
       </form>
-    </div>
+    </section>
   );
 }

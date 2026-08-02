@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Loader2, ShieldCheck, Slash, XCircle } from 'lucide-react';
+import { CheckCircle2, CircleAlert, Inbox, Loader2, RefreshCw, ShieldCheck, Slash, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   approveAgent,
@@ -11,6 +11,7 @@ import { AgentSkillTags } from '../components/agents/AgentSkillTags';
 import { AgentStatusBadge } from '../components/agents/AgentStatusBadge';
 import { useAuthStore } from '../store/authStore';
 import type { Agent, AgentApprovalStatus } from '../types/agent';
+import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
 
 const tabs: Array<{ key: 'all' | AgentApprovalStatus; label: string }> = [
   { key: 'pending_review', label: '待审核' },
@@ -81,69 +82,71 @@ export default function AdminAgents() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-100">
-          <ShieldCheck className="h-6 w-6 text-yellow-300" />
-          Agent 审核管理
-        </h1>
-        <p className="mt-2 text-sm text-gray-500">审核用户提交的平台托管和外部自托管 Agent。</p>
-      </div>
+    <div className="mx-auto w-full max-w-[1440px] space-y-6">
+      <WorkbenchPageHeader
+        icon={ShieldCheck}
+        eyebrow="Agent 审核"
+        title="Agent 入驻审核"
+        description="核验平台托管与外部自托管 Agent 的资料、执行端配置和能力标签。"
+        actions={<button type="button" onClick={() => void fetchAgents()} disabled={loading} className="btn-cs btn-ghost-dark btn-sm disabled:opacity-60"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新列表</button>}
+      />
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-1 overflow-x-auto rounded-xl bg-[var(--background-100)] p-1">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`rounded border px-3 py-1.5 text-sm ${
+            className={`min-h-10 shrink-0 rounded-lg px-4 text-sm font-medium transition-colors ${
               activeTab === tab.key
-                ? 'border-yellow-500 bg-yellow-500/10 text-yellow-300'
-                : 'border-gray-800 text-gray-400 hover:text-gray-200'
+                ? 'bg-white text-[var(--brand-700)] shadow-sm'
+                : 'text-[var(--text-500)] hover:text-[var(--text-800)]'
             }`}
           >
-            {tab.label} ({countOf(tab.key)})
+            {tab.label} <span className="ml-1 text-xs text-[var(--text-400)]">{countOf(tab.key)}</span>
           </button>
         ))}
       </div>
 
-      {error && <div className="rounded border border-red-500/30 bg-red-500/10 p-4 text-red-300">{error}</div>}
+      {error && agents.length > 0 && <div className="flex items-center gap-2 rounded-xl border border-[color:var(--state-error)] bg-[var(--state-error-surface)] p-4 text-sm text-[var(--state-error)]"><CircleAlert className="h-4 w-4" />{error}</div>}
 
       {loading ? (
-        <div className="flex items-center justify-center py-20 text-gray-500">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+        <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white text-sm text-[var(--text-500)]">
+          <Loader2 className="mr-2 h-5 w-5 animate-spin text-[var(--brand-500)]" />
           正在读取审核列表
         </div>
+      ) : error && agents.length === 0 ? (
+        <WorkbenchStatePanel icon={CircleAlert} title="审核列表暂时无法加载" description={error} tone="error" action={<button type="button" onClick={() => void fetchAgents()} className="btn-cs btn-primary btn-sm">重新加载</button>} />
       ) : filtered.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-800 p-12 text-center text-gray-500">
-          当前状态下暂无 Agent。
-        </div>
+        <WorkbenchStatePanel icon={Inbox} title="当前分类暂无 Agent" description="切换其他审核状态，或等待新的 Agent 提交入驻申请。" />
       ) : (
-        <div className="space-y-4">
+        <section className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white">
+          <div className="border-b border-[color:var(--border)] px-5 py-4"><h2 className="font-semibold text-[var(--text-800)]">审核队列</h2><p className="mt-1 text-xs text-[var(--text-500)]">当前分类共 {filtered.length} 个 Agent</p></div>
+          <div className="divide-y divide-[color:var(--border)]">
           {filtered.map((agent) => (
-            <article key={agent.id} className="rounded-lg border border-gray-800 bg-[#0a0a0a] p-5">
+            <article key={agent.id} className="p-5 transition-colors hover:bg-[var(--background-100)]">
               <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
                 <div className="min-w-0 flex-1">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <h2 className="mr-2 text-lg font-bold text-gray-100">{agent.name}</h2>
+                    <h2 className="mr-2 text-base font-semibold text-[var(--text-900)]">{agent.name}</h2>
                     <AgentStatusBadge type="approval" value={agent.approvalStatus} />
                     <AgentStatusBadge type="runtime" value={agent.runtimeStatus} />
                     <AgentStatusBadge type="agentType" value={agent.agentType} />
                   </div>
-                  <p className="mb-3 text-sm text-gray-400">{agent.description || '暂无描述'}</p>
-                  <div className="mb-3 grid gap-2 text-xs text-gray-500 md:grid-cols-2">
-                    <div>Owner: {agent.owner?.phone || agent.owner?.displayName || agent.owner?.id || '-'}</div>
-                    <div>Created: {agent.createdAt ? new Date(agent.createdAt).toLocaleString() : '-'}</div>
-                    <div className="break-all">Endpoint: {agent.endpointUrl || '-'}</div>
-                    <div className="break-all">Card: {agent.cardUrl || agent.cards?.[0]?.source || '-'}</div>
-                  </div>
-                  <AgentSkillTags agent={agent} limit={16} />
+                  <p className="mb-3 text-sm leading-6 text-[var(--text-500)]">{agent.description || '暂无描述'}</p>
+                  <dl className="mb-3 grid gap-x-6 gap-y-2 rounded-xl bg-[var(--background-100)] p-4 text-xs md:grid-cols-2">
+                    <div><dt className="text-[var(--text-400)]">所有者</dt><dd className="mt-0.5 text-[var(--text-700)]">{agent.owner?.phone || agent.owner?.displayName || agent.owner?.id || '-'}</dd></div>
+                    <div><dt className="text-[var(--text-400)]">提交时间</dt><dd className="mt-0.5 text-[var(--text-700)]">{agent.createdAt ? new Date(agent.createdAt).toLocaleString() : '-'}</dd></div>
+                    <div className="break-all"><dt className="text-[var(--text-400)]">执行端</dt><dd className="mt-0.5 text-[var(--text-700)]">{agent.endpointUrl || '-'}</dd></div>
+                    <div className="break-all"><dt className="text-[var(--text-400)]">Agent Card</dt><dd className="mt-0.5 text-[var(--text-700)]">{agent.cardUrl || agent.cards?.[0]?.source || '-'}</dd></div>
+                  </dl>
+                  <AgentSkillTags agent={agent} limit={16} variant="light" />
                 </div>
 
                 <div className="flex flex-wrap gap-2 lg:w-72 lg:justify-end">
                   <button
                     onClick={() => runAction(agent, 'approve')}
                     disabled={actingId === agent.id || agent.approvalStatus === 'approved'}
-                    className="inline-flex items-center gap-1 rounded border border-green-500/40 px-3 py-2 text-sm text-green-300 hover:bg-green-500/10 disabled:opacity-50"
+                    className="inline-flex min-h-10 items-center gap-1 rounded-full border border-[#bde9c9] bg-[var(--state-success-surface)] px-4 text-sm font-medium text-[var(--state-success-text)] disabled:opacity-50"
                   >
                     <CheckCircle2 className="h-4 w-4" />
                     通过
@@ -151,7 +154,7 @@ export default function AdminAgents() {
                   <button
                     onClick={() => runAction(agent, 'reject')}
                     disabled={actingId === agent.id || agent.approvalStatus === 'rejected'}
-                    className="inline-flex items-center gap-1 rounded border border-red-500/40 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+                    className="inline-flex min-h-10 items-center gap-1 rounded-full border border-[#ffc6c1] bg-[var(--state-error-surface)] px-4 text-sm font-medium text-[var(--state-error)] disabled:opacity-50"
                   >
                     <XCircle className="h-4 w-4" />
                     驳回
@@ -159,7 +162,7 @@ export default function AdminAgents() {
                   <button
                     onClick={() => runAction(agent, 'disable')}
                     disabled={actingId === agent.id || agent.approvalStatus === 'disabled'}
-                    className="inline-flex items-center gap-1 rounded border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 disabled:opacity-50"
+                    className="inline-flex min-h-10 items-center gap-1 rounded-full border border-[color:var(--border)] px-4 text-sm font-medium text-[var(--text-600)] hover:border-[var(--text-300)] disabled:opacity-50"
                   >
                     <Slash className="h-4 w-4" />
                     禁用
@@ -168,7 +171,8 @@ export default function AdminAgents() {
               </div>
             </article>
           ))}
-        </div>
+          </div>
+        </section>
       )}
     </div>
   );

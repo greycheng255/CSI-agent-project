@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Terminal, Loader2, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { UserPlus, Loader2, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { registerUser } from '../services/auth.service';
 
 export default function Register() {
@@ -66,36 +66,34 @@ export default function Register() {
 
   if (success) {
     return (
-      <div className="max-w-md mx-auto mt-20">
-        <div className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-8 shadow-2xl text-center">
-          <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-green-400 mb-2">注册成功</h1>
-          <p className="text-gray-400">欢迎加入碳硅网络</p>
-          <p className="text-gray-500 text-sm mt-2">正在跳转...</p>
+      <div className="max-w-md mx-auto px-4 py-20">
+        <div className="card-cs p-8 text-center">
+          <CheckCircle className="w-16 h-16 mx-auto mb-4 text-[var(--state-success)]" />
+          <h1 className="text-2xl font-bold text-[var(--foreground)] mb-2">注册成功</h1>
+          <p className="text-[var(--text-500)]">欢迎加入 CSi</p>
+          <p className="text-[var(--text-400)] text-sm mt-2">正在跳转...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-md mx-auto mt-20">
-      <div className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-8 shadow-2xl">
+    <div className="max-w-md mx-auto px-4 py-12">
+      <div className="card-cs p-8">
         <div className="text-center mb-8">
-          <Terminal className="w-12 h-12 text-green-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold">加入碳硅网络</h1>
-          <p className="text-gray-500 mt-2 text-sm">创建您的节点账户</p>
+          <div className="icon-tile-cs mx-auto mb-4">
+            <UserPlus className="w-6 h-6" />
+          </div>
+          <h1 className="text-2xl font-bold text-[var(--foreground)]">加入 CSi</h1>
+          <p className="text-[var(--text-500)] mt-2 text-sm">创建账号，发布需求或接入智能体</p>
         </div>
 
-        {error && (
-          <div className="mb-6 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
-            {error}
-          </div>
-        )}
+        {error && <div className="alert-cs-error mb-6">{error}</div>}
 
         <form onSubmit={handleRegister} className="space-y-5" autoComplete="off">
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              手机号 <span className="text-red-400">*</span>
+            <label className="label-cs">
+              手机号 <span className="text-[var(--state-error)]">*</span>
             </label>
             <input
               type="tel"
@@ -104,13 +102,13 @@ export default function Register() {
               placeholder="请输入11位手机号"
               maxLength={11}
               autoComplete="off"
-              className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-gray-200 focus:outline-none focus:border-green-500 transition-colors"
+              className="input-cs"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              昵称 <span className="text-gray-600">(可选)</span>
+            <label className="label-cs">
+              昵称 <span className="text-[var(--text-400)]">(可选)</span>
             </label>
             <input
               type="text"
@@ -118,13 +116,13 @@ export default function Register() {
               onChange={e => setDisplayName(e.target.value)}
               placeholder="设置您的昵称"
               autoComplete="off"
-              className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-gray-200 focus:outline-none focus:border-green-500 transition-colors"
+              className="input-cs"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              密码 <span className="text-red-400">*</span>
+            <label className="label-cs">
+              密码 <span className="text-[var(--state-error)]">*</span>
             </label>
             <div className="relative">
               <input
@@ -133,12 +131,13 @@ export default function Register() {
                 onChange={e => setPassword(e.target.value)}
                 placeholder="设置密码（至少6位）"
                 autoComplete="new-password"
-                className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-gray-200 focus:outline-none focus:border-green-500 transition-colors pr-10"
+                className="input-cs pr-11"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-400"
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--text-400)] transition-colors hover:text-[var(--text-600)]"
+                aria-label={showPassword ? '隐藏密码' : '显示密码'}
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
@@ -146,8 +145,8 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              确认密码 <span className="text-red-400">*</span>
+            <label className="label-cs">
+              确认密码 <span className="text-[var(--state-error)]">*</span>
             </label>
             <input
               type={showPassword ? 'text' : 'password'}
@@ -155,14 +154,14 @@ export default function Register() {
               onChange={e => setConfirmPassword(e.target.value)}
               placeholder="再次输入密码"
               autoComplete="new-password"
-              className="w-full bg-black border border-gray-700 rounded-lg px-4 py-3 text-gray-200 focus:outline-none focus:border-green-500 transition-colors"
+              className="input-cs"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-green-500/10 text-green-400 border border-green-500/30 font-bold rounded-lg hover:bg-green-500/20 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className="btn-cs btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? (
               <>
@@ -176,9 +175,9 @@ export default function Register() {
         </form>
 
         <div className="mt-6 text-center">
-          <p className="text-gray-500 text-sm">
+          <p className="text-[var(--text-500)] text-sm">
             已有账户？{' '}
-            <Link to="/login" className="text-green-400 hover:text-green-300">
+            <Link to="/login" className="link-cs">
               立即登录
             </Link>
           </p>

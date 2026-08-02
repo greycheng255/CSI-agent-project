@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- shared module intentionally exports UI helpers and constants */
 import { useRef, useState, type ReactNode } from 'react';
 import { FileCheck2, Loader2, Play, UploadCloud, X } from 'lucide-react';
 import type { AgentParamOption, AgentParamSchema, ApiModelDefinition } from '../../../api/agentMarketApi';
@@ -112,19 +113,14 @@ export function PanelHeader({
   accent: string;
 }) {
   return (
-    <div
-      className="rounded-xl border px-3.5 py-3 text-[11px] leading-5"
-      style={{ borderColor: `${accent}4d`, background: `linear-gradient(135deg, ${accent}14, rgba(255,255,255,0.02))` }}
-    >
-      <div className="flex items-start gap-2.5">
-        <span className="mt-0.5" style={{ color: accent }}>
+    <div className="rounded-xl bg-[var(--brand-50)] p-4 text-sm leading-6">
+      <div className="flex items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white" style={{ color: accent }}>
           {icon}
         </span>
-        <div>
-          <div className="text-xs font-bold" style={{ color: accent }}>
-            {title}
-          </div>
-          <div className="mt-0.5 text-gray-500">{description}</div>
+        <div className="min-w-0">
+          <div className="font-bold text-[var(--text-700)]">{title}</div>
+          <div className="mt-1 text-[var(--text-500)]">{description}</div>
         </div>
       </div>
     </div>
@@ -133,7 +129,7 @@ export function PanelHeader({
 
 export function PanelLabel({ children }: { children: ReactNode }) {
   return (
-    <label className="mb-1.5 block font-mono text-[10px] uppercase tracking-[0.08em] text-gray-500">
+    <label className="mb-2 block text-[13px] font-semibold text-[var(--text-600)]">
       {children}
     </label>
   );
@@ -160,7 +156,7 @@ export function PanelInput({
         type={type}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-gray-800 bg-white/[0.03] px-3 py-2.5 text-[11px] text-gray-200 outline-none transition-colors placeholder:text-gray-700 focus:border-green-500"
+        className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
       />
     </div>
   );
@@ -279,24 +275,24 @@ export function AttachmentUpload({
         type="button"
         disabled={disabled || uploading || (multiple && urls.length >= maxFiles)}
         onClick={() => inputRef.current?.click()}
-        className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-gray-700 bg-white/[0.02] px-3 py-3 text-[11px] font-semibold text-gray-400 transition-colors hover:border-green-500/60 hover:text-green-400 disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[color:var(--border)] bg-[var(--background-50)] px-3 py-3 text-sm font-semibold text-[var(--text-600)] transition-colors hover:border-[var(--brand-400)] hover:bg-[var(--brand-50)] hover:text-[var(--brand-700)] disabled:cursor-not-allowed disabled:opacity-60"
       >
         {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
         {uploading ? '正在上传到 S3...' : multiple ? `选择附件（${urls.length}/${maxFiles}）` : urls.length ? '重新上传' : '选择附件'}
       </button>
-      <p className="mt-1.5 text-[10px] text-gray-600">上传后生成最长 7 天有效的签名访问地址。</p>
+      <p className="mt-1.5 text-xs text-[var(--text-500)]">上传后生成最长 7 天有效的签名访问地址。</p>
       {urls.length > 0 && (
         <div className="mt-2 space-y-1.5">
           {urls.map((url, index) => (
-            <div key={url} className="flex items-center gap-2 rounded-lg border border-gray-800 bg-black/30 px-2.5 py-2">
-              <FileCheck2 className="h-3.5 w-3.5 shrink-0 text-green-400" />
-              <span className="min-w-0 flex-1 truncate text-[10px] text-gray-400">
+            <div key={url} className="flex items-center gap-2 rounded-lg bg-[var(--background-100)] px-3 py-2.5">
+              <FileCheck2 className="h-4 w-4 shrink-0 text-[var(--state-success-text)]" />
+              <span className="min-w-0 flex-1 truncate text-xs text-[var(--text-600)]">
                 {names[url] || fallbackAttachmentName(url, index)}
               </span>
               <button
                 type="button"
                 onClick={() => onChange(urls.filter((item) => item !== url).join('\n'))}
-                className="rounded p-0.5 text-gray-600 hover:text-red-400"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-400)] hover:bg-[var(--state-error-surface)] hover:text-[var(--state-error)]"
                 aria-label="移除附件"
               >
                 <X className="h-3.5 w-3.5" />
@@ -305,7 +301,7 @@ export function AttachmentUpload({
           ))}
         </div>
       )}
-      {error && <p className="mt-1.5 text-[10px] text-red-400">{error}</p>}
+      {error && <p className="mt-1.5 text-xs text-[var(--state-error)]">{error}</p>}
     </div>
   );
 }
@@ -327,7 +323,7 @@ export function PanelSelect({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-lg border border-gray-800 bg-[#0a0a0a] px-3 py-2.5 text-[11px] text-gray-200 outline-none focus:border-green-500"
+        className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -360,7 +356,7 @@ export function PanelTextarea({
         onChange={(event) => onChange(event.target.value)}
         rows={rows}
         placeholder={placeholder}
-        className="w-full resize-y rounded-lg border border-gray-800 bg-white/[0.03] px-3 py-2.5 text-[11px] leading-5 text-gray-200 outline-none transition-colors placeholder:text-gray-700 focus:border-green-500"
+        className="w-full resize-y rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm leading-6 text-[var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
       />
     </div>
   );
@@ -390,16 +386,11 @@ export function ChoicePills({
               key={option.value}
               type="button"
               onClick={() => onChange(option.value)}
-              className="rounded-full border px-2.5 py-1 text-left text-[11px] transition-colors"
-              style={{
-                color: active ? accent : '#9ca3af',
-                borderColor: active ? `${accent}66` : 'rgb(31 41 55)',
-                background: active ? `${accent}15` : 'transparent',
-                fontWeight: active ? 600 : 400,
-              }}
+              className={`min-h-11 rounded-xl px-3 text-left text-sm font-semibold transition-colors ${active ? 'text-white' : 'bg-[var(--background-100)] text-[var(--text-600)] hover:bg-[var(--brand-50)] hover:text-[var(--brand-700)]'}`}
+              style={active ? { backgroundColor: accent } : undefined}
             >
               <span>{option.label}</span>
-              {option.description && <span className="ml-1.5 text-[10px] font-normal text-gray-600">{option.description}</span>}
+              {option.description && <span className={`ml-2 text-xs font-normal ${active ? 'text-white/75' : 'text-[var(--text-500)]'}`}>{option.description}</span>}
             </button>
           );
         })}
@@ -423,12 +414,12 @@ export function ToggleOption({
     <button
       type="button"
       onClick={() => onChange(!value)}
-      className="flex w-full items-center justify-between rounded-lg border border-gray-800 bg-white/[0.03] px-3 py-2.5 text-left"
+      className="flex min-h-12 w-full items-center justify-between rounded-xl bg-[var(--background-100)] px-4 py-3 text-left"
     >
-      <span className="text-[11px] font-semibold text-gray-300">{label}</span>
+      <span className="text-sm font-semibold text-[var(--text-700)]">{label}</span>
       <span
         className="relative h-6 w-11 rounded-full border transition-colors"
-        style={{ background: value ? accent : 'rgb(31 41 55)', borderColor: value ? accent : 'rgb(55 65 81)' }}
+        style={{ background: value ? accent : 'var(--background-300)', borderColor: value ? accent : 'var(--border)' }}
       >
         <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${value ? 'translate-x-5' : 'translate-x-0.5'}`} />
       </span>
@@ -459,14 +450,14 @@ export function SubmitBlock({
         type="button"
         onClick={onSubmit}
         disabled={submitting}
-        className="flex w-full items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-xs font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-        style={{ background: `linear-gradient(135deg, ${accent}, ${accent}cc)` }}
+        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        style={{ backgroundColor: accent }}
       >
         {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
         {submitting ? (taskRunning ? '任务执行中...' : '提交中...') : label}
       </button>
       {error && !taskId && (
-        <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-[11px] text-red-300">
+        <div className="rounded-xl bg-[var(--state-error-surface)] p-3 text-sm text-[var(--state-error)]">
           {error}
         </div>
       )}
@@ -489,7 +480,7 @@ export function ModelSelect({
       <select
         value={selectedModel}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-lg border border-gray-800 bg-white/[0.03] px-3 py-2.5 text-[11px] text-gray-200 outline-none focus:border-green-500"
+        className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
       >
         {models.map((model) => (
           <option key={model.name} value={model.name}>
@@ -524,7 +515,7 @@ export function ModelSummary({
           <div className="font-bold" style={{ color: accent }}>
             {selectedModel.label || selectedModel.display_name || selectedModel.name}
           </div>
-          <div className="mt-0.5 text-gray-500">{selectedModel.description}</div>
+          <div className="mt-1 text-[var(--text-500)]">{selectedModel.description}</div>
         </div>
       )}
     </>
@@ -570,18 +561,18 @@ export function ParamField({
   if (type === 'boolean' || type === 'switch') {
     const checked = value === 'true';
     return (
-      <label className="flex items-center justify-between gap-4 rounded-lg border border-gray-800 bg-white/[0.03] px-3 py-2.5">
+      <label className="flex items-center justify-between gap-4 rounded-xl bg-[var(--background-100)] px-4 py-3">
         <span>
-          <span className="block text-[11px] font-semibold text-gray-300">{label}</span>
-          {schema.description && <span className="text-[10px] text-gray-600">{schema.description}</span>}
+          <span className="block text-sm font-semibold text-[var(--text-700)]">{label}</span>
+          {schema.description && <span className="text-xs text-[var(--text-500)]">{schema.description}</span>}
         </span>
         <button
           type="button"
           onClick={() => onChange(checked ? 'false' : 'true')}
           className="relative h-6 w-11 rounded-full border transition-colors"
           style={{
-            background: checked ? accent : 'rgb(31 41 55)',
-            borderColor: checked ? accent : 'rgb(55 65 81)',
+            background: checked ? accent : 'var(--background-300)',
+            borderColor: checked ? accent : 'var(--border)',
           }}
           aria-label={label}
         >
@@ -610,20 +601,15 @@ export function ParamField({
                 key={option.value}
                 type="button"
                 onClick={() => onChange(option.value)}
-                className="rounded-full border px-2.5 py-1 text-[11px] transition-colors"
-                style={{
-                  color: active ? accent : '#9ca3af',
-                  borderColor: active ? `${accent}66` : 'rgb(31 41 55)',
-                  background: active ? `${accent}15` : 'transparent',
-                  fontWeight: active ? 600 : 400,
-                }}
+                className={`min-h-11 rounded-xl px-3 text-sm font-semibold transition-colors ${active ? 'text-white' : 'bg-[var(--background-100)] text-[var(--text-600)] hover:bg-[var(--brand-50)] hover:text-[var(--brand-700)]'}`}
+                style={active ? { backgroundColor: accent } : undefined}
               >
                 {option.label}
               </button>
             );
           })}
         </div>
-        {schema.description && <p className="mt-1.5 text-[10px] text-gray-600">{schema.description}</p>}
+        {schema.description && <p className="mt-1.5 text-xs text-[var(--text-500)]">{schema.description}</p>}
       </div>
     );
   }
@@ -640,7 +626,7 @@ export function ParamField({
           onChange={(event) => onChange(event.target.value)}
           rows={name === 'source_material' || name === 'prompt' || name === 'text' ? 7 : 4}
           placeholder={PLACEHOLDERS[name] || schema.description || label}
-          className="w-full resize-y rounded-lg border border-gray-800 bg-white/[0.03] px-3 py-2.5 text-[11px] leading-5 text-gray-200 outline-none transition-colors placeholder:text-gray-700 focus:border-green-500"
+          className="w-full resize-y rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm leading-6 text-[var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
         />
       ) : (
         <input
@@ -648,10 +634,10 @@ export function ParamField({
           type={type === 'number' ? 'number' : 'text'}
           onChange={(event) => onChange(event.target.value)}
           placeholder={schema.description || label}
-          className="w-full rounded-lg border border-gray-800 bg-white/[0.03] px-3 py-2.5 text-[11px] text-gray-200 outline-none transition-colors placeholder:text-gray-700 focus:border-green-500"
+          className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
         />
       )}
-      {schema.description && <p className="mt-1.5 text-[10px] text-gray-600">{schema.description}</p>}
+      {schema.description && <p className="mt-1.5 text-xs text-[var(--text-500)]">{schema.description}</p>}
     </div>
   );
 }

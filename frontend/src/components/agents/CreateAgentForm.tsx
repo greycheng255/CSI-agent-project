@@ -151,13 +151,13 @@ export function CreateAgentForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 rounded-lg border border-purple-900/50 bg-purple-950/10 p-5">
+    <form onSubmit={handleSubmit} className="space-y-5 rounded-2xl border border-[color:var(--border)] bg-[var(--surface)] p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-purple-300">注册外部自托管 Agent</h2>
-          <p className="mt-1 text-xs text-gray-500">提交后进入待审核，审核通过并启动后展示到智能体广场。</p>
+          <h2 className="text-lg font-bold text-[var(--text-900)]">注册外部自托管 Agent</h2>
+          <p className="mt-1 text-xs text-[var(--text-500)]">提交后进入待审核，审核通过并启动后展示到智能体广场。</p>
         </div>
-        <span className="inline-flex items-center gap-1 rounded border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-300">
+        <span className="inline-flex items-center gap-1 rounded-full bg-[var(--brand-50)] px-2.5 py-1 text-xs font-medium text-[var(--brand-700)]">
           <Link2 className="h-3.5 w-3.5" />
           外部自托管
         </span>
@@ -176,7 +176,7 @@ export function CreateAgentForm({
               type="button"
               onClick={fetchCardUrlPreview}
               disabled={cardUrlLoading}
-              className="inline-flex items-center gap-2 rounded border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:border-gray-500 disabled:opacity-50"
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[color:var(--border)] px-3 py-2 text-sm text-[var(--text-700)] hover:border-[var(--brand-300)] hover:bg-[var(--brand-50)] disabled:opacity-50"
             >
               {cardUrlLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               预览
@@ -186,13 +186,13 @@ export function CreateAgentForm({
 
         <Field label="或粘贴 Agent Card JSON">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-[var(--text-500)]">
               示例包含必填字段：schema_version、name、description、version、endpoints.task、endpoints.health、auth.type、capabilities.domains、capabilities.skills、pricing.model。
             </p>
             <button
               type="button"
               onClick={() => setCardJsonText(AGENT_CARD_JSON_EXAMPLE)}
-              className="inline-flex items-center gap-1 rounded border border-gray-700 px-2 py-1 text-xs text-gray-300 hover:border-gray-500"
+              className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-[color:var(--border)] px-2.5 py-1 text-xs text-[var(--text-700)] hover:border-[var(--brand-300)] hover:bg-[var(--brand-50)]"
             >
               <FileJson className="h-3.5 w-3.5" />
               填入示例
@@ -211,8 +211,8 @@ export function CreateAgentForm({
           <div
             className={`flex items-center gap-2 rounded border px-3 py-2 text-xs ${
               parsedCard.ok
-                ? 'border-green-500/30 bg-green-500/10 text-green-300'
-                : 'border-red-500/30 bg-red-500/10 text-red-300'
+                ? 'border-[var(--state-success-border)] bg-[var(--state-success-surface)] text-[var(--state-success-text)]'
+                : 'border-[var(--state-danger-border)] bg-[var(--state-danger-surface)] text-[var(--state-danger-text)]'
             }`}
           >
             {parsedCard.ok ? <CheckCircle2 className="h-4 w-4" /> : <FileJson className="h-4 w-4" />}
@@ -238,21 +238,21 @@ export function CreateAgentForm({
       </Field>
 
       {error && (
-        <div className="rounded border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+        <div className="rounded-xl border border-[var(--state-danger-border)] bg-[var(--state-danger-surface)] px-3 py-2 text-sm text-[var(--state-danger-text)]">
           {error}
         </div>
       )}
 
       <div className="flex justify-end gap-3">
         {onCancel && (
-          <button type="button" onClick={onCancel} className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200">
+          <button type="button" onClick={onCancel} className="min-h-11 rounded-xl px-4 py-2 text-sm text-[var(--text-500)] hover:bg-[var(--background-100)] hover:text-[var(--text-900)]">
             取消
           </button>
         )}
         <button
           type="submit"
           disabled={submitting}
-          className="inline-flex items-center gap-2 rounded bg-purple-500 px-5 py-2 text-sm font-bold text-black hover:bg-purple-400 disabled:opacity-60"
+          className="btn-cs inline-flex min-h-11 items-center gap-2 px-5 py-2 text-sm font-bold disabled:opacity-60"
         >
           {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
           提交审核
@@ -265,7 +265,7 @@ export function CreateAgentForm({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-sm text-gray-400">{label}</span>
+      <span className="mb-1 block text-sm font-medium text-[var(--text-700)]">{label}</span>
       {children}
     </label>
   );

@@ -108,6 +108,7 @@ function statusClass(status?: string) {
   return 'text-gray-400 bg-gray-500/10 border-gray-700';
 }
 
+/* eslint-disable react-hooks/exhaustive-deps -- invocation and tool loaders are scoped to their explicit filter effects */
 export default function AdminMCPPlatformPanel() {
   const [tools, setTools] = useState<AdminMCPTool[]>([]);
   const [selectedName, setSelectedName] = useState('');

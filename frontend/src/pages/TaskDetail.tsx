@@ -1,6 +1,21 @@
 ﻿import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Clock, DollarSign, Loader2, Bot, CheckCircle2, Package, ExternalLink, CheckCircle, XCircle, Gauge, Hourglass } from 'lucide-react';
+import {
+  ArrowLeft,
+  Bot,
+  CalendarClock,
+  CheckCircle,
+  CheckCircle2,
+  Clock,
+  ExternalLink,
+  Gauge,
+  Hourglass,
+  Loader2,
+  Package,
+  Paperclip,
+  UserCircle2,
+  XCircle,
+} from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
 import { BidDetailPanel } from '../components/BidDetailPanel';
@@ -93,6 +108,7 @@ interface Bid {
   } | null;
 }
 
+/* eslint-disable react-hooks/exhaustive-deps -- task-related loaders are intentionally sequenced by task, order, and viewer effects */
 export default function TaskDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -109,16 +125,16 @@ export default function TaskDetail() {
   const bidStatusView = (status?: Bid['status']) => {
     switch (status) {
       case 'accepted':
-        return { label: '已中标', cls: 'bg-green-500/10 text-green-400 border-green-500/20' };
+        return { label: '已中标', cls: 'bg-[color:var(--state-success-surface)] text-[color:var(--state-success-text)]' };
       case 'rejected':
-        return { label: '未中标', cls: 'bg-gray-800 text-gray-400 border-gray-700' };
+        return { label: '未中标', cls: 'bg-[color:var(--background-200)] text-[color:var(--text-500)]' };
       case 'expired':
-        return { label: '已过期', cls: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' };
+        return { label: '已过期', cls: 'bg-[color:var(--state-warning-surface)] text-[color:var(--state-warning)]' };
       case 'withdrawn':
-        return { label: '已撤回', cls: 'bg-red-500/10 text-red-400 border-red-500/20' };
+        return { label: '已撤回', cls: 'bg-[color:var(--state-error-surface)] text-[color:var(--state-error)]' };
       case 'submitted':
       default:
-        return { label: '待选择', cls: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
+        return { label: '待选择', cls: 'bg-[color:var(--brand-50)] text-[color:var(--brand-700)]' };
     }
   };
 
@@ -201,7 +217,7 @@ export default function TaskDetail() {
       if (!res.ok) throw new Error('选标失败');
       const order = await res.json();
       alert('选标成功！即将跳转至支付页面...');
-      navigate(`/orders/${order.id}`);
+      navigate(`/orders/${order.id}?taskId=${id}`);
     } catch {
       alert('选标失败，请重试');
     } finally {
@@ -213,361 +229,386 @@ export default function TaskDetail() {
   const orderStatusView = (status: Order['status']) => {
     switch (status) {
       case 'PENDING_PAYMENT':
-        return { label: '待支付', badge: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20', icon: <Clock className="w-4 h-4" /> };
+        return { label: '待支付', badge: 'bg-[color:var(--state-warning-surface)] text-[color:var(--state-warning)]', icon: <Clock className="h-4 w-4" /> };
       case 'IN_PROGRESS':
-        return { label: '进行中', badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20', icon: <Loader2 className="w-4 h-4 animate-spin" /> };
+        return { label: '进行中', badge: 'bg-[color:var(--brand-50)] text-[color:var(--brand-700)]', icon: <Loader2 className="h-4 w-4 animate-spin" /> };
       case 'DELIVERED':
-        return { label: '待验收', badge: 'bg-purple-500/10 text-purple-400 border-purple-500/20', icon: <Package className="w-4 h-4" /> };
+        return { label: '待验收', badge: 'bg-[#f3efff] text-[#6544a5]', icon: <Package className="h-4 w-4" /> };
       case 'ACCEPTED':
-        return { label: '已验收', badge: 'bg-green-500/10 text-green-400 border-green-500/20', icon: <CheckCircle className="w-4 h-4" /> };
+        return { label: '已验收', badge: 'bg-[color:var(--state-success-surface)] text-[color:var(--state-success-text)]', icon: <CheckCircle className="h-4 w-4" /> };
       case 'PENDING_RELEASE':
-        return { label: '待放款', badge: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20', icon: <Clock className="w-4 h-4" /> };
+        return { label: '待放款', badge: 'bg-[color:var(--state-warning-surface)] text-[color:var(--state-warning)]', icon: <Clock className="h-4 w-4" /> };
       case 'COMPLETED':
-        return { label: '已完成', badge: 'bg-green-500/10 text-green-400 border-green-500/20', icon: <CheckCircle2 className="w-4 h-4" /> };
+        return { label: '已完成', badge: 'bg-[color:var(--state-success-surface)] text-[color:var(--state-success-text)]', icon: <CheckCircle2 className="h-4 w-4" /> };
       case 'CANCELED':
-        return { label: '已取消', badge: 'bg-gray-800 text-gray-400 border-gray-700', icon: <XCircle className="w-4 h-4" /> };
+        return { label: '已取消', badge: 'bg-[color:var(--background-200)] text-[color:var(--text-500)]', icon: <XCircle className="h-4 w-4" /> };
       case 'REFUNDED':
-        return { label: '已退款', badge: 'bg-gray-800 text-gray-400 border-gray-700', icon: <XCircle className="w-4 h-4" /> };
+        return { label: '已退款', badge: 'bg-[color:var(--background-200)] text-[color:var(--text-500)]', icon: <XCircle className="h-4 w-4" /> };
       default:
-        return { label: status, badge: 'bg-gray-800 text-gray-400 border-gray-700', icon: <Package className="w-4 h-4" /> };
+        return { label: status, badge: 'bg-[color:var(--background-200)] text-[color:var(--text-500)]', icon: <Package className="h-4 w-4" /> };
     }
   };
 
   if (loading || !task) {
     return (
-      <div className="flex justify-center items-center py-20 text-gray-500">
-        <Loader2 className="w-8 h-8 animate-spin mr-3 text-green-500" />
-        正在连接网络读取数据...
+      <div className="w-full space-y-4 py-8" aria-label="正在加载任务详情">
+        <div className="h-8 w-48 animate-pulse rounded bg-[color:var(--background-200)]" />
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="h-96 animate-pulse rounded-2xl bg-[color:var(--background-200)]" />
+          <div className="h-72 animate-pulse rounded-2xl bg-[color:var(--background-200)]" />
+        </div>
       </div>
     );
   }
 
+  const taskStatusLabel = order?.status === 'COMPLETED'
+    ? '已完成'
+    : task.status === 'OPEN'
+      ? '招标中'
+      : task.status;
+
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      <div className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-8 relative overflow-hidden">
-        <div className={`absolute top-0 left-0 w-1 h-full ${order?.status === 'COMPLETED' ? 'bg-green-500' : 'bg-blue-500'}`}></div>
-        <div className="flex justify-between items-start mb-6">
-          <div className="flex-1">
-            <div className="flex items-center space-x-3 mb-2">
-              <span className="text-sm font-mono text-gray-500">TASK#{task.id}</span>
-              {order?.status === 'COMPLETED' ? (
-                <span className="px-2 py-0.5 bg-green-500/10 text-green-400 rounded text-xs border border-green-500/20 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" />
-                  已完成
-                </span>
-              ) : (
-                <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded text-xs">{task.status}</span>
-              )}
-              <span className="px-2 py-0.5 bg-gray-800/50 text-gray-300 rounded text-xs">
-                雇主：{task.client?.phone || task.client?.id?.slice(0, 8) || '未知'}
+    <div className="w-full pb-10">
+      <Link
+        to="/market"
+        className="inline-flex min-h-11 items-center gap-2 rounded-lg px-1 text-sm font-semibold text-[color:var(--brand-600)] transition-colors hover:text-[color:var(--brand-700)]"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        返回任务大厅
+      </Link>
+
+      <div className="mt-3 grid items-start gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(360px,1fr)] xl:gap-6">
+        <section className="min-w-0 self-start rounded-2xl border border-[color:var(--border)] bg-white px-5 py-6 md:px-7">
+          <header className="border-b border-[color:var(--border)] pb-6">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="font-mono text-xs text-[color:var(--text-500)]">TASK#{task.id.slice(0, 12)}</span>
+              <span className={`inline-flex min-h-7 items-center gap-1 rounded-full px-2.5 text-xs font-semibold ${
+                order?.status === 'COMPLETED'
+                  ? 'bg-[color:var(--state-success-surface)] text-[color:var(--state-success-text)]'
+                  : 'bg-[color:var(--brand-50)] text-[color:var(--brand-700)]'
+              }`}>
+                {order?.status === 'COMPLETED' && <CheckCircle2 className="h-3.5 w-3.5" />}
+                {taskStatusLabel}
               </span>
             </div>
-            <h1 className="text-2xl font-bold text-gray-200">{task.title}</h1>
-            
-            {/* 任务完成后的摘要信息 */}
-            {order?.status === 'COMPLETED' && (
-              <div className="mt-3 flex flex-wrap items-center gap-4 text-sm">
-                <span className="text-gray-400">
-                  执行者：<span className="text-blue-400 font-medium">{order.bid?.agent?.name || '未知 Agent'}</span>
+            <h1 className="max-w-4xl text-2xl font-bold tracking-tight text-[color:var(--text-900)] md:text-[28px]">
+              {task.title}
+            </h1>
+            <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-[color:var(--text-500)]">
+              <span className="inline-flex items-center gap-1.5">
+                <UserCircle2 className="h-4 w-4" />
+                任务方 {task.client?.phone || task.client?.id?.slice(0, 8) || '未知'}
+              </span>
+              {order?.bid?.agent?.name && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Bot className="h-4 w-4" />
+                  执行者 {order.bid.agent.name}
                 </span>
-                <span className="text-gray-400">
-                  成交价格：<span className="text-green-400 font-medium">¥{order.amountCny}</span>
+              )}
+              {order && (
+                <span>
+                  成交价 <strong className="font-semibold text-[color:var(--text-700)]">¥{order.amountCny.toLocaleString('zh-CN')}</strong>
                 </span>
-                {order.acceptedAt && (
-                  <span className="text-gray-400">
-                    完成时间：<span className="text-gray-300">{formatShanghaiDateTime(order.acceptedAt)}</span>
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-          <div className="text-right">
-            <div className="text-3xl font-bold text-green-500">¥{task.budgetCny ?? 0}</div>
-            <div className="text-xs text-gray-500 mt-1 flex items-center justify-end">
-              <DollarSign className="w-3 h-3 mr-1" /> 最高预算
+              )}
             </div>
-          </div>
-        </div>
+          </header>
 
-        <div className="space-y-6">
-          <div>
-            <h3 className="text-sm font-bold text-gray-400 mb-2 border-b border-gray-800 pb-2">详细描述</h3>
-            <p className="text-gray-300 font-mono text-sm whitespace-pre-wrap">{task.description}</p>
-          </div>
-          {((task.tags && task.tags.length > 0) || (task.skillsRequired && task.skillsRequired.length > 0)) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {task.tags && task.tags.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-bold text-gray-400 mb-2 border-b border-gray-800 pb-2">任务标签</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {task.tags.map((tag) => (
-                      <span key={tag} className="px-2 py-1 bg-gray-800/70 rounded text-xs text-gray-300">{tag}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {task.skillsRequired && task.skillsRequired.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-bold text-gray-400 mb-2 border-b border-gray-800 pb-2">所需能力</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {task.skillsRequired.map((skill) => (
-                      <span key={skill} className="px-2 py-1 bg-green-500/10 text-green-400 rounded text-xs">{skill}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          {task.attachmentUrls && task.attachmentUrls.length > 0 && (
-            <div>
-              <h3 className="text-sm font-bold text-gray-400 mb-2 border-b border-gray-800 pb-2">附件</h3>
-              <div className="space-y-2">
-                {task.attachmentUrls.map((url) => (
-                  <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-green-400 hover:text-green-300 flex items-center gap-2">
-                    <ExternalLink className="w-4 h-4" />
-                    {url}
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-          <div>
-            <h3 className="text-sm font-bold text-gray-400 mb-2 border-b border-gray-800 pb-2 flex items-center">
-              <CheckCircle2 className="w-4 h-4 mr-2" /> 验收标准
-            </h3>
-            <p className="text-gray-300 font-mono text-sm whitespace-pre-wrap">{task.acceptanceCriteria}</p>
-          </div>
-          
-          {/* 任务时间线 */}
-          <div className="bg-black p-4 rounded-lg border border-gray-800">
-            <h3 className="text-sm font-bold text-gray-400 mb-3 flex items-center">
-              <Clock className="w-4 h-4 mr-2" /> 任务时间线
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-              <div>
-                <span className="text-gray-500 block mb-1">发布时间</span>
-                <span className="text-gray-300">{formatShanghaiDateTime(task.createdAt)}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block mb-1">期望交付</span>
-                <span className="text-gray-300">{formatShanghaiDateTime(task.expectedDeliveryAt)}</span>
-              </div>
-              {order?.deliveredAt && (
-                <div>
-                  <span className="text-gray-500 block mb-1">实际交付</span>
-                  <span className="text-green-400">{formatShanghaiDateTime(order.deliveredAt)}</span>
-                </div>
-              )}
-              {order?.acceptedAt && (
-                <div>
-                  <span className="text-gray-500 block mb-1">验收通过</span>
-                  <span className="text-green-400">{formatShanghaiDateTime(order.acceptedAt)}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 订单信息 - 如果有订单则显示 */}
-      {order && (
-        <div className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-6">
-          <div className="flex justify-between items-start mb-4">
-            <h2 className="text-xl font-bold flex items-center space-x-2">
-              <Package className="text-blue-500 w-6 h-6" />
-              <span>订单信息</span>
-            </h2>
-            {(() => {
-              const statusView = orderStatusView(order.status);
-              return (
-                <span className={`px-3 py-1 rounded border flex items-center gap-2 ${statusView.badge}`}>
-                  {statusView.icon}
-                  {statusView.label}
-                </span>
-              );
-            })()}
-          </div>
-          
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-gray-500">订单编号：</span>
-                <span className="text-gray-300 font-mono">{order.id}</span>
-              </div>
-              <div>
-                <span className="text-gray-500">成交价格：</span>
-                <span className="text-green-400 font-bold">¥{order.amountCny}</span>
-              </div>
-              <div>
-                <span className="text-gray-500">执行 Agent：</span>
-                <span className="text-blue-400">{order.bid?.agent?.name || '未知'}</span>
-              </div>
-              <div>
-                <span className="text-gray-500">创建时间：</span>
-                <span className="text-gray-300">{formatShanghaiDateTime(order.createdAt)}</span>
-              </div>
-              {order.deliveredAt && (
-                <div>
-                  <span className="text-gray-500">交付时间：</span>
-                  <span className="text-gray-300">{formatShanghaiDateTime(order.deliveredAt)}</span>
-                </div>
-              )}
-              {order.acceptedAt && (
-                <div>
-                  <span className="text-gray-500">验收时间：</span>
-                  <span className="text-gray-300">{formatShanghaiDateTime(order.acceptedAt)}</span>
-                </div>
-              )}
-            </div>
-            
-            {/* 交付物信息 */}
-            {order.deliveryUrl && (
-              <div className="mt-4 p-4 bg-gray-900/50 rounded-lg border border-gray-800">
-                <h3 className="text-sm font-bold text-gray-400 mb-2">交付物</h3>
-                <a 
-                  href={order.deliveryUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-green-400 hover:text-green-300 flex items-center gap-2 text-sm"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  {order.deliveryUrl}
-                </a>
-                {order.deliverySummary && (
-                  <p className="text-xs text-gray-500 mt-2">{order.deliverySummary}</p>
-                )}
-              </div>
-            )}
-            
-            {/* 操作按钮 */}
-            <div className="flex gap-3 mt-4">
-              <Link
-                to={`/orders/${order.id}`}
-                className="flex-1 text-center py-2 bg-blue-500/10 text-blue-400 border border-blue-500/30 rounded hover:bg-blue-500/20 transition-colors"
-              >
-                查看订单详情
-              </Link>
-              {order.status === 'PENDING_PAYMENT' && (
-                <Link
-                  to={`/orders/${order.id}`}
-                  className="flex-1 text-center py-2 bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 rounded hover:bg-yellow-500/20 transition-colors"
-                >
-                  去支付
-                </Link>
-              )}
-              {order.status === 'DELIVERED' && (
-                <Link
-                  to={`/orders/${order.id}`}
-                  className="flex-1 text-center py-2 bg-purple-500/10 text-purple-400 border border-purple-500/30 rounded hover:bg-purple-500/20 transition-colors"
-                >
-                  去验收
-                </Link>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 报价列表 - 只在任务开放且没有订单时显示 */}
-      {task.status === 'OPEN' && !order && (
-      <div>
-        <div className="flex justify-between items-end mb-4">
-          <h2 className="text-xl font-bold flex items-center space-x-2">
-            <Bot className="text-green-500 w-6 h-6" />
-            <span>硅基报价池 (Bids)</span>
-            <span className="text-sm font-normal text-gray-500 ml-2">当前 {bids.length} 个 Agent 参与竞标</span>
-          </h2>
-        </div>
-        {!canSelectBid && (
-          <div className="mb-4 text-xs text-gray-500">
-            当前账号不是雇主，仅可查看报价；选择报价需使用雇主账号登录。
-          </div>
-        )}
-
-        {bids.length === 0 ? (
-          <div className="border border-gray-800 border-dashed rounded-xl p-12 text-center text-gray-500">
-            正在向全网在线 Agent 广播需求，请耐心等待报价...
-            <div className="mt-4">
-              <Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-600" />
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {bids.map((bid) => (
-              (() => {
-                const statusView = bidStatusView(bid.status);
-                const canSelectThisBid = canSelectBid && (bid.status || 'submitted') === 'submitted';
-                return (
-              <div
-                key={bid.id}
-                className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 hover:border-green-500/30 transition-colors"
-              >
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3 mb-2">
-                    <span className="font-bold text-green-400 flex items-center">
-                      <Bot className="w-4 h-4 mr-1" />
-                      {bid.agent?.name || 'Unknown Agent'}
+          <div className="divide-y divide-[color:var(--border)]">
+            <section className="py-6">
+              <h2 className="text-base font-bold text-[color:var(--text-900)]">任务说明</h2>
+              <p className="mt-3 max-w-4xl whitespace-pre-wrap text-sm leading-7 text-[color:var(--text-600)]">
+                {task.description || '暂未提供任务描述。'}
+              </p>
+              {((task.tags && task.tags.length > 0) || (task.skillsRequired && task.skillsRequired.length > 0)) && (
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {task.tags?.map((tag) => (
+                    <span key={tag} className="rounded-full bg-[color:var(--background-100)] px-2.5 py-1 text-xs text-[color:var(--text-600)]">
+                      {tag}
                     </span>
-                    <span className="text-xs text-gray-500 font-mono">ID: {bid.agent?.id ? bid.agent.id.slice(0, 8) : '--------'}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded border ${statusView.cls}`}>{statusView.label}</span>
-                    {bid.rankScore !== undefined && (
-                      <span className="text-xs px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">
-                        排名分 {Math.round(bid.rankScore)}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-400 font-mono bg-black p-3 rounded border border-gray-800 mt-2">
-                    {bid.planSummary}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-400">
-                    <span className="flex items-center gap-1">
-                      <Gauge className="w-3.5 h-3.5" />
-                      置信度 {Math.round((bid.confidenceScore ?? 0.5) * 100)}%
+                  ))}
+                  {task.skillsRequired?.map((skill) => (
+                    <span key={skill} className="rounded-full bg-[color:var(--brand-50)] px-2.5 py-1 text-xs font-medium text-[color:var(--brand-700)]">
+                      {skill}
                     </span>
-                    {bid.estimatedHours !== null && bid.estimatedHours !== undefined && (
-                      <span className="flex items-center gap-1">
-                        <Hourglass className="w-3.5 h-3.5" />
-                        预估 {bid.estimatedHours} 小时
-                      </span>
-                    )}
-                    {bid.riskNotes && <span className="text-yellow-400">风险: {bid.riskNotes}</span>}
-                  </div>
-                  <div className="mt-3">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedBidId((cur) => (cur === bid.id ? null : bid.id))}
-                      className="text-xs text-gray-400 hover:text-gray-200 underline underline-offset-4"
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="py-6">
+              <h2 className="flex items-center gap-2 text-base font-bold text-[color:var(--text-900)]">
+                <CheckCircle2 className="h-4 w-4 text-[color:var(--state-success-text)]" />
+                验收标准
+              </h2>
+              <p className="mt-3 max-w-4xl whitespace-pre-wrap text-sm leading-7 text-[color:var(--text-600)]">
+                {task.acceptanceCriteria || '任务方暂未补充验收标准。'}
+              </p>
+            </section>
+
+            {task.attachmentUrls && task.attachmentUrls.length > 0 && (
+              <section className="py-6">
+                <h2 className="flex items-center gap-2 text-base font-bold text-[color:var(--text-900)]">
+                  <Paperclip className="h-4 w-4 text-[color:var(--brand-500)]" />
+                  任务附件
+                </h2>
+                <div className="mt-3 divide-y divide-[color:var(--border)]">
+                  {task.attachmentUrls.map((url) => (
+                    <a
+                      key={url}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex min-h-11 items-center gap-2 py-2 text-sm text-[color:var(--brand-600)] transition-colors hover:text-[color:var(--brand-700)]"
                     >
-                      {expandedBidId === bid.id ? '收起报价依据' : '查看报价依据'}
-                    </button>
+                      <ExternalLink className="h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">{url}</span>
+                    </a>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section className="py-6">
+              <h2 className="flex items-center gap-2 text-base font-bold text-[color:var(--text-900)]">
+                <CalendarClock className="h-4 w-4 text-[color:var(--brand-500)]" />
+                任务时间
+              </h2>
+              <dl className="mt-4 grid gap-x-8 gap-y-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                <div>
+                  <dt className="text-xs text-[color:var(--text-500)]">发布时间</dt>
+                  <dd className="mt-1 font-medium text-[color:var(--text-700)]">{formatShanghaiDateTime(task.createdAt)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-[color:var(--text-500)]">期望交付</dt>
+                  <dd className="mt-1 font-medium text-[color:var(--text-700)]">{formatShanghaiDateTime(task.expectedDeliveryAt)}</dd>
+                </div>
+                {order?.deliveredAt && (
+                  <div>
+                    <dt className="text-xs text-[color:var(--text-500)]">实际交付</dt>
+                    <dd className="mt-1 font-medium text-[color:var(--state-success-text)]">{formatShanghaiDateTime(order.deliveredAt)}</dd>
                   </div>
-                  {expandedBidId === bid.id && (
-                    <div className="mt-4">
-                      <BidDetailPanel bid={bid} />
+                )}
+                {order?.acceptedAt && (
+                  <div>
+                    <dt className="text-xs text-[color:var(--text-500)]">验收通过</dt>
+                    <dd className="mt-1 font-medium text-[color:var(--state-success-text)]">{formatShanghaiDateTime(order.acceptedAt)}</dd>
+                  </div>
+                )}
+              </dl>
+            </section>
+
+            {task.status === 'OPEN' && !order && (
+              <section className="py-6">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <h2 className="flex items-center gap-2 text-base font-bold text-[color:var(--text-900)]">
+                      <Bot className="h-4 w-4 text-[color:var(--brand-500)]" />
+                      智能体报价
+                    </h2>
+                    <p className="mt-1 text-sm text-[color:var(--text-500)]">当前有 {bids.length} 个智能体参与竞标</p>
+                  </div>
+                </div>
+
+                {!canSelectBid && (
+                  <p className="mt-4 text-xs leading-6 text-[color:var(--text-500)]">
+                    当前账号不是雇主，仅可查看报价；选择报价需使用雇主账号登录。
+                  </p>
+                )}
+
+                {bids.length === 0 ? (
+                  <div className="py-10 text-center">
+                    <Bot className="mx-auto h-7 w-7 text-[color:var(--text-400)]" />
+                    <h3 className="mt-3 font-semibold text-[color:var(--text-700)]">等待智能体报价</h3>
+                    <p className="mt-1 text-sm text-[color:var(--text-500)]">任务正在向在线智能体广播，请稍后回来查看。</p>
+                  </div>
+                ) : (
+                  <div className="mt-4 divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
+                    {bids.map((bid) => {
+                      const statusView = bidStatusView(bid.status);
+                      const canSelectThisBid = canSelectBid && (bid.status || 'submitted') === 'submitted';
+                      return (
+                        <article key={bid.id} className="py-5">
+                          <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="flex items-center font-bold text-[color:var(--text-800)]">
+                                  <Bot className="mr-1 h-4 w-4 text-[color:var(--brand-500)]" />
+                                  {bid.agent?.name || 'Unknown Agent'}
+                                </span>
+                                <span className="font-mono text-xs text-[color:var(--text-500)]">
+                                  ID: {bid.agent?.id ? bid.agent.id.slice(0, 8) : '--------'}
+                                </span>
+                                <span className={`inline-flex min-h-7 items-center rounded-full px-2.5 text-xs font-semibold ${statusView.cls}`}>
+                                  {statusView.label}
+                                </span>
+                                {bid.rankScore !== undefined && (
+                                  <span className="inline-flex min-h-7 items-center rounded-full bg-[#f3efff] px-2.5 text-xs font-semibold text-[#6544a5]">
+                                    排名分 {Math.round(bid.rankScore)}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-3 text-sm leading-6 text-[color:var(--text-600)]">
+                                {bid.planSummary || '该智能体暂未提供补充说明。'}
+                              </p>
+                              <div className="mt-3 flex flex-wrap gap-3 text-xs text-[color:var(--text-500)]">
+                                <span className="flex items-center gap-1">
+                                  <Gauge className="h-3.5 w-3.5" />
+                                  置信度 {Math.round((bid.confidenceScore ?? 0.5) * 100)}%
+                                </span>
+                                {bid.estimatedHours !== null && bid.estimatedHours !== undefined && (
+                                  <span className="flex items-center gap-1">
+                                    <Hourglass className="h-3.5 w-3.5" />
+                                    预估 {bid.estimatedHours} 小时
+                                  </span>
+                                )}
+                                {bid.riskNotes && <span className="text-[color:var(--state-warning)]">风险：{bid.riskNotes}</span>}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setExpandedBidId((cur) => (cur === bid.id ? null : bid.id))}
+                                className="mt-2 min-h-11 rounded-lg px-1 text-xs font-semibold text-[color:var(--brand-600)] hover:text-[color:var(--brand-700)]"
+                              >
+                                {expandedBidId === bid.id ? '收起报价依据' : '查看报价依据'}
+                              </button>
+                            </div>
+                            <div className="flex shrink-0 items-center justify-between gap-4 md:min-w-[150px] md:flex-col md:items-end">
+                              <div className="text-2xl font-bold text-[color:var(--text-900)]">¥{bid.priceCny.toLocaleString('zh-CN')}</div>
+                              {canSelectBid && (
+                                <button
+                                  onClick={() => handleSelectBid(bid.id)}
+                                  disabled={selectingBidId === bid.id || !canSelectThisBid}
+                                  className="btn-cs btn-primary disabled:cursor-not-allowed disabled:opacity-50 md:w-full"
+                                >
+                                  {selectingBidId === bid.id ? <Loader2 className="h-4 w-4 animate-spin" /> : canSelectThisBid ? '选择该报价' : '不可选择'}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          {expandedBidId === bid.id && (
+                            <div className="mt-4">
+                              <BidDetailPanel bid={bid} />
+                            </div>
+                          )}
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            )}
+          </div>
+        </section>
+
+        <aside className="self-start rounded-2xl border border-[color:var(--border)] bg-white px-5 py-6 md:px-6 lg:sticky lg:top-20">
+          <section>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium text-[color:var(--text-500)]">最高预算</p>
+                <p className="mt-1 text-3xl font-bold tracking-tight text-[color:var(--text-900)]">
+                  ¥{(task.budgetCny ?? 0).toLocaleString('zh-CN')}
+                </p>
+              </div>
+              <span className={`inline-flex min-h-7 items-center gap-1 rounded-full px-2.5 text-xs font-semibold ${
+                order?.status === 'COMPLETED'
+                  ? 'bg-[color:var(--state-success-surface)] text-[color:var(--state-success-text)]'
+                  : 'bg-[color:var(--brand-50)] text-[color:var(--brand-700)]'
+              }`}>
+                {order?.status === 'COMPLETED' && <CheckCircle2 className="h-3.5 w-3.5" />}
+                {taskStatusLabel}
+              </span>
+            </div>
+            <dl className="mt-5 divide-y divide-[color:var(--border)] border-y border-[color:var(--border)] text-sm">
+              <div className="flex items-center justify-between gap-4 py-3.5">
+                <dt className="text-[color:var(--text-500)]">任务方</dt>
+                <dd className="min-w-0 truncate text-right font-semibold text-[color:var(--text-700)]">
+                  {task.client?.phone || task.client?.id?.slice(0, 8) || '未知'}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4 py-3.5">
+                <dt className="text-[color:var(--text-500)]">期望交付</dt>
+                <dd className="text-right font-semibold text-[color:var(--text-700)]">
+                  {formatShanghaiDateTime(task.expectedDeliveryAt)}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4 py-3.5">
+                <dt className="text-[color:var(--text-500)]">收到报价</dt>
+                <dd className="font-semibold text-[color:var(--text-700)]">{bids.length} 个</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="pt-6">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Package className="h-5 w-5 text-[color:var(--brand-500)]" />
+                <h2 className="text-base font-bold text-[color:var(--text-900)]">关联订单</h2>
+              </div>
+              {order && (() => {
+                const statusView = orderStatusView(order.status);
+                return (
+                  <span className={`inline-flex min-h-7 items-center gap-1 rounded-full px-2.5 text-xs font-semibold ${statusView.badge}`}>
+                    {statusView.icon}
+                    {statusView.label}
+                  </span>
+                );
+              })()}
+            </div>
+
+            {order ? (
+              <>
+                <dl className="mt-4 divide-y divide-[color:var(--border)] text-sm">
+                  <div className="py-3">
+                    <dt className="text-xs text-[color:var(--text-500)]">订单编号</dt>
+                    <dd className="mt-1 truncate font-mono text-xs text-[color:var(--text-700)]">{order.id}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 py-3">
+                    <dt className="text-[color:var(--text-500)]">成交价格</dt>
+                    <dd className="font-bold text-[color:var(--text-900)]">¥{order.amountCny.toLocaleString('zh-CN')}</dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 py-3">
+                    <dt className="text-[color:var(--text-500)]">执行智能体</dt>
+                    <dd className="min-w-0 truncate text-right font-semibold text-[color:var(--text-700)]">
+                      {order.bid?.agent?.name || '未知'}
+                    </dd>
+                  </div>
+                  {order.acceptedAt && (
+                    <div className="flex items-center justify-between gap-4 py-3">
+                      <dt className="text-[color:var(--text-500)]">完成时间</dt>
+                      <dd className="text-right font-semibold text-[color:var(--text-700)]">
+                        {formatShanghaiDateTime(order.acceptedAt)}
+                      </dd>
                     </div>
                   )}
-                </div>
+                </dl>
 
-                <div className="flex flex-col items-end min-w-[150px]">
-                  <div className="text-2xl font-bold text-white mb-3">¥{bid.priceCny}</div>
-                  {canSelectBid && (
-                    <button
-                      onClick={() => handleSelectBid(bid.id)}
-                      disabled={selectingBidId === bid.id || !canSelectThisBid}
-                      className="w-full px-4 py-2 bg-green-500 text-black font-bold rounded hover:bg-green-400 transition-colors disabled:opacity-50 flex justify-center items-center"
-                    >
-                      {selectingBidId === bid.id ? <Loader2 className="w-4 h-4 animate-spin" /> : canSelectThisBid ? '选择该报价' : '不可选择'}
-                    </button>
-                  )}
-                </div>
-              </div>
-                );
-              })()
-            ))}
-          </div>
-        )}
+                {order.deliveryUrl && (
+                  <a
+                    href={order.deliveryUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 flex min-h-11 items-center gap-2 text-sm font-medium text-[color:var(--brand-600)] hover:text-[color:var(--brand-700)]"
+                  >
+                    <ExternalLink className="h-4 w-4 flex-shrink-0" />
+                    <span className="truncate">查看交付物</span>
+                  </a>
+                )}
+
+                <Link to={`/orders/${order.id}?taskId=${task.id}`} className="btn-cs btn-primary mt-5 w-full">
+                  {order.status === 'PENDING_PAYMENT'
+                    ? '进入订单并支付'
+                    : order.status === 'DELIVERED'
+                      ? '进入订单并验收'
+                      : '查看订单详情'}
+                </Link>
+              </>
+            ) : (
+              <p className="mt-3 text-sm leading-6 text-[color:var(--text-500)]">
+                任务尚未选定执行智能体，选标后将在这里生成并展示关联订单。
+              </p>
+            )}
+          </section>
+        </aside>
       </div>
-      )}
     </div>
   );
 }

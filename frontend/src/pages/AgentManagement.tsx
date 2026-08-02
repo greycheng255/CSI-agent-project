@@ -1,11 +1,12 @@
 ﻿import { useCallback, useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
-import { Bot, Plus, Activity, Settings, ExternalLink, Code2, Terminal, DollarSign, RefreshCw } from 'lucide-react';
+import { Bot, Plus, Activity, Settings, ExternalLink, Code2, Terminal, DollarSign, RefreshCw, Loader2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_BASE } from '../config/api';
 import { CreateAgentForm } from '../components/agents/CreateAgentForm';
 import { AgentStatusBadge } from '../components/agents/AgentStatusBadge';
 import { disableAgent, enableAgent } from '../api/agentsApi';
+import { WorkbenchPageHeader } from '../components/workbench/WorkbenchPrimitives';
 
 type AgentStatus = 'ONLINE' | 'OFFLINE';
 
@@ -338,7 +339,7 @@ export default function AgentManagement() {
       return;
     }
     fetchAgents();
-  }, [fetchAgents, navigate, user]);
+  }, [admin, fetchAgents, navigate, user]);
   const openBidModal = async (agent: Agent) => {
     setBidAgent(agent);
     setShowBid(true);
@@ -408,19 +409,16 @@ export default function AgentManagement() {
     }
   };
 
-  if (loading) return <div className="text-center py-20 text-gray-500">读取数据中...</div>;
+  if (loading) return <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white text-sm text-[var(--text-500)]"><Loader2 className="mr-3 h-5 w-5 animate-spin text-[var(--brand-500)]" />正在读取 Agent 数据...</div>;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center space-x-2">
-            <Bot className="text-purple-500 w-6 h-6" />
-            <span>Agent 管理</span>
-          </h1>
-          <p className="text-gray-500 mt-2 text-sm">在这里注册并管理您的 AI Agent，让它们接入平台自动接单赚取法币。</p>
-        </div>
-        <div className="flex space-x-4">
+    <div className="mx-auto w-full max-w-[1440px] space-y-6">
+      <WorkbenchPageHeader
+        icon={Bot}
+        eyebrow="我的 Agent"
+        title="Agent 管理"
+        description="统一查看 Agent 的审核、运行与执行连接状态，并管理外部 Agent 的接入配置。"
+        actions={<>
           <button 
             type="button"
             onClick={() => {
@@ -428,7 +426,7 @@ export default function AgentManagement() {
               setShowApiGuide(!showApiGuide);
               setShowCreate(false);
             }}
-            className="px-4 py-2 border border-purple-500/50 text-purple-400 font-bold rounded hover:bg-purple-500/10 transition-colors flex items-center space-x-2 text-sm"
+            className="btn-cs btn-ghost-dark btn-sm"
           >
             <Code2 className="w-4 h-4" />
             <span>集群 API 接入指南</span>
@@ -439,31 +437,32 @@ export default function AgentManagement() {
               setShowCreate(!showCreate);
               setShowApiGuide(false);
             }}
-            className="px-4 py-2 bg-purple-500 text-black font-bold rounded hover:bg-purple-400 transition-colors flex items-center space-x-2 text-sm"
+            className="btn-cs btn-primary btn-sm"
           >
             <Plus className="w-4 h-4" />
             <span>注册外部 Agent</span>
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {showBid && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="w-full max-w-2xl border border-gray-800 bg-[#0a0a0a] rounded-xl p-6">
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/35 px-4" role="dialog" aria-modal="true" aria-labelledby="agent-bid-dialog-title">
+          <div className="w-full max-w-2xl rounded-2xl border border-[color:var(--border)] bg-white p-6">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
-                <h2 className="text-lg font-bold text-gray-200 flex items-center gap-2">
-                  <DollarSign className="w-5 h-5 text-green-500" />
+                <h2 id="agent-bid-dialog-title" className="flex items-center gap-2 text-lg font-semibold text-[var(--text-900)]">
+                  <DollarSign className="h-5 w-5 text-[var(--brand-500)]" />
                   为 Agent 报价
                 </h2>
-                <p className="text-xs text-gray-500 mt-1">
-                  Agent：<span className="text-gray-300">{bidAgent?.name}</span>
+                <p className="mt-1 text-xs text-[var(--text-500)]">
+                  Agent：<span className="text-[var(--text-700)]">{bidAgent?.name}</span>
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowBid(false)}
-                className="text-gray-500 hover:text-gray-300 transition-colors text-sm"
+                aria-label="关闭 Agent 报价弹窗"
+                className="text-sm text-[var(--text-500)] transition-colors hover:text-[var(--text-800)]"
               >
                 关闭
               </button>
@@ -471,11 +470,11 @@ export default function AgentManagement() {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm text-gray-400 mb-1">选择任务（OPEN）</label>
+                <label className="mb-1 block text-sm text-[var(--text-600)]">选择任务（OPEN）</label>
                 <select
                   value={selectedTaskId}
                   onChange={(e) => setSelectedTaskId(e.target.value)}
-                  className="w-full bg-black border border-gray-700 rounded px-3 py-2 focus:border-green-500 outline-none text-sm text-gray-200"
+                  className="field-input"
                 >
                   {loadingTasks ? (
                     <option value="">读取任务中...</option>
@@ -493,13 +492,13 @@ export default function AgentManagement() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-400 mb-1">报价金额（CNY）</label>
+                  <label className="mb-1 block text-sm text-[var(--text-600)]">报价金额（CNY）</label>
                   <input
                     value={priceCny}
                     onChange={(e) => setPriceCny(e.target.value)}
                     placeholder="160"
                     inputMode="numeric"
-                    className="w-full bg-black border border-gray-700 rounded px-3 py-2 focus:border-green-500 outline-none text-sm text-gray-200"
+                    className="field-input"
                   />
                 </div>
                 <div className="flex items-end justify-end gap-3">
@@ -510,7 +509,7 @@ export default function AgentManagement() {
                       const budget = t?.budgetCny ?? 0;
                       setPriceCny(budget > 0 ? String(Math.floor(budget * 0.8)) : priceCny);
                     }}
-                    className="px-3 py-2 border border-gray-700 text-gray-300 rounded hover:border-gray-500 transition-colors text-sm"
+                    className="min-h-10 rounded-full border border-[color:var(--border)] px-3 text-sm font-medium text-[var(--text-600)] hover:border-[var(--brand-300)] hover:text-[var(--brand-600)]"
                   >
                     设为 80%
                   </button>
@@ -521,7 +520,7 @@ export default function AgentManagement() {
                       const budget = t?.budgetCny ?? 0;
                       setPriceCny(budget > 0 ? String(Math.floor(budget * 0.6)) : priceCny);
                     }}
-                    className="px-3 py-2 border border-gray-700 text-gray-300 rounded hover:border-gray-500 transition-colors text-sm"
+                    className="min-h-10 rounded-full border border-[color:var(--border)] px-3 text-sm font-medium text-[var(--text-600)] hover:border-[var(--brand-300)] hover:text-[var(--brand-600)]"
                   >
                     设为 60%
                   </button>
@@ -529,12 +528,12 @@ export default function AgentManagement() {
               </div>
 
               <div>
-                <label className="block text-sm text-gray-400 mb-1">方案摘要</label>
+                <label className="mb-1 block text-sm text-[var(--text-600)]">方案摘要</label>
                 <textarea
                   rows={4}
                   value={planSummary}
                   onChange={(e) => setPlanSummary(e.target.value)}
-                  className="w-full bg-black border border-gray-700 rounded px-3 py-2 focus:border-green-500 outline-none text-sm text-gray-200 font-mono"
+                  className="field-input min-h-28 font-mono"
                 />
               </div>
 
@@ -542,7 +541,7 @@ export default function AgentManagement() {
                 <button
                   type="button"
                   onClick={() => setShowBid(false)}
-                  className="px-4 py-2 text-gray-400 hover:text-white text-sm"
+                  className="min-h-10 px-4 text-sm font-medium text-[var(--text-500)] hover:text-[var(--text-800)]"
                 >
                   取消
                 </button>
@@ -550,7 +549,7 @@ export default function AgentManagement() {
                   type="button"
                   onClick={handleSubmitBid}
                   disabled={submittingBid || !bidAgent?.id}
-                  className="px-6 py-2 bg-green-500 text-black font-bold rounded hover:bg-green-400 text-sm disabled:opacity-50"
+                  className="btn-cs btn-primary btn-sm disabled:opacity-50"
                 >
                   {submittingBid ? '提交中...' : '提交报价'}
                 </button>
@@ -561,14 +560,14 @@ export default function AgentManagement() {
       )}
 
       {showApiGuide && (
-        <div className="border border-blue-900/50 bg-blue-900/10 rounded-xl p-6 mb-8 font-mono w-full block">
-          <h2 className="text-lg font-bold text-blue-400 mb-4 flex items-center">
+        <section className="w-full rounded-2xl border border-[var(--brand-200)] bg-[var(--brand-50)] p-6 font-mono">
+          <h2 className="mb-4 flex items-center text-lg font-semibold text-[var(--brand-700)]">
             <Terminal className="w-5 h-5 mr-2" /> 集群 API 接入指南 (Openclaw 适用)
           </h2>
 
-          <div className="mb-6 p-4 bg-black/50 rounded-lg border border-gray-800">
-            <h3 className="text-sm font-bold text-gray-300 mb-2">当前集群架构</h3>
-            <ul className="text-xs text-gray-400 space-y-1">
+          <div className="mb-6 rounded-xl border border-[var(--brand-100)] bg-white p-4">
+            <h3 className="mb-2 text-sm font-semibold text-[var(--text-800)]">当前集群架构</h3>
+            <ul className="space-y-1 text-xs text-[var(--text-600)]">
               <li>• Openclaw 集群 Namespace: <span className="text-blue-400">openclaw-cloud</span></li>
               <li>• Genesis 集群 Namespace: <span className="text-blue-400">genesis</span></li>
               <li>• Genesis API (集群内): <span className="text-green-400">http://genesis-backend.genesis.svc.cluster.local:4000</span></li>
@@ -577,8 +576,8 @@ export default function AgentManagement() {
           </div>
 
           <div className="mb-6">
-            <h3 className="text-sm font-bold text-gray-300 mb-2">步骤 1：获取 OWNER_TOKEN</h3>
-            <div className="bg-black p-4 rounded-lg border border-gray-800 text-sm text-gray-300 overflow-x-auto">
+            <h3 className="mb-2 text-sm font-semibold text-[var(--text-800)]">步骤 1：获取 OWNER_TOKEN</h3>
+            <div className="overflow-x-auto rounded-xl border border-[color:var(--border)] bg-white p-4 text-sm text-[var(--text-700)]">
               <pre>
 {`# 使用开发者账号登录获取 Token
 curl -X POST http://122.51.51.177:30001/api/v1/users/login \\
@@ -586,14 +585,14 @@ curl -X POST http://122.51.51.177:30001/api/v1/users/login \\
   -d '{"phone": "你的手机号", "password": "你的密码"}'`}
               </pre>
             </div>
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="mt-2 text-xs text-[var(--text-500)]">
               * 从响应中提取 token 字段作为 OWNER_TOKEN
             </p>
           </div>
 
           <div className="mb-6">
-            <h3 className="text-sm font-bold text-gray-300 mb-2">步骤 2：在 Openclaw Pod 内注册 Agent</h3>
-            <div className="bg-black p-4 rounded-lg border border-gray-800 text-sm text-gray-300 overflow-x-auto">
+            <h3 className="mb-2 text-sm font-semibold text-[var(--text-800)]">步骤 2：在 Openclaw Pod 内注册 Agent</h3>
+            <div className="overflow-x-auto rounded-xl border border-[color:var(--border)] bg-white p-4 text-sm text-[var(--text-700)]">
               <pre>
 {`# 进入 Openclaw Pod
 kubectl exec -n openclaw-cloud -it openclaw-oc-grey-6e28-7fd8bc7659-5g6gt -- sh
@@ -617,8 +616,8 @@ curl -X POST http://genesis-backend.genesis.svc.cluster.local:4000/api/v1/owner/
           </div>
 
           <div>
-            <h3 className="text-sm font-bold text-gray-300 mb-2">选项：使用 Kubernetes Job 自动注册</h3>
-            <div className="bg-black p-4 rounded-lg border border-gray-800 text-sm text-gray-300 overflow-x-auto">
+            <h3 className="mb-2 text-sm font-semibold text-[var(--text-800)]">选项：使用 Kubernetes Job 自动注册</h3>
+            <div className="overflow-x-auto rounded-xl border border-[color:var(--border)] bg-white p-4 text-sm text-[var(--text-700)]">
               <pre>
 {`apiVersion: batch/v1
 kind: Job
@@ -653,20 +652,20 @@ spec:
             </div>
           </div>
 
-          <div className="mt-6 p-4 bg-yellow-900/10 border border-yellow-700/30 rounded-lg">
-            <h3 className="text-sm font-bold text-yellow-400 mb-2">关键配置</h3>
-            <ul className="text-xs text-gray-400 space-y-1">
-              <li>• 开发者账号: <span className="text-gray-300">注册时选择"我是开发者"即可</span></li>
-              <li>• Webhook 端口: <span className="text-gray-300">8080</span></li>
-              <li>• 所需角色: <span className="text-gray-300">OWNER (开发者)</span></li>
+          <div className="mt-6 rounded-xl border border-[#f3d79a] bg-[var(--state-warning-surface)] p-4">
+            <h3 className="mb-2 text-sm font-semibold text-[var(--state-warning)]">关键配置</h3>
+            <ul className="space-y-1 text-xs text-[var(--text-600)]">
+              <li>• 开发者账号: <span className="text-[var(--text-800)]">注册时选择"我是开发者"即可</span></li>
+              <li>• Webhook 端口: <span className="text-[var(--text-800)]">8080</span></li>
+              <li>• 所需角色: <span className="text-[var(--text-800)]">OWNER (开发者)</span></li>
             </ul>
           </div>
 
-          <p className="text-xs text-gray-500 mt-4 border-t border-gray-800 pt-4">
+          <p className="mt-4 border-t border-[var(--brand-100)] pt-4 text-xs text-[var(--text-500)]">
             * 注册成功后，Genesis 网络会主动将平台上的新需求推送到您配置的 webhookUrl。
             * 完整文档请参考: <span className="text-blue-400">OPENCLAW_INTEGRATION.md</span>
           </p>
-        </div>
+        </section>
       )}
 
       {showCreate && (
@@ -680,28 +679,28 @@ spec:
         />
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {agents.length === 0 && !showCreate && (
-          <div className="col-span-2 border border-gray-800 border-dashed rounded-xl p-12 text-center text-gray-500">
-            您还没有注册任何 Agent。
+          <div className="col-span-2 rounded-2xl border border-dashed border-[color:var(--border)] bg-white p-12 text-center text-sm text-[var(--text-500)]">
+            暂无 Agent。注册外部 Agent 后，可在这里查看审核、运行和接单状态。
           </div>
         )}
         
         {agents.map((agent) => (
-          <div key={agent.id} className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-5 hover:border-purple-500/30 transition-colors">
+          <article key={agent.id} className="rounded-2xl border border-[color:var(--border)] bg-white p-5 transition-colors hover:border-[var(--brand-300)]">
             <div className="flex justify-between items-start gap-3 mb-4">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center border border-purple-500/30 shrink-0">
-                  <Bot className="w-6 h-6 text-purple-400" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-50)]">
+                  <Bot className="h-5 w-5 text-[var(--brand-600)]" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-bold text-gray-200 truncate" title={agent.name}>{agent.name}</h3>
-                  <span className="text-xs font-mono text-gray-500">ID: {agent.id.slice(0,8)}</span>
+                  <h3 className="truncate font-semibold text-[var(--text-900)]" title={agent.name}>{agent.name}</h3>
+                  <span className="font-mono text-xs text-[var(--text-400)]">ID: {agent.id.slice(0,8)}</span>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 flex-wrap shrink-0">
-                <div className="flex items-center gap-1 rounded border border-gray-800 bg-gray-900/60 px-2 py-1">
-                  <span className="text-xs text-gray-500">审核</span>
+                <div className="flex items-center gap-1 rounded-lg border border-[color:var(--border)] bg-[var(--background-100)] px-2 py-1">
+                  <span className="text-xs text-[var(--text-500)]">审核</span>
                   <span
                     title={
                       agent.approvalStatus === 'approved'
@@ -721,17 +720,17 @@ spec:
                 <div
                   className={`flex items-center gap-1 rounded border px-2 py-1 ${
                     agent.isActive === false
-                      ? 'border-gray-700 bg-gray-900/80'
-                      : 'border-green-500/30 bg-green-500/10'
+                      ? 'border-[color:var(--border)] bg-[var(--background-100)]'
+                      : 'border-[#bde9c9] bg-[var(--state-success-surface)]'
                   }`}
                   title={agent.isActive === false ? '当前已停止接单，不会出现在智能体广场' : '当前已启动，可被平台发现和接单'}
                 >
-                  <span className="text-xs text-gray-500">启动状态</span>
+                  <span className="text-xs text-[var(--text-500)]">启动状态</span>
                   <span
                     className={`rounded border px-2 py-0.5 text-xs ${
                       agent.isActive === false
-                        ? 'border-gray-600 bg-gray-800 text-gray-300'
-                        : 'border-green-500/30 bg-green-500/10 text-green-300'
+                        ? 'border-[color:var(--border)] bg-white text-[var(--text-600)]'
+                        : 'border-[#bde9c9] bg-white text-[var(--state-success-text)]'
                     }`}
                   >
                     {agent.isActive === false ? '已停止' : '已启动'}
@@ -741,7 +740,7 @@ spec:
                   <button
                     onClick={() => toggleAgentActive(agent)}
                     disabled={togglingAgent === agent.id}
-                    className="flex items-center gap-1 px-2 py-1 rounded border text-xs border-red-500/40 text-red-300 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1 rounded-lg border border-[#ffc6c1] px-2 py-1 text-xs text-[var(--state-error)] transition-colors hover:bg-[var(--state-error-surface)] disabled:opacity-50"
                     title="下线后不再出现在智能体广场"
                   >
                     {togglingAgent === agent.id ? '处理中' : '停止'}
@@ -753,7 +752,7 @@ spec:
                       togglingAgent === agent.id ||
                       (!isSystemDefaultAgent(agent) && agent.approvalStatus !== 'approved')
                     }
-                    className="flex items-center gap-1 px-2 py-1 rounded border text-xs border-green-500/40 text-green-300 hover:bg-green-500/10 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1 rounded-lg border border-[#bde9c9] px-2 py-1 text-xs text-[var(--state-success-text)] transition-colors hover:bg-[var(--state-success-surface)] disabled:opacity-50"
                     title={
                       !isSystemDefaultAgent(agent) && agent.approvalStatus !== 'approved'
                         ? '审核通过后才能启动展示'
@@ -774,14 +773,14 @@ spec:
               <button
                 onClick={() => performHealthCheck(agent.id)}
                 disabled={healthCheckingAgent === agent.id}
-                className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-blue-500/10 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1 rounded-lg bg-[var(--brand-50)] px-2 py-1 text-xs text-[var(--brand-700)] transition-colors hover:bg-[var(--brand-100)] disabled:opacity-50"
                 title="立即检查 Agent 心跳、执行端配置，并刷新健康检查结果"
               >
                 <Activity className={`w-3 h-3 ${healthCheckingAgent === agent.id ? 'animate-pulse' : ''}`} />
                 <span>健康检查</span>
               </button>
-              <div className="flex items-center gap-1 rounded border border-gray-800 bg-gray-900/60 px-2 py-1">
-                <span className="text-xs text-gray-500">运行</span>
+              <div className="flex items-center gap-1 rounded-lg border border-[color:var(--border)] bg-[var(--background-100)] px-2 py-1">
+                <span className="text-xs text-[var(--text-500)]">运行</span>
                 <span
                   title={
                     (agent.runtimeStatus || agent.status?.toLowerCase()) === 'online'
@@ -799,7 +798,7 @@ spec:
               <button
                 onClick={() => refreshAgentStatus(agent.id)}
                 disabled={refreshingAgent === agent.id}
-                className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-gray-800/50 text-gray-400 hover:text-purple-400 hover:bg-purple-500/10 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1 rounded-lg bg-[var(--background-100)] px-2 py-1 text-xs text-[var(--text-600)] transition-colors hover:text-[var(--brand-600)] disabled:opacity-50"
                 title="刷新状态"
               >
                 <RefreshCw className={`w-3 h-3 ${refreshingAgent === agent.id ? 'animate-spin' : ''}`} />
@@ -814,12 +813,12 @@ spec:
                 </div>
               )}
               {agent.owner?.phone && (
-                <div className="text-xs text-gray-400 flex items-center">
-                  <span className="text-gray-500">Owner: {agent.owner.phone}</span>
+                <div className="flex items-center text-xs text-[var(--text-500)]">
+                  <span>Owner: {agent.owner.phone}</span>
                 </div>
               )}
               {!isSystemDefaultAgent(agent) && agent.webhookUrl && (
-                <div className="text-xs text-gray-400 flex items-center">
+                <div className="flex items-center text-xs text-[var(--text-500)]">
                   <ExternalLink className="w-3 h-3 mr-1" />
                   <span className="truncate">{agent.webhookUrl}</span>
                 </div>
@@ -827,8 +826,8 @@ spec:
               
               {/* 执行端状态 */}
               <div className="flex items-center gap-2 pt-1">
-                <span className="text-xs text-gray-500">执行端:</span>
-                <span className="text-xs text-cyan-300">
+                <span className="text-xs text-[var(--text-500)]">执行端:</span>
+                <span className="text-xs text-[var(--brand-600)]">
                   {getExecutionDisplay(agent, healthStatusMap[agent.id]).endpointLabel}
                 </span>
                 <span
@@ -837,53 +836,53 @@ spec:
                 >
                   {getExecutionDisplay(agent, healthStatusMap[agent.id]).statusLabel}
                 </span>
-                <span className="text-xs text-gray-600 truncate" title={getExecutionDisplay(agent, healthStatusMap[agent.id]).detail}>
+                <span className="truncate text-xs text-[var(--text-400)]" title={getExecutionDisplay(agent, healthStatusMap[agent.id]).detail}>
                   {getExecutionDisplay(agent, healthStatusMap[agent.id]).detail}
                 </span>
               </div>
               
               {/* 健康检查结果 */}
               {healthStatusMap[agent.id] && (
-                <div className="mt-2 p-2 bg-gray-900/50 rounded border border-gray-800">
-                  <div className="text-xs text-gray-500 mb-1">健康检查详情:</div>
+                <div className="mt-2 rounded-xl bg-[var(--background-100)] p-3">
+                  <div className="mb-1 text-xs text-[var(--text-500)]">健康检查详情:</div>
                   <div className="grid grid-cols-2 gap-1 text-xs">
-                    <div className={`flex items-center gap-1 ${healthStatusMap[agent.id].checks?.heartbeatValid ? 'text-green-400' : 'text-red-400'}`}>
+                    <div className={`flex items-center gap-1 ${healthStatusMap[agent.id].checks?.heartbeatValid ? 'text-[var(--state-success-text)]' : 'text-[var(--state-error)]'}`}>
                       <span>{healthStatusMap[agent.id].checks?.heartbeatValid ? '✓' : '✗'}</span>
                       <span>心跳正常</span>
                     </div>
-                    <div className={`flex items-center gap-1 ${getExecutionCheckPassed(agent, healthStatusMap[agent.id]) ? 'text-green-400' : 'text-red-400'}`}>
+                    <div className={`flex items-center gap-1 ${getExecutionCheckPassed(agent, healthStatusMap[agent.id]) ? 'text-[var(--state-success-text)]' : 'text-[var(--state-error)]'}`}>
                       <span>{getExecutionCheckPassed(agent, healthStatusMap[agent.id]) ? '✓' : '✗'}</span>
                       <span>{getExecutionCheckLabel(agent)}</span>
                     </div>
                   </div>
                   {healthStatusMap[agent.id].errors && healthStatusMap[agent.id].errors!.length > 0 && (
-                    <div className="mt-1 text-xs text-red-400">
+                    <div className="mt-1 text-xs text-[var(--state-error)]">
                       {healthStatusMap[agent.id].errors![0]}
                     </div>
                   )}
                   {healthStatusMap[agent.id].lastHealthCheckAt && (
-                    <div className="mt-1 text-xs text-gray-600">
+                    <div className="mt-1 text-xs text-[var(--text-400)]">
                       检查时间: {new Date(healthStatusMap[agent.id].lastHealthCheckAt!).toLocaleString()}
                     </div>
                   )}
                 </div>
               )}
               
-              <p className="text-sm text-gray-500 line-clamp-2">{agent.description}</p>
+              <p className="line-clamp-2 text-sm leading-6 text-[var(--text-500)]">{agent.description}</p>
               <div className="flex flex-wrap gap-2 pt-1">
                 <AgentStatusBadge type="agentType" value={getDisplayAgentType(agent)} />
                 {isSystemDefaultAgent(agent) && (
                   <>
-                    <span className="px-2 py-1 bg-purple-500/10 rounded text-xs text-purple-300">
+                    <span className="rounded-lg bg-[#f1f0ff] px-2 py-1 text-xs text-[#514fc4]">
                       系统创建
                     </span>
-                    <span className="px-2 py-1 bg-blue-500/10 rounded text-xs text-blue-300">
+                    <span className="rounded-lg bg-[var(--brand-50)] px-2 py-1 text-xs text-[var(--brand-700)]">
                       平台 Runtime
                     </span>
                   </>
                 )}
                 {agent.basePrice != null && (
-                  <span className="px-2 py-1 bg-gray-800/50 rounded text-xs text-gray-300">
+                  <span className="rounded-lg bg-[var(--background-100)] px-2 py-1 text-xs text-[var(--text-600)]">
                     {agent.currency || 'CNY'} {agent.basePrice}
                   </span>
                 )}
@@ -893,7 +892,7 @@ spec:
                   {agent.skills.slice(0, 8).map((s) => (
                     <span
                       key={s}
-                      className="px-2 py-1 bg-gray-800/50 rounded text-xs text-gray-300"
+                      className="rounded-lg bg-[var(--background-100)] px-2 py-1 text-xs text-[var(--text-600)]"
                     >
                       {s}
                     </span>
@@ -902,35 +901,35 @@ spec:
               )}
             </div>
 
-            <div className="flex border-t border-gray-800 pt-4">
+            <div className="flex border-t border-[color:var(--border)] pt-4">
               <button
                 type="button"
                 onClick={() => openBidModal(agent)}
-                className="flex-1 flex justify-center items-center space-x-1 text-sm text-gray-400 hover:text-green-400 transition-colors"
+                className="flex flex-1 items-center justify-center gap-1 text-sm font-medium text-[var(--text-500)] transition-colors hover:text-[var(--brand-600)]"
               >
                 <DollarSign className="w-4 h-4" />
                 <span>报价</span>
               </button>
-              <div className="w-px bg-gray-800"></div>
+              <div className="w-px bg-[var(--border)]"></div>
               <Link
                 to={`/owner/agents/${agent.id}`}
-                className="flex-1 flex justify-center items-center space-x-1 text-sm text-gray-400 hover:text-purple-400 transition-colors"
+                className="flex flex-1 items-center justify-center gap-1 text-sm font-medium text-[var(--text-500)] transition-colors hover:text-[var(--brand-600)]"
               >
                 <Settings className="w-4 h-4" />
                 <span>控制台</span>
               </Link>
-              <div className="w-px bg-gray-800"></div>
+              <div className="w-px bg-[var(--border)]"></div>
               <Link
                 to="/orders/claimed"
-                className="flex-1 flex justify-center items-center space-x-1 text-sm text-gray-400 hover:text-green-400 transition-colors"
+                className="flex flex-1 items-center justify-center gap-1 text-sm font-medium text-[var(--text-500)] transition-colors hover:text-[var(--brand-600)]"
               >
                 <Activity className="w-4 h-4" />
                 <span>接单记录</span>
               </Link>
             </div>
-          </div>
+          </article>
         ))}
-      </div>
+      </section>
     </div>
   );
 }

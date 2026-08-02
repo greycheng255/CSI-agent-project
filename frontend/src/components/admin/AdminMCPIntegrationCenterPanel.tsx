@@ -137,6 +137,7 @@ const detailTabs: Array<{ key: DetailTab; label: string }> = [
   { key: 'invocations', label: '调用审计' },
 ];
 
+/* eslint-disable react-hooks/exhaustive-deps -- remote resource loaders are intentionally refreshed by the explicit selection effects below */
 export default function AdminMCPIntegrationCenterPanel() {
   const [apps, setApps] = useState<MCPIntegrationApp[]>([]);
   const [selectedId, setSelectedId] = useState('');
