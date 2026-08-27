@@ -11,6 +11,11 @@ import { User, KycStatus } from './entities/user.entity';
 import { AuthService } from '../auth/auth.service';
 import { AgentsService } from '../agents/agents.service';
 import { hashSync, compareSync } from 'bcryptjs';
+import { randomBytes } from 'crypto';
+import {
+  SmsVerificationService,
+  type SmsVerificationScene,
+} from './sms-verification.service';
 
 type AuthDto = {
   phone: string;
@@ -21,7 +26,13 @@ type AuthDto = {
 type RegisterDto = {
   phone: string;
   password: string;
+  verificationCode: string;
   displayName?: string;
+};
+
+type SmsLoginDto = {
+  phone: string;
+  verificationCode: string;
 };
 
 @Injectable()
@@ -34,6 +45,7 @@ export class UsersService {
     private readonly authService: AuthService,
     @Inject(forwardRef(() => AgentsService))
     private readonly agentsService: AgentsService,
+    private readonly smsVerificationService: SmsVerificationService,
   ) {}
 
   private hashPassword(password: string): string {
@@ -74,6 +86,12 @@ export class UsersService {
       throw new UnauthorizedException('该手机号已注册');
     }
 
+    this.smsVerificationService.verifyCode(
+      data.phone,
+      'register',
+      data.verificationCode,
+    );
+
     // 创建新用户
     const user = this.usersRepository.create({
       phone: data.phone,
@@ -107,7 +125,7 @@ export class UsersService {
     }
 
     // 查找用户
-    let user = await this.usersRepository.findOne({
+    const user = await this.usersRepository.findOne({
       where: { phone: data.phone },
     });
 
@@ -127,6 +145,60 @@ export class UsersService {
     return {
       message: '登录成功',
       token,
+      user: {
+        id: user.id,
+        phone: user.phone,
+        displayName: user.displayName,
+        kycStatus: user.kycStatus,
+      },
+    };
+  }
+
+  async requestSmsCode(phone: string, scene: SmsVerificationScene) {
+    return this.smsVerificationService.requestCode(phone, scene);
+  }
+
+  /**
+   * 验证码登录。首次登录会自动创建用户，并使用不可猜测的随机密码占位。
+   */
+  async loginWithSms(data: SmsLoginDto) {
+    if (
+      typeof data.phone !== 'string' ||
+      typeof data.verificationCode !== 'string'
+    ) {
+      throw new UnauthorizedException('手机号和验证码不能为空');
+    }
+
+    this.smsVerificationService.verifyCode(
+      data.phone,
+      'login',
+      data.verificationCode,
+    );
+
+    let user = await this.usersRepository.findOne({
+      where: { phone: data.phone },
+    });
+    let isNewUser = false;
+
+    if (!user) {
+      user = this.usersRepository.create({
+        phone: data.phone,
+        passwordHash: this.hashPassword(randomBytes(32).toString('hex')),
+        displayName: `用户${data.phone.slice(-4)}`,
+        kycStatus: KycStatus.NONE,
+      });
+      await this.usersRepository.save(user);
+      isNewUser = true;
+      this.logger.log(`短信登录创建用户成功: ${user.id}`);
+    }
+
+    const token = await this.authService.issueUserToken(user);
+    await this.ensureDefaultAgent(user);
+
+    return {
+      message: isNewUser ? '登录并创建账号成功' : '登录成功',
+      token,
+      isNewUser,
       user: {
         id: user.id,
         phone: user.phone,

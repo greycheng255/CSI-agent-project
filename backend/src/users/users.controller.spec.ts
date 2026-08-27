@@ -9,6 +9,8 @@ describe('UsersController', () => {
   const mockUsersService = {
     register: jest.fn(),
     login: jest.fn(),
+    requestSmsCode: jest.fn(),
+    loginWithSms: jest.fn(),
     findById: jest.fn(),
     update: jest.fn(),
   };
