@@ -14,9 +14,6 @@ import { AgentsService } from './agents.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { AuthService } from '../auth/auth.service';
 import type { RequestWithUser } from '../auth/auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
-import { UserRole } from '../users/entities/user.entity';
 
 type CreateAgentDto = {
   name: string;
@@ -26,6 +23,10 @@ type CreateAgentDto = {
   podName?: string;
   externalId?: string;
   agentMode?: 'kubernetes' | 'external';
+};
+
+type RegisterExternalDto = {
+  cardUrl: string;
 };
 
 type UpdateSkillsBody = {
@@ -49,16 +50,32 @@ export class AgentsController {
     private readonly authService: AuthService,
   ) {}
 
+  /** 平台托管 Agent 注册 */
   @Post()
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @UseGuards(AuthGuard)
   create(@Body() body: CreateAgentDto, @Req() req: RequestWithUser) {
-    // 自动从 JWT 获取当前用户 ID 作为 ownerId
     const ownerId = req.user?.id;
     if (!ownerId) {
       throw new ForbiddenException('User ID not found in token');
     }
     return this.agentsService.create(body, ownerId);
+  }
+
+  /** 外部自托管 Agent 注册（通过 Agent Card URL），委托 AgentsService 处理完整流程 */
+  @Post('register-external')
+  @UseGuards(AuthGuard)
+  async registerExternal(@Body() body: RegisterExternalDto, @Req() req: RequestWithUser) {
+    const ownerId = req.user?.id;
+    if (!ownerId) {
+      throw new ForbiddenException('User ID not found in token');
+    }
+    if (!body.cardUrl || typeof body.cardUrl !== 'string') {
+      throw new BadRequestException('cardUrl is required');
+    }
+    return this.agentsService.registerExternal(
+      { name: '', cardUrl: body.cardUrl, agentMode: 'external' },
+      ownerId,
+    );
   }
 
   @Post('upsert')
@@ -154,8 +171,7 @@ export class AgentsController {
   }
 
   @Get(':id/api-keys')
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @UseGuards(AuthGuard)
   async listApiKeys(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Req() req: RequestWithUser,
@@ -164,7 +180,7 @@ export class AgentsController {
     if (!agent) {
       throw new BadRequestException('Agent not found');
     }
-    if (req.user?.role !== UserRole.ADMIN && agent.owner?.id !== req.user?.id) {
+    if (agent.owner?.id !== req.user?.id) {
       throw new ForbiddenException('Only the agent owner can manage api keys');
     }
     const keys = await this.agentsService.listApiKeys(id);
@@ -178,8 +194,7 @@ export class AgentsController {
   }
 
   @Post(':id/api-keys')
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @UseGuards(AuthGuard)
   async createApiKey(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() body: CreateApiKeyBody,
@@ -189,7 +204,7 @@ export class AgentsController {
     if (!agent) {
       throw new BadRequestException('Agent not found');
     }
-    if (req.user?.role !== UserRole.ADMIN && agent.owner?.id !== req.user?.id) {
+    if (agent.owner?.id !== req.user?.id) {
       throw new ForbiddenException('Only the agent owner can manage api keys');
     }
     const name = typeof body.name === 'string' ? body.name : undefined;
@@ -197,8 +212,7 @@ export class AgentsController {
   }
 
   @Post(':id/api-keys/:keyId/revoke')
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @UseGuards(AuthGuard)
   async revokeApiKey(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Param('keyId', new ParseUUIDPipe({ version: '4' })) keyId: string,
@@ -208,7 +222,7 @@ export class AgentsController {
     if (!agent) {
       throw new BadRequestException('Agent not found');
     }
-    if (req.user?.role !== UserRole.ADMIN && agent.owner?.id !== req.user?.id) {
+    if (agent.owner?.id !== req.user?.id) {
       throw new ForbiddenException('Only the agent owner can manage api keys');
     }
     return this.agentsService.revokeApiKey({ agentId: id, keyId });
@@ -265,8 +279,7 @@ export class AgentsController {
    * 更新 Agent 收款码（开发者设置自己的收款信息）
    */
   @Post(':id/payment')
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @UseGuards(AuthGuard)
   async updatePayment(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() body: UpdatePaymentBody,
@@ -276,7 +289,7 @@ export class AgentsController {
     if (!agent) {
       throw new BadRequestException('Agent not found');
     }
-    if (req.user?.role !== UserRole.ADMIN && agent.owner?.id !== req.user?.id) {
+    if (agent.owner?.id !== req.user?.id) {
       throw new ForbiddenException(
         'Only the agent owner can update payment info',
       );
@@ -292,8 +305,7 @@ export class AgentsController {
    * 获取 Agent 收款信息（管理员查看）
    */
   @Get(':id/payment')
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AuthGuard)
   async getPayment(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ) {
@@ -312,8 +324,7 @@ export class AgentsController {
    * 执行 Agent 健康检查（探测 Openclaw 关联状态）
    */
   @Post(':id/health-check')
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @UseGuards(AuthGuard)
   async healthCheck(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Req() req: RequestWithUser,
@@ -322,7 +333,7 @@ export class AgentsController {
     if (!agent) {
       throw new BadRequestException('Agent not found');
     }
-    if (req.user?.role !== UserRole.ADMIN && agent.owner?.id !== req.user?.id) {
+    if (agent.owner?.id !== req.user?.id) {
       throw new ForbiddenException(
         'Only the agent owner can perform health check',
       );
@@ -334,8 +345,7 @@ export class AgentsController {
    * 获取 Agent 健康状态
    */
   @Get(':id/health')
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @UseGuards(AuthGuard)
   async getHealthStatus(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Req() req: RequestWithUser,
@@ -344,7 +354,7 @@ export class AgentsController {
     if (!agent) {
       throw new BadRequestException('Agent not found');
     }
-    if (req.user?.role !== UserRole.ADMIN && agent.owner?.id !== req.user?.id) {
+    if (agent.owner?.id !== req.user?.id) {
       throw new ForbiddenException(
         'Only the agent owner can view health status',
       );
@@ -356,8 +366,7 @@ export class AgentsController {
    * 更新 Openclaw URL
    */
   @Post(':id/openclaw-url')
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @UseGuards(AuthGuard)
   async updateOpenclawUrl(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() body: { openclawUrl: string },
@@ -367,7 +376,7 @@ export class AgentsController {
     if (!agent) {
       throw new BadRequestException('Agent not found');
     }
-    if (req.user?.role !== UserRole.ADMIN && agent.owner?.id !== req.user?.id) {
+    if (agent.owner?.id !== req.user?.id) {
       throw new ForbiddenException(
         'Only the agent owner can update openclaw url',
       );
@@ -382,8 +391,7 @@ export class AgentsController {
    * 更新 Agent ID（管理员接口，用于同步 K8s Pod 标签）
    */
   @Post(':id/update-agent-id')
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(AuthGuard)
   async updateAgentId(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() body: { newId: string },

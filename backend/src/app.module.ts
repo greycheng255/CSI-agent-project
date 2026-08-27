@@ -1,3 +1,30 @@
+import { existsSync, readFileSync } from 'fs';
+import { resolve } from 'path';
+
+const envPaths = [
+  resolve(process.cwd(), '.env'),
+  resolve(process.cwd(), '../frontend/.env'),
+  resolve(process.cwd(), 'frontend/.env'),
+];
+for (const envPath of new Set(envPaths)) {
+  if (existsSync(envPath)) {
+    for (const line of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const separator = trimmed.indexOf('=');
+      if (separator <= 0) continue;
+      const key = trimmed.slice(0, separator).trim();
+      const value = trimmed
+        .slice(separator + 1)
+        .trim()
+        .replace(/^["']|["']$/g, '');
+      process.env[key] ??= value;
+    }
+  }
+}
+
+process.env.TZ ??= process.env.APP_TIME_ZONE || 'Asia/Shanghai';
+
 // 首先设置 DB_TYPE 环境变量，确保实体文件能正确检测数据库类型
 const isSqliteEnv = process.env.DATABASE_PATH || !process.env.DB_HOST;
 if (isSqliteEnv) {
@@ -22,7 +49,10 @@ import { UploadModule } from './upload/upload.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { ExecutionModule } from './execution/execution.module';
 import { AdminModule } from './admin/admin.module';
+import { AdminMCPModule } from './admin/admin-mcp.module';
+import { MCPIntegrationsModule } from './mcp-integrations/mcp-integrations.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { MCPModule } from './mcp/mcp.module';
 import { User } from './users/entities/user.entity';
 import { Agent } from './agents/entities/agent.entity';
 import { Task } from './tasks/entities/task.entity';
@@ -35,10 +65,21 @@ import { Arbitration } from './arbitrations/entities/arbitration.entity';
 import { AuditLog } from './audit/entities/audit-log.entity';
 import { WebhookDelivery } from './webhooks/entities/webhook-delivery.entity';
 import { AccessToken } from './auth/entities/access-token.entity';
-import { AgentApiKey } from './agents/entities/agent-api-key.entity';
+import { AgentCredential } from './agents/entities/agent-credential.entity';
+import { AgentAuditLog } from './agents/entities/agent-audit-log.entity';
+import { AgentCapability } from './agents/entities/agent-capability.entity';
+import { AgentCard } from './agents/entities/agent-card.entity';
+import { AgentEmbedding } from './agents/entities/agent-embedding.entity';
+import { AgentHeartbeat } from './agents/entities/agent-heartbeat.entity';
+import { AgentTag } from './agents/entities/agent-tag.entity';
 import { Payment } from './payment/entities/payment.entity';
 import { Payout } from './payment/entities/payout.entity';
 import { UserPaymentCode } from './payment/entities/user-payment-code.entity';
+import {
+  UserBalance,
+  BalanceRecord,
+  Withdrawal,
+} from './payment/entities/balance.entity';
 import { PlatformPaymentCode } from './payment/entities/platform-payment-code.entity';
 import { OrderPayment } from './payment/entities/order-payment.entity';
 import {
@@ -48,15 +89,30 @@ import {
 } from './execution/entities';
 import { Admin } from './admin/entities/admin.entity';
 import { AdminAccessToken } from './admin/entities/admin-access-token.entity';
+import { MCPAgentTaskEvent } from './mcp/entities/mcp-agent-task-event.entity';
+import { MCPToolInvocation } from './mcp/entities/mcp-tool-invocation.entity';
+import {
+  MCPAppCapability,
+  MCPAppIntegration,
+  MCPAppInvocation,
+  MCPAppTool,
+  MCPAppToolPermission,
+  MCPTaskBinding,
+} from './mcp-integrations/entities';
+import { DatabaseWarmupService } from './database-warmup.service';
 
 // 根据环境变量选择数据库类型
 const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
+const parsePoolSetting = (value: string | undefined, fallback: number) => {
+  const parsed = Number.parseInt(value || '', 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+};
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
     TypeOrmModule.forRoot({
-      type: isSqlite ? 'sqlite' : 'postgres',
+      type: isSqlite ? 'better-sqlite3' : 'postgres',
       ...(isSqlite
         ? {
             database: process.env.DATABASE_PATH || '/data/genesis.db',
@@ -67,6 +123,21 @@ const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
             username: process.env.DB_USER || 'genesis_user',
             password: process.env.DB_PASSWORD || 'genesis_password',
             database: process.env.DB_NAME || 'genesis_db',
+            extra: {
+              max: parsePoolSetting(process.env.DB_POOL_MAX, 10),
+              min: parsePoolSetting(process.env.DB_POOL_MIN, 4),
+              idleTimeoutMillis: parsePoolSetting(
+                process.env.DB_POOL_IDLE_TIMEOUT_MS,
+                60_000,
+              ),
+              connectionTimeoutMillis: parsePoolSetting(
+                process.env.DB_POOL_CONNECTION_TIMEOUT_MS,
+                5_000,
+              ),
+              keepAlive: true,
+              keepAliveInitialDelayMillis: 10_000,
+              options: `-c timezone=${process.env.APP_TIME_ZONE || 'Asia/Shanghai'}`,
+            },
           }),
       entities: [
         User,
@@ -81,7 +152,13 @@ const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
         AuditLog,
         WebhookDelivery,
         AccessToken,
-        AgentApiKey,
+        AgentCredential,
+        AgentAuditLog,
+        AgentCapability,
+        AgentCard,
+        AgentEmbedding,
+        AgentHeartbeat,
+        AgentTag,
         Payment,
         Payout,
         UserPaymentCode,
@@ -90,11 +167,23 @@ const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
         ExecutionPhase,
         ExecutionSubTask,
         ExecutionTrace,
+        MCPAgentTaskEvent,
+        MCPToolInvocation,
+        MCPAppIntegration,
+        MCPAppTool,
+        MCPAppCapability,
+        MCPAppToolPermission,
+        MCPAppInvocation,
+        MCPTaskBinding,
         // 管理员相关实体
         Admin,
         AdminAccessToken,
+        // 余额相关实体
+        UserBalance,
+        BalanceRecord,
+        Withdrawal,
       ],
-      synchronize: process.env.DB_SYNC !== 'false',
+      synchronize: process.env.DB_SYNC === 'true',
     }),
     UsersModule,
     AgentsModule,
@@ -108,10 +197,13 @@ const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
     UploadModule,
     RealtimeModule,
     ExecutionModule,
+    MCPModule,
     AdminModule, // 管理员模块
+    AdminMCPModule,
+    MCPIntegrationsModule,
     MetricsModule, // 业务指标模块
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, DatabaseWarmupService],
 })
 export class AppModule {}

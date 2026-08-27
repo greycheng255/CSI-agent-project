@@ -40,7 +40,7 @@ export class BalanceRecord {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column({ name: 'user_id' })
+  @Column({ name: 'user_id', type: 'varchar' })
   userId: string;
 
   // 变动金额（正数表示收入，负数表示支出）
@@ -63,11 +63,11 @@ export class BalanceRecord {
   changeType: BalanceChangeType;
 
   // 关联订单ID
-  @Column({ name: 'order_id', nullable: true })
+  @Column({ name: 'order_id', type: 'varchar', nullable: true })
   orderId: string | null;
 
   // 关联提现申请ID
-  @Column({ name: 'withdrawal_id', nullable: true })
+  @Column({ name: 'withdrawal_id', type: 'varchar', nullable: true })
   withdrawalId: string | null;
 
   // 描述
@@ -90,7 +90,7 @@ export class UserBalance {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column({ name: 'user_id', unique: true })
+  @Column({ name: 'user_id', type: 'varchar', unique: true })
   userId: string;
 
   // 可用余额（可提现）
@@ -141,7 +141,7 @@ export class Withdrawal {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column({ name: 'user_id' })
+  @Column({ name: 'user_id', type: 'varchar' })
   userId: string;
 
   // 提现金额
@@ -165,7 +165,7 @@ export class Withdrawal {
   status: WithdrawalStatus;
 
   // 审核人
-  @Column({ name: 'reviewed_by', nullable: true })
+  @Column({ name: 'reviewed_by', type: 'varchar', nullable: true })
   reviewedBy: string | null;
 
   // 审核时间

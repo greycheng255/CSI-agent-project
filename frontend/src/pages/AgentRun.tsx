@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Copy,
+  Download,
   ExternalLink,
   FolderOpen,
   Loader2,
@@ -29,47 +30,47 @@ import {
   AgentSpecificPanel,
   resolveAgentMarketPlugin,
 } from '../features/agent-market/plugins/registry';
+import { FlashcardStudyView } from '../features/agent-market/FlashcardStudyView';
+import { MindMapVisualization } from '../features/agent-market/MindMapVisualization';
 
 const CONTEXT_KEY = 'genesis-agent-market-context';
 
 const FIELD_LABELS: Record<string, string> = {
-  sourceMaterial: '素材内容',
-  cardStyle: '卡片类型',
+  source_material: '素材内容',
+  card_style: '卡片类型',
   count: '生成数量',
   layout: '布局',
   depth: '展开层级',
   style: '风格',
   duration: '时长',
-  hostVoice: '主持人音色',
-  guestVoice: '嘉宾音色',
+  host_voice: '主持人音色',
+  guest_voice: '嘉宾音色',
   text: '票据文本',
-  imageUrls: '图片 URL',
-  pdfUrl: 'PDF URL',
-  pdfName: 'PDF 文件名',
-  categoryHint: '类别提示',
-  imageUrl: '图片 URL',
-  audioUrl: '音频 URL',
+  image_urls: '图片 URL',
+  pdf_url: 'PDF URL',
+  pdf_name: 'PDF 文件名',
+  category_hint: '类别提示',
+  image_url: '图片 URL',
+  audio_url: '音频 URL',
   resolution: '分辨率',
-  videoType: '视频类型',
+  video_type: '视频类型',
   prompt: '提示词',
-  firstFrameUrl: '首帧 URL',
-  lastFrameUrl: '尾帧 URL',
+  first_frame_url: '首帧 URL',
+  last_frame_url: '尾帧 URL',
   size: '画幅/尺寸',
-  shotType: '镜头类型',
-  referenceUrls: '参考素材 URL',
+  shot_type: '镜头类型',
+  reference_urls: '参考素材 URL',
   audio: '生成声音',
   images: '参考图片 URL',
-  image_url: '参考图片 URL',
   quality: '质量',
   voice: '音色',
-  format: '格式',
+  voice_name: '音色名称',
+  model_id: '模型 ID',
+  model_name: '模型名称',
+  volume: '音量',
+  speed: '语速',
   tags: '风格标签',
   is_music: '音乐模式',
-  aspect_ratio: '画面比例',
-  duration_s: '视频秒数',
-  preview_only: '先生成预览',
-  visual_preset: '视觉预设',
-  include_bgm: '包含配乐',
 };
 
 type ContextState = {
@@ -201,7 +202,7 @@ function normalizeValue(name: string, schema: AgentParamSchema, raw: string) {
     const urls = parseList(raw);
     const lowerName = name.toLowerCase();
     if (lowerName.endsWith('url') || lowerName.endsWith('_url')) return urls[0] || '';
-    return urls;
+    return urls.length === 1 ? urls[0] : urls;
   }
 
   return raw;
@@ -220,6 +221,11 @@ function normalizeParams(params: AgentParamMap, values: Record<string, string>, 
 
   Object.entries(values).forEach(([name, raw]) => {
     if (name in params || !raw.trim()) return;
+    if (name === 'volume' || name === 'speed') {
+      const numeric = Number(raw);
+      normalized[name] = Number.isFinite(numeric) ? numeric : raw;
+      return;
+    }
     normalized[name] = raw.includes('\n') ? parseList(raw) : raw;
   });
 
@@ -272,6 +278,60 @@ function detectMediaKind(status: AgentTaskStatus, resultUrl: string) {
   return 'link';
 }
 
+function resultFilename(status: AgentTaskStatus, resultUrl: string, kind: string) {
+  const fallbackExtensions: Record<string, string> = {
+    image: 'png',
+    video: 'mp4',
+    audio: 'mp3',
+    link: 'bin',
+    structured: 'json',
+  };
+  let extension = fallbackExtensions[kind] || 'bin';
+
+  if (resultUrl) {
+    try {
+      const pathname = new URL(resultUrl, window.location.href).pathname;
+      const match = pathname.match(/\.([a-zA-Z0-9]{2,8})$/);
+      if (match) extension = match[1].toLowerCase();
+    } catch {
+      // 使用按结果类型推断的扩展名。
+    }
+  }
+
+  const resultType = (status.result_type || 'agent-result').replace(/[^a-zA-Z0-9_-]+/g, '-');
+  const taskSuffix = status.task_id ? `-${status.task_id.slice(0, 8)}` : '';
+  return `${resultType}${taskSuffix}.${extension}`;
+}
+
+function saveBlob(blob: Blob, filename: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+}
+
+async function downloadRemoteResult(url: string, filename: string) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    saveBlob(await response.blob(), filename);
+  } catch {
+    // 某些对象存储未开放 CORS；退回浏览器原生下载/新窗口打开。
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.target = '_blank';
+    anchor.rel = 'noreferrer';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  }
+}
+
 function validateRequiredParams(params: AgentParamMap, values: Record<string, string>, skipPrompt: boolean) {
   for (const [name, schema] of Object.entries(params)) {
     if (skipPrompt && name === 'prompt') continue;
@@ -281,6 +341,82 @@ function validateRequiredParams(params: AgentParamMap, values: Record<string, st
   }
 
   return '';
+}
+
+function validateConditionalParams(agentId: string, values: Record<string, string>) {
+  if (agentId === 'video') {
+    const videoType = values.video_type || 't2v';
+    if (videoType === 'i2v' && !values.first_frame_url?.trim()) {
+      return '请填写首帧 URL';
+    }
+    if (videoType === 'r2v' && !values.reference_urls?.trim()) {
+      return '请填写至少一个参考素材 URL';
+    }
+    if (videoType === 'r2v' && parseList(values.reference_urls || '').length > 9) {
+      return 'Seedance 2.0 参考生最多支持 9 张参考图片';
+    }
+  }
+
+  if (
+    agentId === 'invoice' &&
+    !values.text?.trim() &&
+    !values.image_urls?.trim() &&
+    !values.pdf_url?.trim()
+  ) {
+    return '请提供票据文本、图片 URL 或 PDF URL';
+  }
+
+  return '';
+}
+
+function buildSunoPrompt(lyrics: string, stylePrompt: string, mode: string) {
+  const style = stylePrompt.trim();
+  const lyricText = lyrics.trim();
+  if (mode === 'instrumental') {
+    return `纯音乐，无人声。音乐描述：${style}`;
+  }
+  if (!lyricText) {
+    return `根据以下音乐描述生成一首完整歌曲，并自动创作适合的歌词：${style}`;
+  }
+  return `歌词：\n${lyricText}\n\n音乐描述：\n${style}`;
+}
+
+function sanitizeAgentParams(agentId: string, params: Record<string, unknown>) {
+  if (agentId === 'music') {
+    return {
+      mv: params.mv || 'chirp-v4-5',
+      make_instrumental: params.make_instrumental || 'song',
+      vocal_gender: params.vocal_gender || 'auto',
+      sample_rate: params.sample_rate || '44100',
+      bitrate: params.bitrate || '192000',
+      model_name: 'Suno Music Generation 4.5',
+    };
+  }
+
+  if (agentId !== 'video') return params;
+
+  const videoType = String(params.video_type || 't2v');
+  const rawResolution = String(params.resolution || '720p');
+  const common: Record<string, unknown> = {
+    version: params.version || '标准',
+    duration: params.duration || '5',
+    aspect_ratio: params.aspect_ratio || 'adaptive',
+    resolution: rawResolution.toLowerCase() === '4k' ? '4K' : rawResolution.toLowerCase(),
+  };
+
+  const rawImages = videoType === 'r2v'
+    ? params.reference_urls
+    : [params.first_frame_url, params.last_frame_url].filter(Boolean);
+  const images = Array.isArray(rawImages)
+    ? rawImages.filter(Boolean)
+    : typeof rawImages === 'string' && rawImages.trim()
+      ? [rawImages.trim()]
+      : [];
+  if (videoType !== 't2v' && images.length > 0) {
+    common.images = images.length === 1 ? images[0] : images;
+  }
+
+  return common;
 }
 
 function StatusPanel({
@@ -297,74 +433,47 @@ function StatusPanel({
   const progress = getProgressNumber(status);
 
   return (
-    <div className="rounded-xl border border-gray-800 bg-black p-5">
+    <div className="rounded-2xl border border-[color:var(--border)] bg-white p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-xs font-bold uppercase tracking-[0.2em] text-gray-600">任务状态</div>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-300">
-            <span className="font-mono text-green-400">{taskId}</span>
+          <div className="text-sm font-semibold text-[var(--text-700)]">任务状态</div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-[var(--text-600)]">
+            <span className="break-all font-mono text-[var(--brand-600)]">{taskId}</span>
             <button
               type="button"
               onClick={() => navigator.clipboard.writeText(taskId)}
-              className="rounded border border-gray-800 p-1 text-gray-500 hover:text-green-400"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-400)] hover:bg-[var(--brand-50)] hover:text-[var(--brand-600)]"
               aria-label="复制任务 ID"
             >
               <Copy className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
-        <span className="inline-flex items-center gap-2 rounded border border-green-500/20 bg-green-500/10 px-3 py-1 text-xs font-bold text-green-400">
+          <span className="inline-flex items-center gap-2 rounded-full bg-[var(--state-success-surface)] px-3 py-1 text-xs font-bold text-[var(--state-success-text)]">
           {polling && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {status?.status || 'submitted'}
         </span>
       </div>
 
       <div className="mt-5">
-        <div className="mb-2 flex justify-between text-xs text-gray-600">
+          <div className="mb-2 flex justify-between text-xs text-[var(--text-500)]">
           <span>{status?.current_step || 'waiting'}</span>
           <span>{progress}%</span>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-gray-900">
-          <div className="h-full rounded-full bg-green-500 transition-all" style={{ width: `${progress}%` }} />
+          <div className="h-2 overflow-hidden rounded-full bg-[var(--background-200)]">
+            <div className="h-full rounded-full bg-[var(--brand-500)] transition-all" style={{ width: `${progress}%` }} />
         </div>
       </div>
 
       {typeof status?.cost === 'number' && (
-        <div className="mt-3 text-xs text-gray-500">
-          预计/实际消耗：<span className="font-mono text-yellow-400">{status.cost}</span> credits
+          <div className="mt-3 text-xs text-[var(--text-500)]">
+            预计/实际消耗：<span className="font-mono font-semibold text-[var(--state-warning)]">{status.cost}</span> credits
         </div>
       )}
 
       {(error || status?.error) && (
-        <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+        <div className="mt-4 rounded-xl bg-[var(--state-error-surface)] p-3 text-sm text-[var(--state-error)]">
           {error || status?.error}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TreeView({ node, depth = 0 }: { node: unknown; depth?: number }) {
-  if (!isRecord(node)) return null;
-
-  const data = isRecord(node.data) ? node.data : {};
-  const label =
-    (typeof data.label === 'string' && data.label) ||
-    (typeof node.label === 'string' && node.label) ||
-    (typeof node.title === 'string' && node.title) ||
-    '未命名节点';
-  const children = Array.isArray(node.children) ? node.children : [];
-
-  return (
-    <div className={depth === 0 ? '' : 'ml-4 border-l border-gray-800 pl-4'}>
-      <div className="rounded border border-gray-800 bg-gray-950 px-3 py-2 text-sm text-gray-300">
-        {label}
-      </div>
-      {children.length > 0 && (
-        <div className="mt-2 space-y-2">
-          {children.map((child, index) => (
-            <TreeView key={index} node={child} depth={depth + 1} />
-          ))}
         </div>
       )}
     </div>
@@ -374,44 +483,31 @@ function TreeView({ node, depth = 0 }: { node: unknown; depth?: number }) {
 function StructuredResult({ data }: { data: unknown }) {
   if (!isRecord(data)) {
     return (
-      <pre className="max-h-[520px] overflow-auto rounded-lg border border-gray-800 bg-black p-4 text-xs text-gray-300">
+      <pre className="max-h-[520px] overflow-auto rounded-xl bg-[var(--background-100)] p-4 text-xs leading-6 text-[var(--text-600)]">
         {jsonText(data)}
       </pre>
     );
   }
 
   if (Array.isArray(data.cards)) {
-    return (
-      <div className="space-y-3">
-        {data.cards.map((card, index) => {
-          const item = isRecord(card) ? card : {};
-          return (
-            <div key={index} className="rounded-lg border border-gray-800 bg-black p-4">
-              <div className="text-sm font-bold text-gray-100">{String(item.front || `卡片 ${index + 1}`)}</div>
-              <div className="mt-2 text-sm leading-6 text-gray-400">{String(item.back || '')}</div>
-              {Boolean(item.tag) && <div className="mt-3 text-xs text-cyan-400">{String(item.tag)}</div>}
-            </div>
-          );
-        })}
-      </div>
-    );
+    return <FlashcardStudyView cards={data.cards} cardStyle={data.card_style} />;
   }
 
   if (data.tree) {
-    return <TreeView node={data.tree} />;
+    return <MindMapVisualization tree={data.tree} initialLayout={data.layout} />;
   }
 
   if (isRecord(data.invoice)) {
     return (
       <div className="space-y-4">
-        <div className="rounded-lg border border-gray-800 bg-black p-4">
-          <div className="mb-3 text-sm font-bold text-gray-100">发票主表</div>
-          <pre className="overflow-auto text-xs text-gray-300">{jsonText(data.invoice)}</pre>
+        <div className="rounded-xl bg-[var(--background-100)] p-4">
+          <div className="mb-3 text-sm font-bold text-[var(--text-800)]">发票主表</div>
+          <pre className="overflow-auto text-xs leading-6 text-[var(--text-600)]">{jsonText(data.invoice)}</pre>
         </div>
         {Array.isArray(data.items) && (
-          <div className="rounded-lg border border-gray-800 bg-black p-4">
-            <div className="mb-3 text-sm font-bold text-gray-100">明细</div>
-            <pre className="overflow-auto text-xs text-gray-300">{jsonText(data.items)}</pre>
+          <div className="rounded-xl bg-[var(--background-100)] p-4">
+            <div className="mb-3 text-sm font-bold text-[var(--text-800)]">明细</div>
+            <pre className="overflow-auto text-xs leading-6 text-[var(--text-600)]">{jsonText(data.items)}</pre>
           </div>
         )}
       </div>
@@ -427,7 +523,7 @@ function StructuredResult({ data }: { data: unknown }) {
     return (
       <div className="space-y-3">
         {rows.map((row, index) => (
-          <div key={index} className="rounded-lg border border-gray-800 bg-black p-4 text-sm leading-6 text-gray-300">
+        <div key={index} className="rounded-xl bg-[var(--background-100)] p-4 text-sm leading-6 text-[var(--text-600)]">
             {isRecord(row) ? jsonText(row) : String(row)}
           </div>
         ))}
@@ -436,7 +532,7 @@ function StructuredResult({ data }: { data: unknown }) {
   }
 
   return (
-    <pre className="max-h-[520px] overflow-auto rounded-lg border border-gray-800 bg-black p-4 text-xs text-gray-300">
+    <pre className="max-h-[520px] overflow-auto rounded-xl bg-[var(--background-100)] p-4 text-xs leading-6 text-[var(--text-600)]">
       {jsonText(data)}
     </pre>
   );
@@ -445,33 +541,77 @@ function StructuredResult({ data }: { data: unknown }) {
 function ResultPanel({ status }: { status: AgentTaskStatus }) {
   const resultUrl = pickResultUrl(status);
   const kind = resultUrl ? detectMediaKind(status, resultUrl) : 'structured';
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
+  const hasResultData = status.result_data !== null && status.result_data !== undefined;
+  const canDownload = Boolean(resultUrl || hasResultData);
+
+  const handleDownload = async () => {
+    if (!canDownload || downloading) return;
+
+    setDownloading(true);
+    setDownloadError('');
+    try {
+      if (resultUrl) {
+        await downloadRemoteResult(resultUrl, resultFilename(status, resultUrl, kind));
+      } else {
+        const blob = new Blob([jsonText(status.result_data)], {
+          type: 'application/json;charset=utf-8',
+        });
+        saveBlob(blob, resultFilename(status, '', 'structured'));
+      }
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : '结果下载失败，请稍后重试。');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
-    <div className="rounded-xl border border-gray-800 bg-[#0a0a0a] p-5">
+    <div className="rounded-2xl border border-[color:var(--border)] bg-white p-5 md:p-6">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <div className="text-xs font-bold uppercase tracking-[0.2em] text-gray-600">执行结果</div>
-          <h3 className="mt-1 text-lg font-bold text-gray-100">生成完成</h3>
+          <div className="text-sm font-semibold text-[var(--brand-600)]">执行结果</div>
+          <h3 className="mt-1 text-xl font-bold text-[var(--text-900)]">生成完成</h3>
         </div>
-        <CheckCircle2 className="h-5 w-5 text-green-400" />
+        <div className="flex items-center gap-2">
+          {canDownload && (
+            <button
+              type="button"
+              onClick={() => void handleDownload()}
+              disabled={downloading}
+              className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-[color:var(--border)] bg-white px-3 py-2 text-sm font-semibold text-[var(--text-700)] transition-colors hover:border-[var(--brand-300)] hover:bg-[var(--brand-50)] hover:text-[var(--brand-700)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {downloading ? '下载中...' : '下载结果'}
+            </button>
+          )}
+          <CheckCircle2 className="h-5 w-5 text-[var(--state-success-text)]" />
+        </div>
       </div>
 
-      {kind === 'image' && <img src={resultUrl} alt="生成结果" className="w-full rounded-lg border border-gray-800" />}
-      {kind === 'video' && <video src={resultUrl} controls className="w-full rounded-lg border border-gray-800 bg-black" />}
+      {downloadError && (
+        <div className="mb-4 rounded-xl bg-[var(--state-error-surface)] p-3 text-sm text-[var(--state-error)]">
+          {downloadError}
+        </div>
+      )}
+
+      {kind === 'image' && <img loading="lazy" src={resultUrl} alt="生成结果" className="w-full rounded-xl border border-[color:var(--border)]" />}
+      {kind === 'video' && <video src={resultUrl} controls className="w-full rounded-xl border border-[color:var(--border)] bg-black" />}
       {kind === 'audio' && <audio src={resultUrl} controls className="w-full" />}
       {kind === 'link' && (
         <a
           href={resultUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-2 text-sm font-bold text-green-400"
+          className="btn-cs btn-primary inline-flex items-center gap-2"
         >
           打开结果
           <ExternalLink className="h-4 w-4" />
         </a>
       )}
 
-      {status.result_data !== null && status.result_data !== undefined && (
+      {hasResultData && (
         <div className={resultUrl ? 'mt-5' : ''}>
           <StructuredResult data={status.result_data} />
         </div>
@@ -501,6 +641,7 @@ export default function AgentRun() {
   const [submitting, setSubmitting] = useState(false);
   const [polling, setPolling] = useState(false);
   const [runError, setRunError] = useState('');
+  const taskRunning = Boolean(taskId && !status?.is_final);
 
   useEffect(() => {
     let cancelled = false;
@@ -607,7 +748,7 @@ export default function AgentRun() {
   }, []);
 
   const handleSubmit = async () => {
-    if (!agent || !directory || !runnable) return;
+    if (!agent || !directory || !runnable || submitting || taskRunning) return;
 
     const workspaceId = context.workspaceId.trim();
     const tenantId = context.tenantId.trim();
@@ -624,6 +765,12 @@ export default function AgentRun() {
       return;
     }
 
+    const conditionalError = validateConditionalParams(agent.id, formValues);
+    if (conditionalError) {
+      setRunError(conditionalError);
+      return;
+    }
+
     if (agent.capability.kind === 'media' && !prompt.trim()) {
       setRunError('请填写提示词。');
       return;
@@ -637,7 +784,10 @@ export default function AgentRun() {
 
     try {
       if (agent.capability.kind === 'workflow') {
-        const params = normalizeParams(currentParams, formValues, false);
+        const params = sanitizeAgentParams(
+          agent.id,
+          normalizeParams(currentParams, formValues, false),
+        );
         const newTaskId = await createAgentTask({
           type: agent.capability.workflowType,
           params,
@@ -650,12 +800,25 @@ export default function AgentRun() {
       }
 
       if (agent.capability.kind === 'media') {
-        const params = normalizeParams(currentParams, formValues, true);
-        const type = selectedModel?.type;
+        const params = sanitizeAgentParams(
+          agent.id,
+          normalizeParams(currentParams, formValues, true),
+        );
+        const type = agent.id === 'music' ? 'music' : selectedModel?.type;
+        const model = agent.id === 'video'
+          ? formValues.video_type === 'r2v' ? 'kwvideo-v2-ref' : 'kwvideo-v2'
+          : agent.id === 'music' ? 'suno-v4.5' : selectedModelName;
+        const taskPrompt = agent.id === 'music'
+          ? buildSunoPrompt(
+              formValues.lyrics || '',
+              prompt,
+              formValues.make_instrumental || 'song',
+            )
+          : prompt.trim();
         const newTaskId = await createAgentTask({
           type,
-          model: selectedModelName,
-          prompt: prompt.trim(),
+          model,
+          prompt: taskPrompt,
           params,
           workspaceId,
           tenantId: tenantId || undefined,
@@ -698,9 +861,9 @@ export default function AgentRun() {
 
   if (!agent) {
     return (
-      <div className="mx-auto max-w-3xl rounded-xl border border-gray-800 bg-[#0a0a0a] p-8 text-center">
-        <h1 className="m-0 text-2xl font-bold text-gray-100">未找到智能体</h1>
-        <Link to="/agent-market" className="mt-6 inline-flex text-green-400">
+      <div className="mx-auto max-w-3xl rounded-2xl border border-[color:var(--border)] bg-white p-8 text-center">
+        <h1 className="m-0 text-2xl font-bold text-[var(--text-900)]">未找到智能体</h1>
+        <Link to="/agent-market" className="mt-6 inline-flex font-semibold text-[var(--brand-600)] hover:text-[var(--brand-700)]">
           返回集市
         </Link>
       </div>
@@ -710,204 +873,131 @@ export default function AgentRun() {
   const style = AGENT_STYLE[agent.color];
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="mx-auto max-w-[1440px] space-y-5">
       <Link
         to="/agent-market"
-        className="inline-flex items-center gap-2 rounded-lg border border-gray-800 bg-[#0a0a0a] px-4 py-2 text-sm font-bold text-gray-300 hover:border-green-500 hover:text-green-400"
+        className="inline-flex min-h-10 items-center gap-2 rounded-lg px-1 text-sm font-semibold text-[var(--brand-600)] hover:text-[var(--brand-700)]"
       >
         <ArrowLeft className="h-4 w-4" />
         返回集市
       </Link>
 
-      <div className="rounded-xl border border-gray-800 bg-[#0a0a0a] p-6">
-        <div className="grid gap-5 lg:grid-cols-[auto_1fr_auto] lg:items-center">
-          <div
-            className="flex h-20 w-20 items-center justify-center rounded-2xl border text-4xl"
-            style={{ background: style.bg, borderColor: style.border }}
-          >
-            {agent.icon}
-          </div>
-          <div>
-            <h1 className="m-0 text-3xl font-bold text-gray-100">{agent.name}</h1>
-            <p className="mt-2 text-gray-500">{agent.desc}</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {agent.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded border px-2 py-1 text-xs font-bold"
-                  style={{ color: style.text, background: style.bg, borderColor: style.border }}
-                >
-                  {tag}
+      <div className="grid items-start gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
+        <aside className="space-y-4 xl:sticky xl:top-24">
+          <section className="rounded-2xl border border-[color:var(--border)] bg-white p-5">
+            <div className="flex items-start gap-4">
+              <div
+                className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-3xl"
+                style={{ background: style.bg }}
+              >
+                {agent.icon}
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold text-[var(--text-900)]">{agent.name}</h1>
+                <p className="mt-1 text-sm leading-6 text-[var(--text-500)]">{agent.desc}</p>
+              </div>
+            </div>
+
+            <dl className="mt-5 divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
+              <div className="flex items-center justify-between py-3 text-sm">
+                <dt className="flex items-center gap-2 text-[var(--text-500)]"><Star className="h-4 w-4" />评分</dt>
+                <dd className="font-semibold text-[var(--text-800)]">{agent.rating.toFixed(1)}</dd>
+              </div>
+              <div className="flex items-center justify-between py-3 text-sm">
+                <dt className="flex items-center gap-2 text-[var(--text-500)]"><Zap className="h-4 w-4" />累计调用</dt>
+                <dd className="font-semibold text-[var(--text-800)]">{agent.calls.toLocaleString()}</dd>
+              </div>
+            </dl>
+
+            <div className="mt-5">
+              <h2 className="text-sm font-semibold text-[var(--text-700)]">能力标签</h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {agent.tags.map((tag) => (
+                  <span key={tag} className="rounded-full bg-[var(--background-100)] px-3 py-1.5 text-xs font-medium text-[var(--text-600)]">
+                    {tag}
+                  </span>
+                ))}
+                <span className="rounded-full bg-[var(--brand-50)] px-3 py-1.5 text-xs font-medium text-[var(--brand-700)]">
+                  {agent.capability.kind === 'workflow' ? 'Agent 工作流' : agent.capability.kind === 'media' ? '媒体生成' : '待开放'}
                 </span>
-              ))}
+              </div>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-gray-800 bg-black p-4">
-              <Star className="h-4 w-4" style={{ color: style.text }} />
-              <div className="mt-2 text-2xl font-bold text-gray-100">{agent.rating.toFixed(1)}</div>
-              <div className="text-xs text-gray-600">评分</div>
-            </div>
-            <div className="rounded-xl border border-gray-800 bg-black p-4">
-              <Zap className="h-4 w-4" style={{ color: style.text }} />
-              <div className="mt-2 text-2xl font-bold text-gray-100">{agent.calls.toLocaleString()}</div>
-              <div className="text-xs text-gray-600">调用</div>
-            </div>
-          </div>
-        </div>
-      </div>
+          </section>
 
-      {loadError && (
-        <div className="flex items-start gap-3 rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-300">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <div>
-            <div className="font-bold">第三方目录加载不完整，正在使用 fallback schema。</div>
-            <div className="mt-1 text-yellow-200/70">{loadError}</div>
-          </div>
-        </div>
-      )}
-
-      <div className="rounded-xl border border-gray-800 bg-[#0a0a0a] p-5">
-        <div className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-gray-600">
-          <FolderOpen className="h-4 w-4" />
-          运行上下文
-        </div>
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div>
-            <label className="mb-2 block text-xs font-bold text-gray-500">workspaceId *</label>
-            <input
-              value={context.workspaceId}
-              onChange={(event) => setContext((current) => ({ ...current, workspaceId: event.target.value }))}
-              placeholder={activeProvider?.defaultWorkspaceId || 'workspace_id'}
-              className="w-full rounded-lg border border-gray-800 bg-black px-4 py-3 text-sm text-gray-200 outline-none focus:border-green-500"
-            />
-            <p className="mt-2 text-xs text-gray-600">生成结果会写入第三方后端的这个工作区。</p>
-          </div>
-          <div>
-            <label className="mb-2 block text-xs font-bold text-gray-500">tenantId / X-Tenant-ID</label>
-            <input
-              value={context.tenantId}
-              onChange={(event) => setContext((current) => ({ ...current, tenantId: event.target.value }))}
-              placeholder={activeProvider?.defaultTenantId || 'tenant_id'}
-              className="w-full rounded-lg border border-gray-800 bg-black px-4 py-3 text-sm text-gray-200 outline-none focus:border-green-500"
-            />
-            <p className="mt-2 text-xs text-gray-600">用于第三方积分扣费；不填则由后端默认租户处理。</p>
-          </div>
-          <div>
-            <label className="mb-2 block text-xs font-bold text-gray-500">userId</label>
-            <input
-              value={context.userId}
-              onChange={(event) => setContext((current) => ({ ...current, userId: event.target.value }))}
-              placeholder={activeProvider?.defaultUserId || 'user_id'}
-              className="w-full rounded-lg border border-gray-800 bg-black px-4 py-3 text-sm text-gray-200 outline-none focus:border-green-500"
-            />
-            <p className="mt-2 text-xs text-gray-600">随任务请求写入 body.user_id 与 X-User-ID。</p>
-          </div>
-        </div>
-        {activeProvider && (
-          <div className="mt-4 rounded-lg border border-gray-800 bg-black px-4 py-3 text-xs text-gray-500">
-            <span className="font-bold text-gray-400">{activeProvider.name}</span>
-            <span className="mx-2 text-gray-700">·</span>
-            <span>{activeProvider.restBase}</span>
-            {activeProvider.mcpEndpoint && (
-              <>
-                <span className="mx-2 text-gray-700">·</span>
-                <span>{activeProvider.mcpEndpoint}</span>
-              </>
-            )}
-            {activeProvider.authorization && (
-              <>
-                <span className="mx-2 text-gray-700">·</span>
-                <span>Authorization ready</span>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
-        <aside className="space-y-4">
-          <div className="rounded-xl border border-gray-800 bg-[#0a0a0a] p-5">
-            <div className="text-xs font-bold uppercase tracking-[0.2em] text-gray-600">能力标签</div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {agent.tags.map((tag) => (
-                <span key={tag} className="rounded border border-gray-800 bg-black px-3 py-2 text-sm text-gray-400">
-                  {tag}
-                </span>
-              ))}
-              <span className="rounded border border-gray-800 bg-black px-3 py-2 text-sm text-gray-400">
-                {agent.capability.kind === 'workflow'
-                  ? 'Agent 工作流'
-                  : agent.capability.kind === 'media'
-                    ? '媒体生成'
-                    : agent.capability.kind === 'local'
-                      ? '本地任务包'
-                      : '待开放'}
+          <section className="rounded-2xl border border-[color:var(--border)] bg-white p-5">
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--brand-50)] text-[var(--brand-600)]">
+                <FolderOpen className="h-4 w-4" />
               </span>
+              <div>
+                <h2 className="text-base font-bold text-[var(--text-900)]">运行设置</h2>
+                <p className="mt-0.5 text-xs text-[var(--text-500)]">设置结果归属与使用身份</p>
+              </div>
             </div>
-          </div>
+
+            <div className="mt-5 space-y-4">
+              <div>
+                <label htmlFor="agent-run-workspace" className="mb-2 block text-[13px] font-semibold text-[var(--text-600)]">工作区 ID *</label>
+                <input id="agent-run-workspace" value={context.workspaceId} onChange={(event) => setContext((current) => ({ ...current, workspaceId: event.target.value }))} placeholder={activeProvider?.defaultWorkspaceId || 'workspace_id'} className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10" />
+                <p className="mt-2 text-xs leading-5 text-[var(--text-500)]">生成结果会写入第三方后端的这个工作区。</p>
+              </div>
+              <div>
+                <label htmlFor="agent-run-tenant" className="mb-2 block text-[13px] font-semibold text-[var(--text-600)]">租户 ID</label>
+                <input id="agent-run-tenant" value={context.tenantId} onChange={(event) => setContext((current) => ({ ...current, tenantId: event.target.value }))} placeholder={activeProvider?.defaultTenantId || 'tenant_id'} className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10" />
+              </div>
+              <div>
+                <label htmlFor="agent-run-user" className="mb-2 block text-[13px] font-semibold text-[var(--text-600)]">用户 ID</label>
+                <input id="agent-run-user" value={context.userId} onChange={(event) => setContext((current) => ({ ...current, userId: event.target.value }))} placeholder={activeProvider?.defaultUserId || 'user_id'} className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10" />
+              </div>
+            </div>
+
+            {activeProvider && (
+              <div className="mt-5 break-all rounded-xl bg-[var(--background-100)] p-3 text-xs leading-5 text-[var(--text-500)]">
+                <div className="font-semibold text-[var(--text-700)]">{activeProvider.name}</div>
+                <div className="mt-1">{activeProvider.restBase}</div>
+                {activeProvider.mcpEndpoint && <div className="mt-1">{activeProvider.mcpEndpoint}</div>}
+                {activeProvider.authorization && <div className="mt-1 text-[var(--state-success-text)]">Authorization ready</div>}
+              </div>
+            )}
+          </section>
 
           {taskId && <StatusPanel taskId={taskId} status={status} error={runError} polling={polling} />}
         </aside>
 
-        <main className="rounded-xl border border-gray-800 bg-[#0a0a0a] p-5">
-          <div className="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-gray-800 pb-4">
-            <div>
-              <div className="text-xs font-bold uppercase tracking-[0.2em] text-gray-600">执行面板</div>
-              <h2 className="mt-2 text-xl font-bold text-gray-100">{agent.name}</h2>
+        <main className="min-w-0 space-y-4">
+          {loadError && (
+            <div className="flex items-start gap-3 rounded-xl bg-[var(--state-warning-surface)] p-4 text-sm text-[var(--state-warning)]">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div><div className="font-bold">第三方目录加载不完整，正在使用备用配置。</div><div className="mt-1 leading-6">{loadError}</div></div>
             </div>
-            {directory?.usingFallback && (
-              <span className="rounded border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-xs font-bold text-yellow-300">
-                fallback schema
-              </span>
+          )}
+
+          <section className="rounded-2xl border border-[color:var(--border)] bg-white p-5 md:p-6">
+            <div className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-[color:var(--border)] pb-5">
+              <div>
+                <div className="text-sm font-semibold text-[var(--brand-600)]">任务配置</div>
+                <h2 className="mt-1 text-2xl font-bold text-[var(--text-900)]">使用 {agent.name}</h2>
+                <p className="mt-1 text-sm text-[var(--text-500)]">填写必要参数后即可开始执行。</p>
+              </div>
+              {directory?.usingFallback && <span className="rounded-full bg-[var(--state-warning-surface)] px-3 py-1 text-xs font-semibold text-[var(--state-warning)]">备用配置</span>}
+            </div>
+
+            {loading && <div className="space-y-4 py-8"><div className="h-11 animate-pulse rounded-xl bg-[var(--background-100)]" /><div className="h-28 animate-pulse rounded-xl bg-[var(--background-100)]" /><div className="h-11 animate-pulse rounded-xl bg-[var(--background-100)]" /></div>}
+
+            {!loading && !runnable && agent.capability.kind !== 'unavailable' && (
+              <div className="rounded-xl bg-[var(--background-100)] p-8 text-center">
+                <AlertTriangle className="mx-auto h-8 w-8 text-[var(--state-warning)]" />
+                <h3 className="mt-4 text-lg font-bold text-[var(--text-900)]">该智能体暂未开放使用</h3>
+                <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[var(--text-500)]">能力接入完成后，本页面会自动开放任务配置与执行入口。</p>
+              </div>
             )}
-          </div>
 
-          {loading && (
-            <div className="flex items-center justify-center gap-3 py-20 text-gray-500">
-              <Loader2 className="h-6 w-6 animate-spin text-green-500" />
-              加载执行目录...
-            </div>
-          )}
+            {!loading && (runnable || agent.capability.kind === 'unavailable') && (
+              <AgentSpecificPanel agentId={agent.id} agent={agent} accent={style.text} formValues={formValues} updateField={updateField} prompt={prompt} setPrompt={setPrompt} count={count} setCount={setCount} onSubmit={handleSubmit} submitting={submitting || taskRunning} runError={runError} taskId={taskId} currentParams={currentParams} workflowDefinition={workflowDefinition} selectedModel={selectedModel} compatibleModels={compatibleModels} selectedModelName={selectedModelName} setSelectedModelName={setSelectedModelName} />
+            )}
+          </section>
 
-          {!loading && !runnable && (
-            <div className="rounded-xl border border-dashed border-gray-800 bg-black p-8 text-center">
-              <AlertTriangle className="mx-auto h-8 w-8 text-yellow-400" />
-              <h3 className="mt-4 text-lg font-bold text-gray-100">该模块暂未在第三方 Agent API 中开放</h3>
-              <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-gray-500">
-                当前集市已为它创建独立页面；当 `/api/v1/agent/agents` 或 `/api/v1/agent/models`
-                返回对应能力后，这里会自动切换为可执行面板。
-              </p>
-            </div>
-          )}
-
-          {!loading && runnable && (
-            <div className="space-y-5">
-              <AgentSpecificPanel
-                agentId={agent.id}
-                agent={agent}
-                accent={style.text}
-                formValues={formValues}
-                updateField={updateField}
-                prompt={prompt}
-                setPrompt={setPrompt}
-                count={count}
-                setCount={setCount}
-                onSubmit={handleSubmit}
-                submitting={submitting}
-                runError={runError}
-                taskId={taskId}
-                currentParams={currentParams}
-                workflowDefinition={workflowDefinition}
-                selectedModel={selectedModel}
-                compatibleModels={compatibleModels}
-                selectedModelName={selectedModelName}
-                setSelectedModelName={setSelectedModelName}
-              />
-
-              {status?.is_final && status.status === 'done' && <ResultPanel status={status} />}
-            </div>
-          )}
+          {runnable && status?.is_final && status.status === 'done' && <ResultPanel status={status} />}
         </main>
       </div>
     </div>

@@ -1,7 +1,5 @@
-# Genesis Agent Dockerfile
-# 使用本地已编译的代码，避免在容器内构建
-
-FROM node:18-alpine
+# Genesis Agent Dockerfile - 使用宿主机预编译产物
+FROM node:20-alpine
 
 WORKDIR /app
 
@@ -9,12 +7,12 @@ WORKDIR /app
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S genesis -u 1001
 
-# 复制 package 文件
-COPY package*.json ./
+# 设置 npm 官方源
+RUN npm config set registry https://registry.npmjs.org/
 
-# 只安装生产依赖
-RUN npm ci --only=production && \
-    npm cache clean --force
+# 复制 package 文件和依赖
+COPY package*.json ./
+COPY node_modules ./node_modules
 
 # 复制编译后的代码
 COPY dist ./dist

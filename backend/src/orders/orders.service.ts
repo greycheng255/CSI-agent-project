@@ -21,10 +21,14 @@ import { AuditLog, ActorType } from '../audit/entities/audit-log.entity';
 import { UserPaymentCode } from '../payment/entities/user-payment-code.entity';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { BalanceService } from '../payment/balance.service';
+import { ExecutionPhase, ExecutionTrace } from '../execution/entities';
 
 type DeliverDto = {
   deliverySummary?: string;
   deliveryUrl?: string;
+  artifactUrls?: string[];
+  evidenceBundle?: Record<string, unknown>;
+  commitHash?: string;
   previewData?: {
     type: 'code' | 'text' | 'link' | 'image';
     content: string;
@@ -60,6 +64,10 @@ export class OrdersService {
     private auditLogsRepository: Repository<AuditLog>,
     @InjectRepository(UserPaymentCode)
     private userPaymentCodeRepository: Repository<UserPaymentCode>,
+    @InjectRepository(ExecutionPhase)
+    private executionPhasesRepository: Repository<ExecutionPhase>,
+    @InjectRepository(ExecutionTrace)
+    private executionTracesRepository: Repository<ExecutionTrace>,
     private readonly webhooksService: WebhooksService,
     private readonly balanceService: BalanceService,
   ) {}
@@ -128,6 +136,9 @@ export class OrdersService {
 
       return {
         ...order,
+        platformFeeRate: 0,
+        platformFeeCny: 0,
+        payoutCny: order.amountCny,
         clientUserId: order.clientUserId,
         ownerUserId: order.ownerUserId,
         bid: order.bid
@@ -159,6 +170,62 @@ export class OrdersService {
     });
   }
 
+  private async getExecutionSnapshot(orderId: string) {
+    const phases = await this.executionPhasesRepository.find({
+      where: { orderId },
+      order: { sequence: 'ASC', createdAt: 'ASC' },
+    });
+    const traces = await this.executionTracesRepository.find({
+      where: { orderId },
+      order: { createdAt: 'DESC' },
+      take: 20,
+    });
+
+    const totalWeight = phases.reduce((sum, phase) => sum + (phase.weight || 0), 0);
+    const weightedProgress = phases.reduce(
+      (sum, phase) => sum + (phase.calculateProgress?.() ?? phase.progress ?? 0) * (phase.weight || 0),
+      0,
+    );
+    const totalProgress = totalWeight > 0
+      ? Math.round(weightedProgress / totalWeight)
+      : phases.length > 0
+        ? Math.round(phases.reduce((sum, phase) => sum + (phase.progress || 0), 0) / phases.length)
+        : 0;
+
+    return {
+      totalProgress,
+      status:
+        phases.length === 0
+          ? 'NOT_STARTED'
+          : phases.some((phase) => phase.status === 'FAILED')
+            ? 'FAILED'
+            : phases.every((phase) => phase.status === 'COMPLETED')
+              ? 'COMPLETED'
+              : phases.some((phase) => phase.status === 'RUNNING' || phase.status === 'ASSIGNED')
+                ? 'IN_PROGRESS'
+                : 'PENDING',
+      phases,
+      traces,
+    };
+  }
+
+  private async enrichOrderDetail(order: Order) {
+    const [enriched] = await this.enrichOrdersWithPaymentCodes([order]);
+    const [execution, deliveryHistory, checklistStats] = await Promise.all([
+      this.getExecutionSnapshot(order.id),
+      this.getDeliveryHistory(order.id),
+      this.getChecklistStats(order.id),
+    ]);
+
+    return {
+      ...enriched,
+      execution,
+      executionPhases: execution.phases,
+      deliveryHistory,
+      checklistStats,
+    };
+  }
+
   async findOne(id: string) {
     const order = await this.ordersRepository.findOne({
       where: { id },
@@ -184,13 +251,11 @@ export class OrdersService {
         ],
       });
       if (orderWithBid) {
-        await this.enrichOrdersWithPaymentCodes([orderWithBid]);
-        return orderWithBid;
+        return this.enrichOrderDetail(orderWithBid);
       }
     }
     
-    await this.enrichOrdersWithPaymentCodes([order]);
-    return order;
+    return this.enrichOrderDetail(order);
   }
 
   async findAll(status?: OrderStatus) {
@@ -266,18 +331,18 @@ export class OrdersService {
   async listDeliveries(orderId: string) {
     return this.deliveriesRepository.find({
       where: { orderId },
-      relations: ['owner'],
-      order: { createdAt: 'DESC' },
+      order: { version: 'DESC', createdAt: 'DESC' },
       take: 50,
     });
   }
 
   async findByTask(taskId: string) {
-    return this.ordersRepository.find({
+    const orders = await this.ordersRepository.find({
       where: { task: { id: taskId } },
       relations: ['task', 'bid', 'bid.agent', 'client', 'owner'],
       order: { createdAt: 'DESC' },
     });
+    return this.enrichOrdersWithPaymentCodes(orders);
   }
 
   async pay(id: string, payerUserId: string) {
@@ -310,14 +375,9 @@ export class OrdersService {
     const from = order.status;
     order.status = OrderStatus.IN_PROGRESS;
     order.escrowedAt = new Date();
-    const fee = Math.round(
-      order.amountCny * Number(order.platformFeeRate || 0),
-    );
-    order.platformFeeCny = Math.max(0, Math.min(order.amountCny, fee));
-    order.payoutCny = Math.max(
-      0,
-      order.amountCny - (order.platformFeeCny || 0),
-    );
+    order.platformFeeRate = 0;
+    order.platformFeeCny = 0;
+    order.payoutCny = order.amountCny;
 
     const saved = await this.ordersRepository.save(order);
 
@@ -389,6 +449,14 @@ export class OrdersService {
 
     // 创建新交付
     const version = order.deliveryCount + 1;
+    const artifactUrls = Array.from(
+      new Set([
+        ...(Array.isArray(data.artifactUrls) ? data.artifactUrls : []),
+        ...(typeof data.deliveryUrl === 'string' && data.deliveryUrl.trim()
+          ? [data.deliveryUrl.trim()]
+          : []),
+      ].filter((url) => typeof url === 'string' && url.trim().length > 0)),
+    );
     const delivery = this.deliveriesRepository.create({
       orderId: order.id,
       ownerUserId: order.ownerUserId,
@@ -396,6 +464,11 @@ export class OrdersService {
       status: DeliveryStatus.PENDING_REVIEW,
       deliveryText: typeof data.deliverySummary === 'string' ? data.deliverySummary : null,
       attachmentUrl: typeof data.deliveryUrl === 'string' ? data.deliveryUrl : null,
+      artifactUrls: artifactUrls.length > 0 ? artifactUrls : null,
+      evidenceBundle: data.evidenceBundle || null,
+      commitHash: typeof data.commitHash === 'string' && data.commitHash.trim()
+        ? data.commitHash.trim()
+        : null,
       previewData: data.previewData || null,
     });
     await this.deliveriesRepository.save(delivery);
@@ -407,6 +480,9 @@ export class OrdersService {
       version,
       deliveryText: delivery.deliveryText,
       attachmentUrl: delivery.attachmentUrl,
+      artifactUrls: delivery.artifactUrls,
+      evidenceBundle: delivery.evidenceBundle,
+      commitHash: delivery.commitHash,
       comment: version === 1 ? 'Initial delivery' : `Revision ${version}`,
       createdById: ownerUserId,
     });
@@ -433,7 +509,12 @@ export class OrdersService {
       to: saved.status,
       actorType: ActorType.OWNER,
       actorId: ownerUserId,
-      payload: { deliveryId: delivery.id, version },
+      payload: {
+        deliveryId: delivery.id,
+        version,
+        artifactUrls: delivery.artifactUrls,
+        commitHash: delivery.commitHash,
+      },
     });
 
     // 触发 Webhook 通知雇主
@@ -448,8 +529,8 @@ export class OrdersService {
   async getDeliveryHistory(orderId: string) {
     const deliveries = await this.deliveriesRepository.find({
       where: { orderId },
-      relations: ['revisions', 'owner'],
-      order: { version: 'DESC' },
+      relations: ['revisions'],
+      order: { version: 'DESC', createdAt: 'DESC' },
     });
     return deliveries;
   }
@@ -466,10 +547,33 @@ export class OrdersService {
     if (orderClientId !== clientUserId) {
       throw new BadRequestException('Only the client can accept');
     }
+
+    let checklist = await this.getChecklist(id);
+    if (checklist.length === 0 && order.task?.acceptanceCriteria) {
+      checklist = await this.generateChecklistFromTask(id);
+    }
+    const blockingItems = checklist.filter(
+      (item) =>
+        item.status === ChecklistItemStatus.PENDING ||
+        item.status === ChecklistItemStatus.FAILED,
+    );
+    if (blockingItems.length > 0) {
+      throw new BadRequestException(
+        'Acceptance checklist must be fully passed before accepting delivery',
+      );
+    }
+
     const from = order.status;
     order.status = OrderStatus.PENDING_RELEASE; // 验收后变为待放款状态
     order.acceptedAt = new Date();
     const accepted = await this.ordersRepository.save(order);
+
+    if (order.currentDeliveryId) {
+      await this.deliveriesRepository.update(
+        { id: order.currentDeliveryId },
+        { status: DeliveryStatus.ACCEPTED, acceptedAt: accepted.acceptedAt },
+      );
+    }
 
     // [追踪点] 订单已验收
     console.log(
@@ -485,6 +589,11 @@ export class OrdersService {
       to: accepted.status,
       actorType: ActorType.CLIENT,
       actorId: clientUserId,
+      payload: {
+        checklistTotal: checklist.length,
+        checklistPassed: checklist.filter((item) => item.status === ChecklistItemStatus.PASSED).length,
+        checklistNa: checklist.filter((item) => item.status === ChecklistItemStatus.NA).length,
+      },
     });
 
     return accepted;
@@ -503,6 +612,36 @@ export class OrdersService {
       throw new BadRequestException('Order is not pending release');
     }
 
+    const ownerId = order.bid?.agent?.owner?.id || order.ownerUserId;
+    order.platformFeeRate = 0;
+    order.platformFeeCny = 0;
+    order.payoutCny = order.amountCny;
+    const payoutCny = Number(order.amountCny);
+    const platformFeeCny = 0;
+    if (!ownerId) {
+      throw new BadRequestException('Order has no payable owner');
+    }
+    if (!Number.isFinite(payoutCny) || payoutCny <= 0) {
+      throw new BadRequestException('Order payout amount must be greater than 0');
+    }
+
+    await this.auditLogsRepository.save(
+      this.auditLogsRepository.create({
+        entityType: 'ORDER',
+        entityId: id,
+        action: 'FUNDS_RELEASE_APPROVED',
+        actorType: ActorType.ADMIN,
+        actorId: adminUserId,
+        payload: {
+          transactionId: data.transactionId,
+          notes: data.notes,
+          payoutAmount: payoutCny,
+          platformFee: platformFeeCny,
+          approvedAt: new Date().toISOString(),
+        },
+      }),
+    );
+
     const from = order.status;
     order.status = OrderStatus.COMPLETED;
     order.releasedAt = new Date();
@@ -514,11 +653,7 @@ export class OrdersService {
     );
 
     // 给开发者增加余额（订单收入）
-    const ownerId = order.bid?.agent?.owner?.id;
-    const payoutCny = completed.payoutCny ?? 0;
-    const platformFeeCny = completed.platformFeeCny ?? 0;
-
-    if (ownerId && payoutCny > 0) {
+    if (payoutCny > 0) {
       try {
         await this.balanceService.addIncome({
           userId: ownerId,
@@ -851,8 +986,8 @@ export class OrdersService {
     // 解析验收标准（假设每行是一个检查项）
     const criteriaLines = acceptanceCriteria
       .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0);
+      .map((line: string) => line.trim())
+      .filter((line: string) => line.length > 0);
 
     const checklistItems: AcceptanceChecklist[] = [];
     

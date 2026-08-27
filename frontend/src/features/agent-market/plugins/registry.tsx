@@ -1,18 +1,15 @@
+/* eslint-disable react-refresh/only-export-components -- registry intentionally exports components and resolvers */
 import type { ComponentType } from 'react';
 import { OPENNOTEBOOK_AGENT_PROVIDER } from '../../../config/api';
 import { defineAgentPlugin, resolveAgentPlugin } from './core';
-import DataPlugin from './data';
 import DigiHumanPlugin from './digihuman';
 import FlashcardPlugin from './flashcard';
-import FrameDirectorPlugin from './frameDirector';
 import GenericPlugin from './generic';
 import ImagePlugin from './image';
 import InvoicePlugin from './invoice';
 import MindmapPlugin from './mindmap';
 import MusicPlugin from './music';
 import PodcastPlugin from './podcast';
-import ScriptPlugin from './script';
-import TranslatePlugin from './translate';
 import VideoPlugin from './video';
 import VoicePlugin from './voice';
 import VoiceClonePlugin from './voiceClone';
@@ -58,11 +55,11 @@ export const agentMarketPlugins = [
       version: '1.0.0',
       description: '文生视频、首尾帧视频和参考生视频执行面板。',
       entry: 'agent-market.panel',
-      category: 'workflow',
+      category: 'media',
       provider: OPENNOTEBOOK_AGENT_PROVIDER,
       agentIds: ['video'],
-      capabilityKinds: ['workflow'],
-      workflowTypes: ['videoagent'],
+      capabilityKinds: ['media'],
+      mediaTypes: ['video', 'videogen'],
       tags: ['video', 'generation'],
       priority: 100,
     },
@@ -73,13 +70,13 @@ export const agentMarketPlugins = [
       id: 'genesis.agent-market.voice',
       displayName: '语音合成',
       version: '1.0.0',
-      description: '文字转语音、音色和输出格式面板。',
+      description: 'Gemini TTS 文字转语音、音色、音量和语速面板。',
       entry: 'agent-market.panel',
-      category: 'media',
+      category: 'workflow',
       provider: OPENNOTEBOOK_AGENT_PROVIDER,
       agentIds: ['voice'],
-      capabilityKinds: ['media'],
-      mediaTypes: ['tts', 'audio'],
+      capabilityKinds: ['workflow'],
+      workflowTypes: ['speech_synth'],
       tags: ['audio', 'tts'],
       priority: 100,
     },
@@ -90,13 +87,12 @@ export const agentMarketPlugins = [
       id: 'genesis.agent-market.voice-clone',
       displayName: '声音克隆',
       version: '1.0.0',
-      description: '参考录音克隆和目标文本合成面板。',
+      description: 'OpenNotebook 公共 Agent API 尚未开放声音克隆能力。',
       entry: 'agent-market.panel',
-      category: 'media',
+      category: 'unavailable',
       provider: OPENNOTEBOOK_AGENT_PROVIDER,
       agentIds: ['clone'],
-      capabilityKinds: ['media'],
-      mediaTypes: ['audio', 'tts'],
+      capabilityKinds: ['unavailable'],
       tags: ['audio', 'clone'],
       priority: 100,
     },
@@ -203,68 +199,6 @@ export const agentMarketPlugins = [
       priority: 100,
     },
     Panel: InvoicePlugin,
-  }),
-  defineAgentPlugin({
-    manifest: {
-      id: 'genesis.agent-market.frame-director',
-      displayName: 'FrameDirector',
-      version: '1.0.0',
-      description: '视频 brief、分镜、预览和渲染执行面板。',
-      entry: 'agent-market.panel',
-      category: 'media',
-      provider: OPENNOTEBOOK_AGENT_PROVIDER,
-      agentIds: ['framedirector'],
-      capabilityKinds: ['media'],
-      mediaTypes: ['framedirector'],
-      tags: ['video', 'director'],
-      priority: 100,
-    },
-    Panel: FrameDirectorPlugin,
-  }),
-  defineAgentPlugin({
-    manifest: {
-      id: 'genesis.agent-market.script',
-      displayName: '脚本大师',
-      version: '1.0.0',
-      description: '本地生成脚本任务包。',
-      entry: 'agent-market.panel',
-      category: 'local',
-      agentIds: ['script'],
-      capabilityKinds: ['local'],
-      tags: ['script', 'text'],
-      priority: 100,
-    },
-    Panel: ScriptPlugin,
-  }),
-  defineAgentPlugin({
-    manifest: {
-      id: 'genesis.agent-market.data',
-      displayName: '数据可视化',
-      version: '1.0.0',
-      description: '本地生成数据可视化任务包。',
-      entry: 'agent-market.panel',
-      category: 'local',
-      agentIds: ['data'],
-      capabilityKinds: ['local'],
-      tags: ['data', 'chart'],
-      priority: 100,
-    },
-    Panel: DataPlugin,
-  }),
-  defineAgentPlugin({
-    manifest: {
-      id: 'genesis.agent-market.translate',
-      displayName: '多语翻译',
-      version: '1.0.0',
-      description: '本地生成专业翻译任务包。',
-      entry: 'agent-market.panel',
-      category: 'local',
-      agentIds: ['translate'],
-      capabilityKinds: ['local'],
-      tags: ['translation', 'text'],
-      priority: 100,
-    },
-    Panel: TranslatePlugin,
   }),
 ];
 

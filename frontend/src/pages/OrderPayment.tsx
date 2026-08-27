@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, CheckCircle2, CreditCard, ImagePlus, Loader2, QrCode, ReceiptText, Upload } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
+import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
 
 interface PlatformCode {
   id: string;
@@ -26,291 +28,201 @@ export default function OrderPayment() {
   const navigate = useNavigate();
   const { token } = useAuthStore();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [formError, setFormError] = useState('');
   const [paymentInfo, setPaymentInfo] = useState<OrderPaymentInfo | null>(null);
-  const [selectedCodeId, setSelectedCodeId] = useState<string>('');
+  const [selectedCodeId, setSelectedCodeId] = useState('');
   const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofPreviewUrl, setProofPreviewUrl] = useState('');
+  const previewUrlRef = useRef('');
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (orderId) {
-      fetchPaymentInfo();
-    }
-  }, [orderId]);
-
-  const fetchPaymentInfo = async () => {
+  const fetchPaymentInfo = useCallback(async () => {
+    if (!orderId || !token) return;
+    setLoading(true);
+    setLoadError('');
     try {
-      const res = await fetch(`${API_BASE}/api/v1/payments/order/${orderId}/create`, {
+      const response = await fetch(`${API_BASE}/api/v1/payments/order/${orderId}/create`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        setPaymentInfo(data.data);
-        if (data.data.platformCodes.length > 0) {
-          setSelectedCodeId(data.data.platformCodes[0].id);
-        }
-      } else {
-        const errorData = await res.json();
-        setError(errorData.message || '获取支付信息失败');
-      }
-    } catch {
-      setError('获取支付信息失败');
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || '获取支付信息失败');
+      const info = payload.data as OrderPaymentInfo;
+      setPaymentInfo(info);
+      setSelectedCodeId(info.platformCodes[0]?.id || '');
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : '获取支付信息失败');
     } finally {
       setLoading(false);
     }
-  };
+  }, [orderId, token]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setProofFile(file);
-    }
+  useEffect(() => {
+    fetchPaymentInfo();
+  }, [fetchPaymentInfo]);
+
+  useEffect(() => () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+  }, []);
+
+  const selectedCode = useMemo(
+    () => paymentInfo?.platformCodes.find((code) => code.id === selectedCodeId) || null,
+    [paymentInfo, selectedCodeId],
+  );
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    const nextPreview = file ? URL.createObjectURL(file) : '';
+    previewUrlRef.current = nextPreview;
+    setProofFile(file);
+    setProofPreviewUrl(nextPreview);
+    setFormError('');
   };
 
   const handleSubmit = async () => {
     if (!proofFile) {
-      alert('请上传支付凭证截图');
+      setFormError('请先上传支付成功页面的截图。');
       return;
     }
     if (!selectedCodeId) {
-      alert('请选择支付方式');
+      setFormError('请选择本次使用的支付方式。');
       return;
     }
+    if (!orderId || !token) return;
 
     setSubmitting(true);
-    setError('');
-
+    setFormError('');
     const formData = new FormData();
     formData.append('file', proofFile);
     formData.append('platformCodeId', selectedCodeId);
 
     try {
-      const res = await fetch(`${API_BASE}/api/v1/payments/order/${orderId}/confirm-payment`, {
+      const response = await fetch(`${API_BASE}/api/v1/payments/order/${orderId}/confirm-payment`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-
-      if (res.ok) {
-        alert('支付凭证已提交，请等待平台确认');
-        navigate('/orders');
-      } else {
-        const errorData = await res.json();
-        setError(errorData.message || '提交失败');
-      }
-    } catch {
-      setError('提交失败，请重试');
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || '提交失败');
+      navigate(`/orders/${orderId}`, { replace: true });
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : '提交失败，请重试');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const formatAmount = (amount: number) => {
-    return (amount / 100).toFixed(2);
-  };
-
-  const getTypeLabel = (type: string) => {
-    return type === 'ALIPAY' ? '支付宝' : '微信';
-  };
+  if (!token) return <Navigate to="/login" replace />;
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-500">加载中...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-2xl mx-auto px-4">
-          <div className="bg-red-50 text-red-700 p-4 rounded-lg">{error}</div>
+      <div className="mx-auto w-full max-w-[1440px] space-y-5" aria-label="正在加载支付信息">
+        <div className="h-20 animate-pulse rounded-2xl bg-[var(--background-100)]" />
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+          <div className="h-[520px] animate-pulse rounded-2xl border border-[color:var(--border)] bg-white" />
+          <div className="h-80 animate-pulse rounded-2xl border border-[color:var(--border)] bg-white" />
         </div>
       </div>
     );
   }
 
-  if (!paymentInfo) {
+  if (loadError || !paymentInfo) {
     return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-2xl mx-auto px-4">
-          <div className="text-center text-gray-500">支付信息不存在</div>
-        </div>
+      <div className="mx-auto w-full max-w-3xl py-8">
+        <WorkbenchStatePanel
+          icon={CreditCard}
+          title="支付信息无法加载"
+          description={loadError || '当前订单没有可用的支付信息。'}
+          tone="error"
+          action={<button type="button" onClick={fetchPaymentInfo} className="btn-cs btn-primary btn-sm">重新加载</button>}
+        />
       </div>
     );
   }
 
   const { orderPayment, platformCodes } = paymentInfo;
+  const amount = (value: number) => `¥${(value / 100).toFixed(2)}`;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-2xl mx-auto px-4">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">订单支付</h1>
+    <div className="mx-auto w-full max-w-[1440px] space-y-6">
+      <WorkbenchPageHeader
+        icon={CreditCard}
+        eyebrow="订单支付"
+        title="完成付款并提交凭证"
+        description="选择平台收款方式完成转账，然后上传支付成功截图供平台核验。"
+        actions={<Link to={`/orders/${orderId}`} className="btn-cs btn-ghost-dark btn-sm"><ArrowLeft className="h-4 w-4" />返回订单</Link>}
+      />
 
-        {/* 订单金额信息 */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">支付金额</h2>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">订单金额</span>
-              <span className="text-xl font-bold text-gray-900">
-                ¥{formatAmount(orderPayment.amountCny)}
-              </span>
-            </div>
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-gray-500">平台服务费</span>
-              <span className="text-gray-500">¥{formatAmount(orderPayment.platformFeeCny)}</span>
-            </div>
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-gray-500">开发者实收</span>
-              <span className="text-gray-500">¥{formatAmount(orderPayment.payoutCny)}</span>
-            </div>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+        <section className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white">
+          <div className="flex flex-col gap-4 border-b border-[color:var(--border)] px-5 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-6">
+            <div><p className="text-sm text-[var(--text-500)]">本次应付</p><p className="mt-1 text-3xl font-bold tabular-nums text-[var(--text-900)]">{amount(orderPayment.amountCny)}</p></div>
+            <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              <div><dt className="text-xs text-[var(--text-500)]">平台服务费</dt><dd className="mt-1 font-medium text-[var(--text-700)]">{amount(orderPayment.platformFeeCny)}</dd></div>
+              <div><dt className="text-xs text-[var(--text-500)]">开发者实收</dt><dd className="mt-1 font-medium text-[var(--text-700)]">{amount(orderPayment.payoutCny)}</dd></div>
+            </dl>
           </div>
-        </div>
 
-        {/* 选择支付方式 */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">选择支付方式</h2>
-          
-          {platformCodes.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <p>暂无可用的支付方式</p>
-              <p className="text-sm mt-2">请联系平台管理员</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {platformCodes.map((code) => (
-                <div
-                  key={code.id}
-                  onClick={() => setSelectedCodeId(code.id)}
-                  className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                    selectedCodeId === code.id
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                        selectedCodeId === code.id
-                          ? 'border-blue-500'
-                          : 'border-gray-300'
-                      }`}
+          <div className="px-5 py-5 sm:px-6">
+            <div className="flex items-center gap-2"><QrCode className="h-4 w-4 text-[var(--brand-600)]" /><h2 className="font-semibold text-[var(--text-900)]">选择收款方式</h2></div>
+            {platformCodes.length === 0 ? (
+              <div className="mt-4 rounded-xl bg-[var(--state-warning-surface)] p-4 text-sm text-[var(--state-warning)]">平台暂未配置可用的收款方式，请联系管理员后再试。</div>
+            ) : (
+              <div className="mt-4 flex flex-wrap gap-3" role="radiogroup" aria-label="支付方式">
+                {platformCodes.map((code) => {
+                  const checked = selectedCodeId === code.id;
+                  return (
+                    <button
+                      key={code.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={checked}
+                      onClick={() => { setSelectedCodeId(code.id); setFormError(''); }}
+                      className={`flex min-h-12 items-center gap-3 rounded-xl border px-4 text-left transition-colors ${checked ? 'border-[var(--brand-400)] bg-[var(--brand-50)] text-[var(--brand-700)]' : 'border-[color:var(--border)] text-[var(--text-600)] hover:border-[var(--brand-300)]'}`}
                     >
-                      {selectedCodeId === code.id && (
-                        <div className="w-3 h-3 rounded-full bg-blue-500" />
-                      )}
-                    </div>
-                    <span
-                      className={`px-2 py-1 text-xs rounded ${
-                        code.type === 'ALIPAY'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-green-100 text-green-800'
-                      }`}
-                    >
-                      {getTypeLabel(code.type)}
-                    </span>
-                    <span className="text-gray-700">{code.accountName}</span>
+                      <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${checked ? 'border-[var(--brand-500)]' : 'border-[var(--background-500)]'}`}>{checked && <span className="h-2.5 w-2.5 rounded-full bg-[var(--brand-500)]" />}</span>
+                      <span><span className="block text-sm font-medium">{code.type === 'ALIPAY' ? '支付宝' : '微信支付'}</span><span className="mt-0.5 block text-xs opacity-75">{code.accountName}</span></span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {selectedCode && (
+            <div className="border-t border-[color:var(--border)] px-5 py-6 sm:px-6">
+              <div className="grid items-center gap-6 sm:grid-cols-[minmax(0,1fr)_220px]">
+                <div>
+                  <h2 className="font-semibold text-[var(--text-900)]">扫码完成付款</h2>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--text-500)]">使用{selectedCode.type === 'ALIPAY' ? '支付宝' : '微信'}扫描右侧二维码，核对收款账号与金额后完成转账。</p>
+                  <div className="mt-5 rounded-xl bg-[var(--background-100)] p-4 text-sm">
+                    <div className="flex justify-between gap-4"><span className="text-[var(--text-500)]">收款账号</span><span className="text-right font-medium text-[var(--text-800)]">{selectedCode.accountName}</span></div>
+                    <div className="mt-3 flex justify-between gap-4"><span className="text-[var(--text-500)]">转账金额</span><span className="text-lg font-bold text-[var(--state-error)]">{amount(orderPayment.amountCny)}</span></div>
                   </div>
                 </div>
-              ))}
+                <img src={selectedCode.qrCodeUrl} alt={`${selectedCode.type === 'ALIPAY' ? '支付宝' : '微信'}平台收款码`} className="mx-auto aspect-square w-full max-w-[220px] rounded-xl border border-[color:var(--border)] bg-white object-contain p-3" />
+              </div>
             </div>
           )}
-        </div>
+        </section>
 
-        {/* 扫码支付 */}
-        {selectedCodeId && (
-          <div className="bg-white rounded-lg shadow p-6 mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">扫码支付</h2>
-            
-            {platformCodes.find(c => c.id === selectedCodeId) && (
-              <div className="text-center">
-                <p className="text-gray-600 mb-4">
-                  请使用{getTypeLabel(platformCodes.find(c => c.id === selectedCodeId)!.type)}扫描下方二维码完成支付
-                </p>
-                <div className="inline-block border-2 border-gray-200 rounded-lg p-4">
-                  <img
-                    src={platformCodes.find(c => c.id === selectedCodeId)!.qrCodeUrl}
-                    alt="收款码"
-                    className="w-64 h-64 object-contain"
-                  />
-                </div>
-                <p className="text-sm text-gray-500 mt-4">
-                  支付金额: <span className="text-xl font-bold text-red-600">¥{formatAmount(orderPayment.amountCny)}</span>
-                </p>
-              </div>
-            )}
+        <aside className="h-fit overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white lg:sticky lg:top-20">
+          <div className="border-b border-[color:var(--border)] px-5 py-5"><h2 className="flex items-center gap-2 font-semibold text-[var(--text-900)]"><ReceiptText className="h-4 w-4 text-[var(--brand-600)]" />提交支付凭证</h2><p className="mt-1 text-sm leading-6 text-[var(--text-500)]">上传支付成功页面，平台确认后订单进入执行阶段。</p></div>
+          <div className="space-y-4 px-5 py-5">
+            {formError && <div className="rounded-xl border border-[#ffc6c1] bg-[var(--state-error-surface)] p-3 text-sm text-[var(--state-error)]">{formError}</div>}
+            <label htmlFor="payment-proof" className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[color:var(--border)] px-4 text-center text-[var(--text-500)] transition-colors hover:border-[var(--brand-300)] hover:text-[var(--brand-600)]">
+              {proofPreviewUrl ? <img src={proofPreviewUrl} alt="支付凭证预览" className="max-h-52 max-w-full rounded-lg object-contain" /> : <><ImagePlus className="mb-2 h-7 w-7" /><span className="text-sm font-medium">选择支付截图</span><span className="mt-1 text-xs">支持常见图片格式</span></>}
+              <input id="payment-proof" type="file" accept="image/*" onChange={handleFileChange} className="sr-only" />
+            </label>
+            {proofFile && <div className="flex items-center gap-2 text-xs text-[var(--state-success-text)]"><CheckCircle2 className="h-4 w-4" /><span className="min-w-0 truncate">{proofFile.name}</span></div>}
+            <button type="button" onClick={handleSubmit} disabled={submitting || !proofFile || !selectedCodeId} className="btn-cs btn-primary btn-sm w-full disabled:cursor-not-allowed disabled:opacity-50">
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}{submitting ? '正在提交...' : '确认已支付'}
+            </button>
+            <p className="text-xs leading-5 text-[var(--text-500)]">请勿上传包含无关隐私信息的图片。平台仅使用凭证核验本次订单付款。</p>
           </div>
-        )}
-
-        {/* 上传支付凭证 */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">上传支付凭证</h2>
-          
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-              完成支付后，请截图上传支付成功页面，以便平台确认收款
-            </p>
-            
-            <div className="flex items-center gap-4">
-              <label className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition-colors">
-                <span>{proofFile ? '更换图片' : '选择图片'}</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className="hidden"
-                />
-              </label>
-              {proofFile && (
-                <span className="text-sm text-green-600">
-                  已选择: {proofFile.name}
-                </span>
-              )}
-            </div>
-
-            {proofFile && (
-              <div className="mt-4">
-                <img
-                  src={URL.createObjectURL(proofFile)}
-                  alt="支付凭证预览"
-                  className="max-w-xs border rounded-lg"
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 提交按钮 */}
-        <div className="flex gap-4">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            返回
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || !proofFile || !selectedCodeId}
-            className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-          >
-            {submitting ? '提交中...' : '确认已支付'}
-          </button>
-        </div>
-
-        {/* 说明 */}
-        <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-yellow-800 mb-2">支付说明</h3>
-          <ul className="text-sm text-yellow-700 space-y-1 list-disc list-inside">
-            <li>请使用支付宝或微信扫描上方二维码完成支付</li>
-            <li>支付完成后，请截图并上传支付成功页面</li>
-            <li>平台确认收款后，订单将开始执行</li>
-            <li>如有问题，请联系平台客服</li>
-          </ul>
-        </div>
+        </aside>
       </div>
     </div>
   );

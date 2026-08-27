@@ -10,8 +10,8 @@ export default defineConfig({
   server: {
     host: true,
     proxy: {
-      '/api': {
-        target: 'http://genesis-backend:4000',
+      '^/api(?:/|$)': {
+        target: 'http://localhost:4000',
         changeOrigin: true,
       },
     },

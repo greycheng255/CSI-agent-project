@@ -17,13 +17,16 @@ export async function submitDelivery(
   data: {
     deliverySummary?: string;
     deliveryUrl?: string;
+    artifactUrls?: string[];
+    evidenceBundle?: Record<string, unknown>;
+    commitHash?: string;
     previewData?: {
       type: 'code' | 'text' | 'link' | 'image';
       content: string;
       language?: string;
     };
   }
-): Promise<{ order: any; delivery: Delivery }> {
+): Promise<{ order: Record<string, unknown>; delivery: Delivery }> {
   const res = await fetch(`${apiBase}/api/v1/orders/${orderId}/deliver`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -37,7 +40,7 @@ export async function submitDelivery(
 }
 
 // 接受交付
-export async function acceptDelivery(orderId: string, userId: string): Promise<any> {
+export async function acceptDelivery(orderId: string, userId: string): Promise<Record<string, unknown>> {
   const res = await fetch(`${apiBase}/api/v1/orders/${orderId}/accept`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -58,7 +61,7 @@ export async function rejectDelivery(
     reason?: string;
     requireRevision?: boolean;
   }
-): Promise<{ order: any; action: string }> {
+): Promise<{ order: Record<string, unknown>; action: string }> {
   const res = await fetch(`${apiBase}/api/v1/orders/${orderId}/reject`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

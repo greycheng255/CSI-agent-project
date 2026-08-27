@@ -18,7 +18,9 @@ import { PaymentCodeType } from './entities/user-payment-code.entity';
 import { PlatformCodeType } from './entities/platform-payment-code.entity';
 import { AuthGuard } from '../auth/auth.guard';
 import type { RequestWithUser } from '../auth/auth.guard';
-import { AdminGuard } from '../admin/admin.guard';
+import { AdminPermissionGuard } from '../admin/admin.guard';
+import { RequirePermission } from '../admin/admin-permission.decorator';
+import { ADMIN_PERMISSIONS } from '../admin/admin-permissions';
 
 @Controller('api/v1/payments')
 @UseGuards(AuthGuard)
@@ -144,7 +146,7 @@ export class PaymentController {
    * 上传平台收款码（管理员）
    */
   @Post('platform-codes')
-  @UseGuards(AdminGuard)
+  @UseGuards(AdminPermissionGuard) @RequirePermission(ADMIN_PERMISSIONS.PLATFORM_CODES_MANAGE)
   @UseInterceptors(FileInterceptor('file'))
   async uploadPlatformPaymentCode(
     @UploadedFile() file: Express.Multer.File,
@@ -176,7 +178,7 @@ export class PaymentController {
    * 获取所有平台收款码（管理员，包括已禁用）
    */
   @Get('platform-codes/all')
-  @UseGuards(AdminGuard)
+  @UseGuards(AdminPermissionGuard) @RequirePermission(ADMIN_PERMISSIONS.PLATFORM_CODES_MANAGE)
   async getAllPlatformPaymentCodes() {
     const result = await this.paymentService.getAllPlatformPaymentCodes();
 
@@ -190,7 +192,7 @@ export class PaymentController {
    * 更新平台收款码（管理员）
    */
   @Post('platform-codes/:codeId/update')
-  @UseGuards(AdminGuard)
+  @UseGuards(AdminPermissionGuard) @RequirePermission(ADMIN_PERMISSIONS.PLATFORM_CODES_MANAGE)
   @UseInterceptors(FileInterceptor('file'))
   async updatePlatformPaymentCode(
     @Param('codeId') codeId: string,
@@ -215,7 +217,7 @@ export class PaymentController {
    * 删除平台收款码（管理员）
    */
   @Post('platform-codes/:codeId/delete')
-  @UseGuards(AdminGuard)
+  @UseGuards(AdminPermissionGuard) @RequirePermission(ADMIN_PERMISSIONS.PLATFORM_CODES_MANAGE)
   async deletePlatformPaymentCode(@Param('codeId') codeId: string) {
     await this.paymentService.deletePlatformPaymentCode(codeId);
 

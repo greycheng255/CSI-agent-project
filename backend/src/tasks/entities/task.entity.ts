@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   ManyToOne,
   JoinColumn,
   OneToMany,
@@ -48,7 +49,28 @@ export class Task {
     type: isSqlite ? 'datetime' : 'timestamp with time zone',
     nullable: true,
   })
-  expectedDeliveryAt: Date;
+  expectedDeliveryAt: Date | null;
+
+  @Column(
+    isSqlite
+      ? { type: 'simple-json', nullable: true }
+      : { type: 'text', array: true, nullable: true },
+  )
+  tags: string[] | null;
+
+  @Column(
+    isSqlite
+      ? { name: 'skills_required', type: 'simple-json', nullable: true }
+      : { name: 'skills_required', type: 'text', array: true, nullable: true },
+  )
+  skillsRequired: string[] | null;
+
+  @Column(
+    isSqlite
+      ? { name: 'attachment_urls', type: 'simple-json', nullable: true }
+      : { name: 'attachment_urls', type: 'text', array: true, nullable: true },
+  )
+  attachmentUrls: string[] | null;
 
   @Column({
     type: isSqlite ? 'simple-enum' : 'enum',
@@ -59,6 +81,9 @@ export class Task {
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 
   @OneToMany(() => Bid, (bid) => bid.task)
   bids: Bid[];

@@ -4,27 +4,63 @@ import {
   Logger,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';
-import { Cron, CronExpression } from '@nestjs/schedule';
-import { Agent, AgentStatus, OpenclawStatus } from './entities/agent.entity';
-import { AgentApiKey } from './entities/agent-api-key.entity';
+import {
+  Agent,
+  AgentApprovalStatus,
+  AgentRuntimeStatus,
+  AgentStatus,
+  AgentType,
+  OpenclawStatus,
+} from './entities/agent.entity';
+import { AgentCredential } from './entities/agent-credential.entity';
+import { AgentAuditLog } from './entities/agent-audit-log.entity';
 import { User } from '../users/entities/user.entity';
 import { WebhookDelivery } from '../webhooks/entities/webhook-delivery.entity';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { AgentCardJson, AgentCardService } from './agent-card.service';
+import { AgentsHealthService } from './agents-health.service';
 
 type CreateAgentDto = {
   name: string;
   description?: string;
   webhookUrl?: string;
   skills?: string[];
+  domains?: string[];
+  tags?: string[];
   podName?: string;
   externalId?: string;
   agentMode?: 'kubernetes' | 'external';
+  agentType?: AgentType;
+  cardUrl?: string;
+  cardJson?: AgentCardJson;
+  endpointUrl?: string;
+  healthUrl?: string;
+  authType?: 'bearer' | 'api_key' | 'signature' | 'mtls' | 'none';
+  pricingModel?: string;
+  basePrice?: number;
+  currency?: string;
+  contactEmail?: string;
 };
+
+type AgentCredentialSummary = {
+  hasActiveApiKey: boolean;
+  activeApiKeyCount: number;
+  lastCredentialUsedAt: Date | null;
+};
+
+const SYSTEM_DEFAULT_AGENT_PREFIX = 'system-default-';
+const DEFAULT_PLATFORM_AGENT_SKILLS = [
+  'task_analysis',
+  'code_generation',
+  'data_processing',
+  'ai_integration',
+];
 
 @Injectable()
 export class AgentsService {
@@ -33,28 +69,115 @@ export class AgentsService {
   constructor(
     @InjectRepository(Agent)
     private agentsRepository: Repository<Agent>,
-    @InjectRepository(AgentApiKey)
-    private agentApiKeysRepository: Repository<AgentApiKey>,
+    @InjectRepository(AgentCredential)
+    private agentCredentialsRepository: Repository<AgentCredential>,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     @InjectRepository(WebhookDelivery)
     private webhookDeliveriesRepository: Repository<WebhookDelivery>,
+    @InjectRepository(AgentAuditLog)
+    private agentAuditLogsRepository: Repository<AgentAuditLog>,
     private httpService: HttpService,
+    private agentCardService: AgentCardService,
+    private agentsHealthService: AgentsHealthService,
   ) {}
-
-  /**
-   * 定时检查离线 Agent（每 30 秒执行一次）
-   */
-  @Cron(CronExpression.EVERY_30_SECONDS)
-  async handleOfflineCheck() {
-    const count = await this.checkOfflineAgents();
-    if (count > 0) {
-      this.logger.log(`Marked ${count} agents as offline`);
-    }
-  }
 
   private hashKey(key: string) {
     return createHash('sha256').update(key).digest('hex');
+  }
+
+  async ensureDefaultSystemAgent(owner: User) {
+    if (!owner?.id) {
+      throw new NotFoundException('Owner not found');
+    }
+
+    const externalId = `${SYSTEM_DEFAULT_AGENT_PREFIX}${owner.id}`;
+    const existing = await this.agentsRepository.findOne({
+      where: { externalId },
+      relations: ['owner', 'cards', 'capabilities', 'tags'],
+    });
+
+    if (existing) {
+      const updates: Partial<Agent> = {};
+      if (existing.agentType !== AgentType.PLATFORM_MANAGED) {
+        updates.agentType = AgentType.PLATFORM_MANAGED;
+      }
+      if (existing.agentMode !== 'kubernetes') {
+        updates.agentMode = 'kubernetes';
+      }
+      if (existing.approvalStatus !== AgentApprovalStatus.APPROVED) {
+        updates.approvalStatus = AgentApprovalStatus.APPROVED;
+        updates.approvedAt = new Date();
+      }
+      const metadata = this.defaultSystemAgentMetadata(owner.id, existing.metadata);
+      if (JSON.stringify(existing.metadata || {}) !== JSON.stringify(metadata)) {
+        updates.metadata = metadata;
+      }
+      if (Object.keys(updates).length > 0) {
+        Object.assign(existing, updates);
+        await this.agentsRepository.save(existing);
+      }
+      return this.findOneWithDetails(existing.id);
+    }
+
+    const endpointUrl = this.defaultRuntimeEndpointUrl();
+    const healthUrl = this.defaultRuntimeHealthUrl(endpointUrl);
+    const displayName = owner.displayName || owner.phone || owner.id.slice(0, 8);
+
+    const agent = this.agentsRepository.create({
+      name: `${displayName} Default Agent`,
+      description:
+        'System-created default agent backed by the platform Agent Runtime.',
+      webhookUrl: endpointUrl,
+      owner,
+      status: AgentStatus.ONLINE,
+      approvalStatus: AgentApprovalStatus.APPROVED,
+      runtimeStatus: AgentRuntimeStatus.ONLINE,
+      agentType: AgentType.PLATFORM_MANAGED,
+      agentMode: 'kubernetes',
+      isActive: false,
+      visibility: 'public',
+      externalId,
+      endpointUrl,
+      healthUrl,
+      authType: 'bearer',
+      pricingModel: 'quote',
+      currency: 'CNY',
+      approvedAt: new Date(),
+      lastHeartbeatAt: new Date(),
+      skills: DEFAULT_PLATFORM_AGENT_SKILLS,
+      metadata: this.defaultSystemAgentMetadata(owner.id),
+    });
+
+    const saved = await this.agentsRepository.save(agent);
+    const card = this.agentCardService.buildPlatformCard({
+      name: saved.name,
+      description: saved.description,
+      agentType: saved.agentType,
+      endpointUrl: saved.endpointUrl || undefined,
+      webhookUrl: saved.webhookUrl || undefined,
+      healthUrl: saved.healthUrl || undefined,
+      authType: saved.authType,
+      domains: ['general'],
+      skills: DEFAULT_PLATFORM_AGENT_SKILLS,
+      pricingModel: saved.pricingModel,
+      currency: saved.currency,
+      tags: this.defaultSystemAgentTags(owner.id),
+    });
+
+    await this.agentCardService.saveActiveCard({
+      agent: saved,
+      card,
+      source: 'platform',
+    });
+    await this.agentCardService.replaceExtractedMetadata(saved, card);
+    await this.writeAudit(saved, owner, 'system_default_assigned', null, {
+      approvalStatus: saved.approvalStatus,
+      isActive: saved.isActive,
+      metadata: saved.metadata,
+    });
+
+    return this.findOneWithDetails(saved.id);
   }
 
   async create(data: CreateAgentDto, ownerId: string) {
@@ -71,6 +194,21 @@ export class AgentsService {
       webhookUrl: data.webhookUrl,
       owner: owner,
       status: AgentStatus.ONLINE, // 默认上线
+      approvalStatus: AgentApprovalStatus.PENDING_REVIEW,
+      runtimeStatus: AgentRuntimeStatus.ONLINE,
+      agentType:
+        data.agentType ||
+        (data.agentMode === 'external'
+          ? AgentType.SELF_HOSTED
+          : AgentType.PLATFORM_MANAGED),
+      cardUrl: data.cardUrl || null,
+      endpointUrl: data.endpointUrl || data.webhookUrl || null,
+      healthUrl: data.healthUrl || null,
+      authType: data.authType || 'bearer',
+      pricingModel: data.pricingModel || 'quote',
+      basePrice: data.basePrice ?? null,
+      currency: data.currency || 'CNY',
+      contactEmail: data.contactEmail || null,
       podName: data.podName,
       externalId: data.externalId,
       agentMode: data.agentMode || 'kubernetes',
@@ -88,7 +226,90 @@ export class AgentsService {
           : undefined,
     });
 
-    return this.agentsRepository.save(agent);
+    const saved = await this.agentsRepository.save(agent);
+    const card =
+      data.cardJson ||
+      this.agentCardService.buildPlatformCard({
+        name: data.name,
+        description: data.description,
+        agentType: saved.agentType,
+        endpointUrl: saved.endpointUrl || undefined,
+        webhookUrl: saved.webhookUrl || undefined,
+        healthUrl: saved.healthUrl || undefined,
+        authType: saved.authType,
+        domains: data.domains,
+        skills: data.skills,
+        pricingModel: saved.pricingModel,
+        currency: saved.currency,
+        minimumPrice: saved.basePrice || undefined,
+        tags: data.tags,
+      });
+
+    await this.agentCardService.saveActiveCard({
+      agent: saved,
+      card,
+      source: data.cardJson ? 'manual' : 'platform',
+    });
+    await this.agentCardService.replaceExtractedMetadata(saved, card);
+    await this.writeAudit(saved, owner, 'register', null, {
+      approvalStatus: saved.approvalStatus,
+      runtimeStatus: saved.runtimeStatus,
+    });
+
+    return this.findOneWithDetails(saved.id);
+  }
+
+  async registerExternal(data: CreateAgentDto, ownerId: string) {
+    const owner = await this.usersRepository.findOne({ where: { id: ownerId } });
+    if (!owner) throw new NotFoundException('Owner not found');
+
+    const card = data.cardJson
+      ? this.agentCardService.validate(data.cardJson)
+      : data.cardUrl
+        ? await this.agentCardService.fetchAndValidate(data.cardUrl)
+        : null;
+    if (!card) {
+      throw new BadRequestException('cardUrl or cardJson is required');
+    }
+
+    const agent = this.agentsRepository.create({
+      name: card.name || data.name,
+      description: card.description || data.description,
+      webhookUrl: card.endpoints?.webhook || card.endpoints?.callback || data.webhookUrl,
+      owner,
+      skills: this.extractSkillNames(card),
+      status: AgentStatus.OFFLINE,
+      approvalStatus: AgentApprovalStatus.PENDING_REVIEW,
+      runtimeStatus: AgentRuntimeStatus.UNKNOWN,
+      agentType: AgentType.SELF_HOSTED,
+      agentMode: 'external',
+      externalId: card.agent_id || data.externalId,
+      cardUrl: data.cardUrl || null,
+      endpointUrl: card.endpoints?.task || data.endpointUrl || null,
+      healthUrl: card.endpoints?.health || data.healthUrl || null,
+      authType: (card.auth?.type as Agent['authType']) || data.authType || 'bearer',
+      pricingModel: card.pricing?.model || data.pricingModel || 'quote',
+      basePrice: card.pricing?.minimum_price ?? data.basePrice ?? null,
+      currency: card.pricing?.currency || data.currency || 'CNY',
+      contactEmail: card.provider?.contact_email || data.contactEmail || null,
+      version: card.version || '1.0.0',
+      metadata: card.metadata || null,
+    });
+
+    const saved = await this.agentsRepository.save(agent);
+    await this.agentCardService.saveActiveCard({
+      agent: saved,
+      card,
+      source: data.cardUrl ? 'remote_fetch' : 'manual',
+      fetchedAt: data.cardUrl ? new Date() : null,
+    });
+    await this.agentCardService.replaceExtractedMetadata(saved, card);
+    await this.writeAudit(saved, owner, 'register_external', null, {
+      approvalStatus: saved.approvalStatus,
+      cardUrl: saved.cardUrl,
+    });
+
+    return this.findOneWithDetails(saved.id);
   }
 
   /**
@@ -186,28 +407,43 @@ export class AgentsService {
   async findByUser(userId: string) {
     const agents = await this.agentsRepository.find({
       where: { owner: { id: userId } },
-      relations: ['owner'],
+      relations: ['owner', 'capabilities', 'tags'],
       order: { createdAt: 'DESC' },
     });
 
-    // 实时计算状态：根据心跳时间判断
     const now = Date.now();
-    const timeoutMs = 60000; // 60秒超时
+    const credentialSummaries = await this.getCredentialSummaries(
+      agents.map((agent) => agent.id),
+    );
 
     return agents.map((agent) => {
-      const lastHeartbeat = agent.lastHeartbeatAt
-        ? new Date(agent.lastHeartbeatAt).getTime()
-        : 0;
-      const isOnline = lastHeartbeat > 0 && now - lastHeartbeat < timeoutMs;
+      const runtimeStatus = this.agentsHealthService.calculateRuntimeStatus(
+        agent.lastHeartbeatAt,
+        now,
+      );
+      const credentialSummary =
+        credentialSummaries.get(agent.id) || this.emptyCredentialSummary();
       return {
         ...agent,
-        status: isOnline ? AgentStatus.ONLINE : AgentStatus.OFFLINE,
+        runtimeStatus,
+        status:
+          runtimeStatus === AgentRuntimeStatus.OFFLINE
+            ? AgentStatus.OFFLINE
+            : AgentStatus.ONLINE,
+        ...credentialSummary,
       };
     });
   }
 
   async findOne(id: string) {
     return this.agentsRepository.findOne({ where: { id } });
+  }
+
+  async findOneWithDetails(id: string) {
+    return this.agentsRepository.findOne({
+      where: { id },
+      relations: ['owner', 'cards', 'capabilities', 'tags'],
+    });
   }
 
   async findOneWithOwner(id: string) {
@@ -240,7 +476,7 @@ export class AgentsService {
   }
 
   async listApiKeys(agentId: string) {
-    return this.agentApiKeysRepository.find({
+    return this.agentCredentialsRepository.find({
       where: { agent: { id: agentId } },
       order: { createdAt: 'DESC' },
       take: 50,
@@ -259,15 +495,18 @@ export class AgentsService {
     if (!agent) throw new NotFoundException('Agent not found');
 
     const plain = randomBytes(32).toString('base64url');
-    const keyHash = this.hashKey(plain);
-    const row = await this.agentApiKeysRepository.save(
-      this.agentApiKeysRepository.create({
+    const secretHash = this.hashKey(plain);
+    const row = await this.agentCredentialsRepository.save(
+      this.agentCredentialsRepository.create({
         agent,
         name:
           typeof params.name === 'string' && params.name.trim().length > 0
             ? params.name.trim()
             : null,
-        keyHash,
+        secretHash,
+        keyId: `ak_${randomBytes(8).toString('hex')}`,
+        scopes: ['*'],
+        status: 'active',
         revokedAt: null,
         lastUsedAt: null,
       }),
@@ -275,6 +514,7 @@ export class AgentsService {
 
     return {
       id: row.id,
+      keyId: row.keyId,
       name: row.name,
       apiKey: plain,
       createdAt: row.createdAt,
@@ -282,28 +522,31 @@ export class AgentsService {
   }
 
   async revokeApiKey(params: { agentId: string; keyId: string }) {
-    const row = await this.agentApiKeysRepository.findOne({
+    const row = await this.agentCredentialsRepository.findOne({
       where: { id: params.keyId, agent: { id: params.agentId } },
       relations: ['agent'],
     });
     if (!row) throw new NotFoundException('API key not found');
     if (!row.revokedAt) {
       row.revokedAt = new Date();
-      await this.agentApiKeysRepository.save(row);
+      row.status = 'revoked';
+      await this.agentCredentialsRepository.save(row);
     }
     return { id: row.id, revokedAt: row.revokedAt };
   }
 
   async validateAgentApiKey(plain: string) {
-    const keyHash = this.hashKey(plain);
-    const row = await this.agentApiKeysRepository.findOne({
-      where: { keyHash },
+    const secretHash = this.hashKey(plain);
+    const row = await this.agentCredentialsRepository.findOne({
+      where: { secretHash },
       relations: ['agent'],
     });
     if (!row) return null;
     if (row.revokedAt) return null;
+    if (row.status !== 'active') return null;
+    if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return null;
     row.lastUsedAt = new Date();
-    await this.agentApiKeysRepository.save(row);
+    await this.agentCredentialsRepository.save(row);
     return row.agent || null;
   }
 
@@ -312,21 +555,26 @@ export class AgentsService {
    * 成功时重置连续失败计数，保持 ONLINE
    */
   async heartbeat(agentId: string) {
-    const agent = await this.findOne(agentId);
-    if (!agent) throw new NotFoundException('Agent not found');
+    return this.agentsHealthService.recordHeartbeat(agentId);
+  }
 
-    agent.status = AgentStatus.ONLINE;
-    agent.lastHeartbeatAt = new Date();
-    agent.consecutiveFailures = 0; // 重置失败计数
-
-    await this.agentsRepository.save(agent);
-
-    return {
-      success: true,
-      agentId: agent.id,
-      status: agent.status,
-      timestamp: agent.lastHeartbeatAt,
-    };
+  async heartbeatWithPayload(
+    agentId: string,
+    body?: {
+      status?: string;
+      latencyMs?: number;
+      latency_ms?: number;
+      load?: number;
+      load_metric?: number;
+      metadata?: Record<string, unknown>;
+    },
+  ) {
+    return this.agentsHealthService.recordHeartbeat(agentId, {
+      status: body?.status,
+      latencyMs: body?.latencyMs ?? body?.latency_ms,
+      load: body?.load ?? body?.load_metric,
+      metadata: body?.metadata,
+    });
   }
 
   /**
@@ -342,6 +590,7 @@ export class AgentsService {
     // 连续 2 次失败则标记为 OFFLINE
     if (agent.consecutiveFailures >= 2) {
       agent.status = AgentStatus.OFFLINE;
+      agent.runtimeStatus = AgentRuntimeStatus.OFFLINE;
     }
 
     await this.agentsRepository.save(agent);
@@ -362,16 +611,18 @@ export class AgentsService {
     const agent = await this.findOne(agentId);
     if (!agent) throw new NotFoundException('Agent not found');
 
-    // 检查是否超时（默认 60 秒无心跳视为离线）
-    const timeoutMs = agent.heartbeatIntervalMs * 2 || 60000;
-    const isOnline =
-      agent.lastHeartbeatAt &&
-      Date.now() - agent.lastHeartbeatAt.getTime() < timeoutMs;
+    const runtimeStatus = this.agentsHealthService.calculateRuntimeStatus(
+      agent.lastHeartbeatAt,
+    );
 
     return {
       agentId: agent.id,
       name: agent.name,
-      status: isOnline ? AgentStatus.ONLINE : AgentStatus.OFFLINE,
+      status:
+        runtimeStatus === AgentRuntimeStatus.OFFLINE
+          ? AgentStatus.OFFLINE
+          : AgentStatus.ONLINE,
+      runtimeStatus,
       lastHeartbeatAt: agent.lastHeartbeatAt,
       heartbeatIntervalMs: agent.heartbeatIntervalMs,
     };
@@ -381,37 +632,117 @@ export class AgentsService {
    * 批量检查并更新超时 Agent 状态
    */
   async checkOfflineAgents(): Promise<number> {
-    const timeoutThreshold = new Date(Date.now() - 60000); // 60 秒超时
+    return this.agentsHealthService.refreshTimeoutStatuses();
+  }
 
-    // 查找状态为 ONLINE 但心跳超时的 Agent
-    const offlineAgents = await this.agentsRepository.find({
-      where: {
-        status: AgentStatus.ONLINE,
-        lastHeartbeatAt: LessThan(timeoutThreshold),
-      },
-    });
-
-    // 更新超时的 Agent
-    for (const agent of offlineAgents) {
-      agent.status = AgentStatus.OFFLINE;
-      await this.agentsRepository.save(agent);
+  async approve(agentId: string, reviewerId?: string, comment?: string) {
+    const agent = await this.findOne(agentId);
+    if (!agent) throw new NotFoundException('Agent not found');
+    const before = {
+      approvalStatus: agent.approvalStatus,
+      runtimeStatus: agent.runtimeStatus,
+    };
+    agent.approvalStatus = AgentApprovalStatus.APPROVED;
+    agent.approvedAt = new Date();
+    if (agent.lastHeartbeatAt) {
+      agent.runtimeStatus = AgentRuntimeStatus.ONLINE;
+      agent.status = AgentStatus.ONLINE;
     }
-
-    // 查找状态为 ONLINE 但从未发送过心跳的 Agent
-    const neverHeartbeatAgents = await this.agentsRepository.find({
-      where: {
-        status: AgentStatus.ONLINE,
-
-        lastHeartbeatAt: null as any,
-      },
+    const saved = await this.agentsRepository.save(agent);
+    await this.writeAudit(saved, null, 'approve', before, {
+      approvalStatus: saved.approvalStatus,
+      reviewerId,
+      comment,
     });
+    return saved;
+  }
 
-    for (const agent of neverHeartbeatAgents) {
-      agent.status = AgentStatus.OFFLINE;
-      await this.agentsRepository.save(agent);
+  async reject(agentId: string, reviewerId?: string, comment?: string) {
+    const agent = await this.findOne(agentId);
+    if (!agent) throw new NotFoundException('Agent not found');
+    const before = { approvalStatus: agent.approvalStatus };
+    agent.approvalStatus = AgentApprovalStatus.REJECTED;
+    agent.runtimeStatus = AgentRuntimeStatus.UNKNOWN;
+    agent.status = AgentStatus.OFFLINE;
+    const saved = await this.agentsRepository.save(agent);
+    await this.writeAudit(saved, null, 'reject', before, {
+      approvalStatus: saved.approvalStatus,
+      reviewerId,
+      comment,
+    });
+    return saved;
+  }
+
+  async enable(agentId: string, actorId?: string) {
+    const agent = await this.findOneWithOwner(agentId);
+    if (!agent) throw new NotFoundException('Agent not found');
+    if (actorId && agent.owner?.id !== actorId) {
+      throw new ForbiddenException('Only the agent owner can enable it');
     }
+    const before = {
+      approvalStatus: agent.approvalStatus,
+      isActive: agent.isActive,
+    };
+    if (agent.approvalStatus === AgentApprovalStatus.REJECTED) {
+      throw new ForbiddenException('Rejected agents cannot be enabled');
+    }
+    if (agent.approvalStatus === AgentApprovalStatus.DISABLED) {
+      throw new ForbiddenException('Disabled agents must be re-enabled by an admin');
+    }
+    if (
+      !this.isSystemDefaultAgent(agent) &&
+      agent.approvalStatus !== AgentApprovalStatus.APPROVED
+    ) {
+      throw new ForbiddenException('Agent must be approved before it can be enabled');
+    }
+    agent.isActive = true;
+    if (this.isSystemDefaultAgent(agent)) {
+      agent.approvalStatus = AgentApprovalStatus.APPROVED;
+      agent.runtimeStatus = AgentRuntimeStatus.ONLINE;
+      agent.status = AgentStatus.ONLINE;
+      agent.lastHeartbeatAt = new Date();
+      agent.approvedAt = agent.approvedAt || new Date();
+    }
+    const saved = await this.agentsRepository.save(agent);
+    await this.writeAudit(saved, null, 'enable', before, { actorId });
+    return saved;
+  }
 
-    return offlineAgents.length + neverHeartbeatAgents.length;
+  async disable(agentId: string, actorId?: string, enforceOwner = true) {
+    const agent = await this.findOneWithOwner(agentId);
+    if (!agent) throw new NotFoundException('Agent not found');
+    if (enforceOwner && actorId && agent.owner?.id !== actorId) {
+      throw new ForbiddenException('Only the agent owner can disable it');
+    }
+    const before = {
+      approvalStatus: agent.approvalStatus,
+      runtimeStatus: agent.runtimeStatus,
+      isActive: agent.isActive,
+    };
+    agent.isActive = false;
+    if (!enforceOwner) {
+      agent.approvalStatus = AgentApprovalStatus.DISABLED;
+      agent.runtimeStatus = AgentRuntimeStatus.OFFLINE;
+      agent.status = AgentStatus.OFFLINE;
+    }
+    const saved = await this.agentsRepository.save(agent);
+    await this.writeAudit(saved, null, 'disable', before, { actorId });
+    return saved;
+  }
+
+  async listPendingReview() {
+    return this.agentsRepository.find({
+      where: { approvalStatus: AgentApprovalStatus.PENDING_REVIEW },
+      relations: ['owner', 'cards', 'capabilities', 'tags'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async listAllForAdmin() {
+    return this.agentsRepository.find({
+      relations: ['owner', 'cards', 'capabilities', 'tags'],
+      order: { createdAt: 'DESC' },
+    });
   }
 
   /**
@@ -448,23 +779,22 @@ export class AgentsService {
     };
   }
 
-  /**
-   * 执行 Agent 健康检查
-   * 检查 Agent Pod 状态、心跳、Openclaw 可达性
-   */
   async healthCheck(agentId: string) {
     const agent = await this.findOne(agentId);
     if (!agent) throw new NotFoundException('Agent not found');
 
     const errors: string[] = [];
     const checks = {
-      podRunning: false,
       heartbeatValid: false,
-      openclawReachable: false,
+      platformExecutionReady: false,
+      webhookConfigured: false,
       configurationValid: false,
     };
+    const isPlatformAgent = this.isSystemDefaultAgent(agent);
+    const credentialSummary =
+      (await this.getCredentialSummaries([agent.id])).get(agent.id) ||
+      this.emptyCredentialSummary();
 
-    // 1. 检查 Agent 心跳是否在 60 秒内
     const timeoutMs = 60000;
     const lastHeartbeat = agent.lastHeartbeatAt
       ? new Date(agent.lastHeartbeatAt).getTime()
@@ -474,49 +804,56 @@ export class AgentsService {
 
     if (!checks.heartbeatValid) {
       errors.push('Agent heartbeat timeout (no heartbeat in 60s)');
-      // 如果心跳超时，标记为 OFFLINE
       agent.status = AgentStatus.OFFLINE;
     } else {
-      checks.podRunning = true;
       agent.status = AgentStatus.ONLINE;
     }
 
-    // 2. 检查 Openclaw 是否可访问
-    if (agent.openclawUrl) {
-      try {
-        const response = await firstValueFrom(
-          this.httpService.get(`${agent.openclawUrl}/health`, {
-            timeout: 5000,
-          }),
-        );
-        checks.openclawReachable = response.status === 200;
-        agent.openclawStatus = checks.openclawReachable
-          ? OpenclawStatus.CONNECTED
-          : OpenclawStatus.DISCONNECTED;
-      } catch (error: unknown) {
-        checks.openclawReachable = false;
-        agent.openclawStatus = OpenclawStatus.DISCONNECTED;
-        const errorMessage =
-          error instanceof Error ? error.message : 'Unknown error';
-        errors.push(`Openclaw unreachable: ${errorMessage}`);
+    if (isPlatformAgent) {
+      checks.platformExecutionReady =
+        agent.isActive === true &&
+        agent.approvalStatus === AgentApprovalStatus.APPROVED &&
+        credentialSummary.hasActiveApiKey;
+      checks.configurationValid = checks.platformExecutionReady;
+
+      if (agent.approvalStatus !== AgentApprovalStatus.APPROVED) {
+        errors.push('Agent is not approved');
+      }
+      if (agent.isActive !== true) {
+        errors.push('Agent is not started');
+      }
+      if (!credentialSummary.hasActiveApiKey) {
+        errors.push('Active Agent API Key not found');
       }
     } else {
-      agent.openclawStatus = OpenclawStatus.UNKNOWN;
-      errors.push('Openclaw URL not configured');
+      checks.webhookConfigured = !!agent.webhookUrl;
+      checks.configurationValid = checks.webhookConfigured;
+
+      if (!checks.webhookConfigured) {
+        errors.push('Webhook URL not configured');
+      }
+      if (agent.healthUrl) {
+        try {
+          const response = await firstValueFrom(
+            this.httpService.get(agent.healthUrl, { timeout: 5000 }),
+          );
+          if (response.status < 200 || response.status >= 300) {
+            errors.push(`Health URL returned HTTP ${response.status}`);
+          }
+        } catch (error: unknown) {
+          const errorMessage =
+            error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Health URL unreachable: ${errorMessage}`);
+        }
+      }
     }
 
-    // 3. 检查配置是否有效
-    checks.configurationValid = !!agent.webhookUrl && !!agent.openclawUrl;
-    if (!checks.configurationValid) {
-      if (!agent.webhookUrl) errors.push('Webhook URL not configured');
-      if (!agent.openclawUrl) errors.push('Openclaw URL not configured');
-    }
-
-    // 更新健康检查结果
     agent.lastHealthCheckAt = new Date();
     agent.healthCheckResult = {
       agentOnline: checks.heartbeatValid,
-      openclawReachable: checks.openclawReachable,
+      openclawReachable: isPlatformAgent
+        ? checks.platformExecutionReady
+        : checks.webhookConfigured,
       skillsLoaded: Array.isArray(agent.skills) && agent.skills.length > 0,
       errors: errors.length > 0 ? errors : undefined,
     };
@@ -526,6 +863,10 @@ export class AgentsService {
     return {
       agentId: agent.id,
       status: agent.status,
+      executionMode: isPlatformAgent ? 'platform' : 'external',
+      hasActiveApiKey: credentialSummary.hasActiveApiKey,
+      activeApiKeyCount: credentialSummary.activeApiKeyCount,
+      lastCredentialUsedAt: credentialSummary.lastCredentialUsedAt,
       openclawStatus: agent.openclawStatus,
       lastHeartbeatAt: agent.lastHeartbeatAt,
       lastHealthCheckAt: agent.lastHealthCheckAt,
@@ -540,6 +881,9 @@ export class AgentsService {
   async getHealthStatus(agentId: string) {
     const agent = await this.findOne(agentId);
     if (!agent) throw new NotFoundException('Agent not found');
+    const credentialSummary =
+      (await this.getCredentialSummaries([agent.id])).get(agent.id) ||
+      this.emptyCredentialSummary();
 
     // 实时计算 Agent 在线状态
     const timeoutMs = 60000;
@@ -552,6 +896,10 @@ export class AgentsService {
     return {
       agentId: agent.id,
       status: isOnline ? AgentStatus.ONLINE : AgentStatus.OFFLINE,
+      executionMode: this.isSystemDefaultAgent(agent) ? 'platform' : 'external',
+      hasActiveApiKey: credentialSummary.hasActiveApiKey,
+      activeApiKeyCount: credentialSummary.activeApiKeyCount,
+      lastCredentialUsedAt: credentialSummary.lastCredentialUsedAt,
       openclawStatus: agent.openclawStatus || OpenclawStatus.UNKNOWN,
       lastHeartbeatAt: agent.lastHeartbeatAt,
       lastHealthCheckAt: agent.lastHealthCheckAt,
@@ -601,5 +949,121 @@ export class AgentsService {
       newId,
       message: 'Agent ID updated successfully',
     };
+  }
+
+  private extractSkillNames(card: AgentCardJson) {
+    return (card.capabilities?.skills || [])
+      .map((skill) => (typeof skill === 'string' ? skill : skill.name || ''))
+      .filter(Boolean);
+  }
+
+  private defaultRuntimeEndpointUrl() {
+    return (
+      process.env.DEFAULT_AGENT_RUNTIME_ENDPOINT_URL ||
+      process.env.PLATFORM_AGENT_RUNTIME_ENDPOINT_URL ||
+      'http://genesis-agent.genesis.svc.cluster.local:3000/webhook'
+    );
+  }
+
+  private defaultRuntimeHealthUrl(endpointUrl: string) {
+    if (process.env.DEFAULT_AGENT_RUNTIME_HEALTH_URL) {
+      return process.env.DEFAULT_AGENT_RUNTIME_HEALTH_URL;
+    }
+    if (process.env.PLATFORM_AGENT_RUNTIME_HEALTH_URL) {
+      return process.env.PLATFORM_AGENT_RUNTIME_HEALTH_URL;
+    }
+    return endpointUrl.endsWith('/webhook')
+      ? endpointUrl.replace(/\/webhook$/, '/health')
+      : endpointUrl;
+  }
+
+  private defaultSystemAgentTags(ownerId: string) {
+    return ['system-created', `owner:${ownerId}`, 'platform-runtime'];
+  }
+
+  private defaultSystemAgentMetadata(
+    ownerId: string,
+    existing?: Record<string, unknown> | null,
+  ) {
+    return {
+      ...(existing || {}),
+      createdBy: 'system',
+      systemCreated: true,
+      defaultAgent: true,
+      ownerUserId: ownerId,
+      tags: this.defaultSystemAgentTags(ownerId),
+    };
+  }
+
+  private isSystemDefaultAgent(agent: Agent) {
+    return (
+      agent.agentType === AgentType.PLATFORM_MANAGED &&
+      agent.metadata?.createdBy === 'system' &&
+      agent.metadata?.defaultAgent === true
+    );
+  }
+
+  private emptyCredentialSummary(): AgentCredentialSummary {
+    return {
+      hasActiveApiKey: false,
+      activeApiKeyCount: 0,
+      lastCredentialUsedAt: null,
+    };
+  }
+
+  private async getCredentialSummaries(agentIds: string[]) {
+    const result = new Map<string, AgentCredentialSummary>();
+    if (agentIds.length === 0) return result;
+
+    const credentials = await this.agentCredentialsRepository.find({
+      where: { agent: { id: In(agentIds) } },
+      relations: ['agent'],
+    });
+    const now = Date.now();
+
+    for (const credential of credentials) {
+      const agentId = credential.agent?.id;
+      if (!agentId) continue;
+      if (
+        credential.status !== 'active' ||
+        credential.revokedAt ||
+        (credential.expiresAt && credential.expiresAt.getTime() < now)
+      ) {
+        continue;
+      }
+
+      const summary = result.get(agentId) || this.emptyCredentialSummary();
+      summary.hasActiveApiKey = true;
+      summary.activeApiKeyCount += 1;
+      if (
+        credential.lastUsedAt &&
+        (!summary.lastCredentialUsedAt ||
+          credential.lastUsedAt.getTime() >
+            summary.lastCredentialUsedAt.getTime())
+      ) {
+        summary.lastCredentialUsedAt = credential.lastUsedAt;
+      }
+      result.set(agentId, summary);
+    }
+
+    return result;
+  }
+
+  private async writeAudit(
+    agent: Agent | null,
+    actor: User | null,
+    action: string,
+    beforeValue: Record<string, unknown> | null,
+    afterValue: Record<string, unknown> | null,
+  ) {
+    await this.agentAuditLogsRepository.save(
+      this.agentAuditLogsRepository.create({
+        agent,
+        actor,
+        action,
+        beforeValue,
+        afterValue,
+      }),
+    );
   }
 }

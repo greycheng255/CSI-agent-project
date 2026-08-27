@@ -7,10 +7,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, KycStatus, UserRole } from './entities/user.entity';
+import { User, KycStatus } from './entities/user.entity';
 import { AuthService } from '../auth/auth.service';
-import { AgentManagerService } from '../agents/agent-manager.service';
-import { createHash } from 'crypto';
+import { AgentsService } from '../agents/agents.service';
+import { hashSync, compareSync } from 'bcryptjs';
 
 type AuthDto = {
   phone: string;
@@ -32,18 +32,21 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private readonly authService: AuthService,
-    @Inject(forwardRef(() => AgentManagerService))
-    private readonly agentManagerService: AgentManagerService,
+    @Inject(forwardRef(() => AgentsService))
+    private readonly agentsService: AgentsService,
   ) {}
 
   private hashPassword(password: string): string {
-    return createHash('sha256').update(password).digest('hex');
+    return hashSync(password, 10);
+  }
+
+  private verifyPassword(password: string, hash: string): boolean {
+    return compareSync(password, hash);
   }
 
   /**
    * 用户注册
-   * 所有新注册用户默认为 CLIENT 角色
-   * 13800000001 不再是管理员，只是一个普通用户
+   * 所有用户统一为普通用户，不再区分雇主/开发者
    */
   async register(data: RegisterDto) {
     // 参数校验
@@ -71,34 +74,18 @@ export class UsersService {
       throw new UnauthorizedException('该手机号已注册');
     }
 
-    // 创建新用户 - 所有用户默认为 CLIENT 角色
+    // 创建新用户
     const user = this.usersRepository.create({
       phone: data.phone,
       passwordHash: this.hashPassword(data.password),
       displayName: data.displayName || `用户${data.phone.slice(-4)}`,
       kycStatus: KycStatus.NONE,
-      role: UserRole.CLIENT, // 所有新用户都是普通用户
     });
 
     await this.usersRepository.save(user);
     this.logger.log(`新用户注册成功: ${user.id} (${user.phone})`);
 
-    // 为新用户自动创建 Agent
-    if (this.agentManagerService) {
-      try {
-        this.logger.log(`为新用户 ${user.id} 自动创建 Agent`);
-        const ownerToken = await this.authService.issueUserToken(user);
-        const agent = await this.agentManagerService.createAgentForUser(
-          user,
-          ownerToken,
-        );
-        this.logger.log(`Agent 创建成功: ${agent.id}`);
-      } catch (error: unknown) {
-        const errorMessage =
-          error instanceof Error ? error.message : 'Unknown error';
-        this.logger.error(`Agent 创建失败: ${errorMessage}`);
-      }
-    }
+    await this.ensureDefaultAgent(user);
 
     return {
       message: '注册成功',
@@ -106,15 +93,13 @@ export class UsersService {
         id: user.id,
         phone: user.phone,
         displayName: user.displayName,
-        role: user.role,
       },
     };
   }
 
   /**
    * 用户登录
-   * 不再根据手机号自动分配角色，所有用户都是 CLIENT
-   * 13900000002 作为 Agent 主人，也是 CLIENT 角色，但拥有 Agent
+   * 所有用户统一处理，不再区分角色
    */
   async login(data: AuthDto) {
     if (typeof data.phone !== 'string' || typeof data.password !== 'string') {
@@ -126,39 +111,18 @@ export class UsersService {
       where: { phone: data.phone },
     });
 
-    // 如果用户不存在，自动创建（方便测试）
     if (!user) {
-      user = this.usersRepository.create({
-        phone: data.phone,
-        passwordHash: this.hashPassword(data.password),
-        displayName: `用户${data.phone.slice(-4)}`,
-        kycStatus: KycStatus.NONE,
-        role: UserRole.CLIENT, // 所有用户都是 CLIENT
-      });
-      await this.usersRepository.save(user);
-      this.logger.log(`自动创建用户: ${user.id} (${user.phone})`);
-
-      // 为新用户自动创建 Agent
-      if (this.agentManagerService) {
-        try {
-          const ownerToken = await this.authService.issueUserToken(user);
-          await this.agentManagerService.createAgentForUser(user, ownerToken);
-        } catch (error: unknown) {
-          const errorMessage =
-            error instanceof Error ? error.message : 'Unknown error';
-          this.logger.error(`Agent 创建失败: ${errorMessage}`);
-        }
-      }
+      throw new UnauthorizedException('手机号未注册');
     } else {
       // 验证密码
-      const passwordHash = this.hashPassword(data.password);
-      if (user.passwordHash !== passwordHash) {
+      if (!this.verifyPassword(data.password, user.passwordHash)) {
         throw new UnauthorizedException('密码错误');
       }
     }
 
     // 签发令牌
     const token = await this.authService.issueUserToken(user);
+    await this.ensureDefaultAgent(user);
 
     return {
       message: '登录成功',
@@ -168,7 +132,6 @@ export class UsersService {
         phone: user.phone,
         displayName: user.displayName,
         kycStatus: user.kycStatus,
-        role: user.role,
       },
     };
   }
@@ -188,9 +151,9 @@ export class UsersService {
     return {
       id: user.id,
       phone: user.phone,
+      email: user.email,
       displayName: user.displayName,
       kycStatus: user.kycStatus,
-      role: user.role,
       createdAt: user.createdAt,
     };
   }
@@ -213,6 +176,9 @@ export class UsersService {
     if (data.displayName) {
       user.displayName = data.displayName;
     }
+    if (data.email !== undefined) {
+      user.email = data.email;
+    }
 
     await this.usersRepository.save(user);
 
@@ -222,8 +188,45 @@ export class UsersService {
         id: user.id,
         phone: user.phone,
         displayName: user.displayName,
-        role: user.role,
       },
     };
+  }
+
+  /**
+   * 修改用户密码
+   */
+  async changePassword(
+    userId: string,
+    oldPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('用户不存在');
+    }
+
+    if (!this.verifyPassword(oldPassword, user.passwordHash)) {
+      throw new UnauthorizedException('旧密码错误');
+    }
+
+    if (newPassword.length < 6) {
+      throw new UnauthorizedException('新密码长度至少6位');
+    }
+
+    user.passwordHash = this.hashPassword(newPassword);
+    await this.usersRepository.save(user);
+  }
+
+  private async ensureDefaultAgent(user: User) {
+    try {
+      await this.agentsService.ensureDefaultSystemAgent(user);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Default agent assignment failed: ${errorMessage}`);
+    }
   }
 }

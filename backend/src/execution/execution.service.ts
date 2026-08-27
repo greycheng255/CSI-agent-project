@@ -4,8 +4,6 @@
 import {
   Injectable,
   NotFoundException,
-  Inject,
-  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -25,7 +23,6 @@ import {
   ExecutionProgressResponse,
 } from './dto/execution.dto';
 import { Order, OrderStatus } from '../orders/entities/order.entity';
-import { WebhooksService } from '../webhooks/webhooks.service';
 
 @Injectable()
 export class ExecutionService {
@@ -38,8 +35,6 @@ export class ExecutionService {
     private traceRepository: Repository<ExecutionTrace>,
     @InjectRepository(Order)
     private orderRepository: Repository<Order>,
-    @Inject(forwardRef(() => WebhooksService))
-    private webhooksService: WebhooksService,
   ) {}
 
   // 创建执行计划（初始化整个任务的执行结构）
@@ -511,11 +506,8 @@ export class ExecutionService {
     });
   }
 
-  // 重试执行任务 - 调用 openclaw-bridge 重新执行，如果 Bridge 无记录则直接通知 Agent
+  // Retry execution by resetting platform state. HiClaw consumes the order again through MCP.
   async retryExecution(orderId: string): Promise<any> {
-    const openclawBridgeUrl =
-      process.env.OPENCLAW_BRIDGE_URL || 'http://openclaw-bridge:3001';
-
     try {
       // 1. 重置订单状态为 IN_PROGRESS
       const order = await this.orderRepository.findOne({
@@ -551,60 +543,13 @@ export class ExecutionService {
         console.log(`[RETRY] Execution phases for order ${orderId} cleared`);
       }
 
-      // 3. 尝试调用 openclaw-bridge 的重试接口
-      let bridgeResult = null;
-      let useDirectWebhook = false;
-
-      try {
-        const response = await fetch(
-          `${openclawBridgeUrl}/api/v1/execute/${orderId}/retry`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          },
-        );
-
-        if (response.ok) {
-          bridgeResult = await response.json();
-          console.log(`[RETRY] Bridge retry succeeded for order ${orderId}`);
-        } else if (response.status === 404) {
-          // Bridge 中没有该订单的记录（可能已重启），使用直接 webhook 通知 Agent
-          console.log(
-            `[RETRY] Bridge has no record for order ${orderId}, using direct webhook`,
-          );
-          useDirectWebhook = true;
-        } else {
-          const errorText = await response.text();
-          throw new Error(`Openclaw bridge retry failed: ${errorText}`);
-        }
-      } catch (fetchError: any) {
-        // 网络错误或 Bridge 不可用，使用直接 webhook
-        console.log(
-          `[RETRY] Bridge unavailable, using direct webhook: ${fetchError.message}`,
-        );
-        useDirectWebhook = true;
-      }
-
-      // 4. 如果 Bridge 无记录，直接通过 webhook 通知 Agent
-      if (useDirectWebhook) {
-        await this.webhooksService.notifyOrderPaid(order);
-        console.log(
-          `[RETRY] Direct webhook sent to Agent for order ${orderId}`,
-        );
-      }
-
-      // 5. 记录重试日志
       await this.createTrace({
         orderId,
-        event: 'RETRY_TRIGGERED',
-        message: useDirectWebhook
-          ? '用户手动触发重试，通过 webhook 直接通知 Agent'
-          : '用户手动触发重试，订单状态已重置',
+        event: 'RETRY_QUEUED_FOR_MCP',
+        message:
+          '用户手动触发重试，订单和执行计划已重置，等待 HiClaw Controller 通过 MCP 重新消费并回写执行进度',
         metadata: JSON.stringify({
-          retryMethod: useDirectWebhook ? 'direct_webhook' : 'bridge_retry',
-          bridgeResult,
+          retryMethod: 'mcp_pull',
           orderStatusReset: true,
           phasesCleared: existingPhases.length,
           timestamp: new Date().toISOString(),
@@ -615,12 +560,10 @@ export class ExecutionService {
 
       return {
         orderId,
-        status: 'RETRY_TRIGGERED',
-        message: useDirectWebhook
-          ? '重试任务已启动，已通过 webhook 通知 Agent'
-          : '重试任务已启动，订单状态已重置为进行中',
-        method: useDirectWebhook ? 'direct_webhook' : 'bridge_retry',
-        bridgeResponse: bridgeResult,
+        status: 'RETRY_QUEUED_FOR_MCP',
+        message:
+          '重试状态已重置，请由 HiClaw Controller 通过 MCP 拉取订单并继续执行',
+        method: 'mcp_pull',
       };
     } catch (error: any) {
       // 记录错误

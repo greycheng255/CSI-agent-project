@@ -1,17 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  TrendingUp,
-  TrendingDown,
-  Bot,
-  ClipboardList,
-  DollarSign,
   Activity,
   BarChart3,
+  Bot,
+  CircleAlert,
+  ClipboardList,
+  DollarSign,
+  Inbox,
   Loader2,
+  RefreshCw,
+  TrendingUp,
 } from 'lucide-react';
-import { useAuthStore } from '../store/authStore';
+import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
 import { API_BASE } from '../config/api';
+import { getActiveToken, useAuthStore } from '../store/authStore';
 
 interface DashboardData {
   summary: {
@@ -33,279 +36,188 @@ interface DashboardData {
     offline: number;
     agents: Array<{ id: string; name: string; bidCount: number; avgPrice: number }>;
   };
-  period: {
-    start: string;
-    end: string;
-  };
+  period: { start: string; end: string };
 }
 
-interface MetricCardProps {
-  title: string;
-  value: string | number;
-  icon: React.ReactNode;
-  trend?: number;
+type TrendChartProps = {
+  data: Array<{ date: string; count: number }>;
+  label: string;
   color: string;
-}
+};
 
-function MetricCard({ title, value, icon, trend, color }: MetricCardProps) {
-  return (
-    <div className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-6">
-      <div className="flex items-center justify-between">
-        <div className={`p-3 rounded-lg ${color}`}>
-          {icon}
-        </div>
-        {trend !== undefined && (
-          <div className={`flex items-center gap-1 text-xs ${trend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {trend >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-            {Math.abs(trend)}%
-          </div>
-        )}
-      </div>
-      <div className="mt-4">
-        <div className="text-2xl font-bold text-gray-200">{value}</div>
-        <div className="text-xs text-gray-500 mt-1">{title}</div>
-      </div>
-    </div>
-  );
-}
-
-function TrendChart({ data, label, color }: { data: Array<{ date: string; count: number }>; label: string; color: string }) {
-  if (!data || data.length === 0) {
-    return (
-      <div className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-6">
-        <div className="text-sm font-bold text-gray-200 mb-4">{label}</div>
-        <div className="text-center text-gray-500 py-8">暂无数据</div>
-      </div>
-    );
-  }
-
-  const maxValue = Math.max(...data.map((d) => d.count));
-  const minValue = Math.min(...data.map((d) => d.count));
-  const range = maxValue - minValue || 1;
+function TrendChart({ data, label, color }: TrendChartProps) {
+  const maxValue = Math.max(...data.map((item) => item.count), 1);
 
   return (
-    <div className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-6">
-      <div className="text-sm font-bold text-gray-200 mb-4">{label}</div>
-      <div className="flex items-end gap-2 h-32">
-        {data.map((item, index) => {
-          const height = ((item.count - minValue) / range) * 100;
-          return (
-            <div key={index} className="flex-1 flex flex-col items-center gap-1">
+    <section className="min-w-0 px-5 py-5 first:pl-0 last:pr-0 lg:border-l lg:border-[color:var(--border)] lg:first:border-l-0 lg:first:pl-0">
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-[var(--text-800)]">{label}</h3>
+        <span className="text-xs text-[var(--text-400)]">近 {data.length || 0} 个数据点</span>
+      </div>
+      {data.length === 0 ? (
+        <div className="flex h-32 items-center justify-center text-sm text-[var(--text-400)]">暂无趋势数据</div>
+      ) : (
+        <div className="flex h-36 items-end gap-2" aria-label={`${label}柱状图`}>
+          {data.map((item) => (
+            <div key={`${label}-${item.date}`} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2">
               <div
-                className={`w-full rounded-t ${color}`}
-                style={{ height: `${Math.max(height, 5)}%`, minHeight: '4px' }}
+                className={`w-full max-w-8 rounded-t-md ${color}`}
+                style={{ height: `${Math.max((item.count / maxValue) * 100, 5)}%` }}
+                title={`${item.date}: ${item.count}`}
               />
-              <div className="text-xs text-gray-500">
+              <span className="whitespace-nowrap text-[10px] text-[var(--text-400)]">
                 {new Date(item.date).getDate()}日
-              </div>
+              </span>
             </div>
-          );
-        })}
-      </div>
-    </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, token } = useAuthStore();
+  const { user, admin } = useAuthStore();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-
-    fetchDashboardData();
-  }, [user, navigate]);
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const res = await fetch(`${API_BASE}/api/v1/metrics/dashboard`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: { Authorization: `Bearer ${getActiveToken()}` },
       });
       if (!res.ok) throw new Error('获取数据失败');
-      const result = await res.json();
-      setData(result);
+      setData(await res.json());
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取数据失败');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center py-20 text-gray-500">
-        <Loader2 className="w-6 h-6 animate-spin mr-3 text-green-500" />
-        加载仪表盘数据...
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!user && !admin) {
+      navigate('/login');
+      return;
+    }
+    void fetchDashboardData();
+  }, [admin, fetchDashboardData, navigate, user]);
 
-  if (error) {
-    return (
-      <div className="max-w-3xl mx-auto py-20 text-center text-red-400">
-        {error}
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="max-w-3xl mx-auto py-20 text-center text-gray-500">
-        暂无数据
-      </div>
-    );
-  }
-
-  const { summary, trends, agents } = data;
+  const periodText = data
+    ? `${new Date(data.period.start).toLocaleDateString()} - ${new Date(data.period.end).toLocaleDateString()}`
+    : '正在读取当前数据周期';
+  const isAdminWorkspace = Boolean(admin && !user);
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      {/* 页面标题 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-200">业务仪表盘</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            数据周期: {new Date(data.period.start).toLocaleDateString()} - {new Date(data.period.end).toLocaleDateString()}
-          </p>
+    <div className="mx-auto w-full max-w-[1440px] space-y-6">
+      <WorkbenchPageHeader
+        icon={BarChart3}
+        eyebrow={isAdminWorkspace ? '数据概览' : '工作台概览'}
+        title={isAdminWorkspace ? '平台运营概览' : '经营与执行概览'}
+        description={`${isAdminWorkspace ? '集中查看全平台' : '集中查看'}任务、报价、订单和 Agent 的运行情况。数据周期：${periodText}`}
+        actions={
+          <button type="button" onClick={() => void fetchDashboardData()} disabled={loading} className="btn-cs btn-ghost-dark btn-sm disabled:cursor-not-allowed disabled:opacity-60">
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            刷新数据
+          </button>
+        }
+      />
+
+      {loading && !data ? (
+        <div className="flex min-h-72 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white text-sm text-[var(--text-500)]">
+          <Loader2 className="mr-3 h-5 w-5 animate-spin text-[var(--brand-500)]" />
+          正在汇总工作台数据...
         </div>
-        <button
-          onClick={fetchDashboardData}
-          className="px-4 py-2 bg-blue-500 text-black font-bold rounded hover:bg-blue-400 transition-colors flex items-center gap-2 text-sm"
-        >
-          <Activity className="w-4 h-4" />
-          刷新数据
-        </button>
-      </div>
+      ) : error && !data ? (
+        <WorkbenchStatePanel
+          icon={CircleAlert}
+          title="概览数据暂时无法加载"
+          description={`${error}。请检查服务状态后重新尝试。`}
+          tone="error"
+          action={<button type="button" onClick={() => void fetchDashboardData()} className="btn-cs btn-primary btn-sm">重新加载</button>}
+        />
+      ) : !data ? (
+        <WorkbenchStatePanel icon={Inbox} title="暂无概览数据" description="当前账号还没有可汇总的任务、订单或 Agent 数据。" />
+      ) : (
+        <>
+          {error && (
+            <div className="flex items-center gap-2 rounded-xl border border-[color:var(--state-error)] bg-[var(--state-error-surface)] px-4 py-3 text-sm text-[var(--state-error)]">
+              <CircleAlert className="h-4 w-4 shrink-0" />
+              本次刷新失败，页面仍展示上一次成功读取的数据。
+            </div>
+          )}
 
-      {/* 核心指标卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <MetricCard
-          title="总营收"
-          value={`¥${summary.totalRevenue.toFixed(2)}`}
-          icon={<DollarSign className="w-5 h-5 text-green-400" />}
-          color="bg-green-500/10"
-        />
-        <MetricCard
-          title="总任务"
-          value={summary.totalTasks}
-          icon={<ClipboardList className="w-5 h-5 text-blue-400" />}
-          color="bg-blue-500/10"
-        />
-        <MetricCard
-          title="总报价"
-          value={summary.totalBids}
-          icon={<BarChart3 className="w-5 h-5 text-purple-400" />}
-          color="bg-purple-500/10"
-        />
-        <MetricCard
-          title="总订单"
-          value={summary.totalOrders}
-          icon={<ClipboardList className="w-5 h-5 text-yellow-400" />}
-          color="bg-yellow-500/10"
-        />
-        <MetricCard
-          title="在线 Agent"
-          value={summary.onlineAgents}
-          icon={<Bot className="w-5 h-5 text-cyan-400" />}
-          color="bg-cyan-500/10"
-        />
-        <MetricCard
-          title="完成率"
-          value={`${summary.completionRate}%`}
-          icon={<TrendingUp className="w-5 h-5 text-pink-400" />}
-          color="bg-pink-500/10"
-        />
-      </div>
-
-      {/* 趋势图表 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <TrendChart data={trends.tasks} label="任务趋势" color="bg-blue-500" />
-        <TrendChart data={trends.bids} label="报价趋势" color="bg-purple-500" />
-        <TrendChart data={trends.orders} label="订单趋势" color="bg-green-500" />
-      </div>
-
-      {/* Agent 排行 */}
-      <div className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Bot className="w-5 h-5 text-cyan-400" />
-            <h2 className="text-lg font-bold text-gray-200">Agent 排行</h2>
-          </div>
-          <div className="text-xs text-gray-500">
-            总计: {agents.total} | 在线: {agents.online} | 离线: {agents.offline}
-          </div>
-        </div>
-
-        {agents.agents.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">暂无 Agent 数据</div>
-        ) : (
-          <div className="space-y-3">
-            {agents.agents.slice(0, 10).map((agent, index) => (
-              <div
-                key={agent.id}
-                className="flex items-center gap-4 p-3 bg-gray-900/50 rounded-lg"
-              >
-                <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-sm font-bold text-gray-400">
-                  {index + 1}
+          <section className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white">
+            <div className="border-b border-[color:var(--border)] px-5 py-4">
+              <h2 className="font-semibold text-[var(--text-800)]">核心指标</h2>
+              <p className="mt-1 text-xs text-[var(--text-500)]">用于快速判断当前业务规模与执行健康度</p>
+            </div>
+            <div className="grid grid-cols-2 divide-x divide-y divide-[color:var(--border)] md:grid-cols-3 xl:grid-cols-6 xl:divide-y-0">
+              {[
+                { label: '总营收', value: `¥${data.summary.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: DollarSign, tone: 'text-[var(--state-success-text)] bg-[var(--state-success-surface)]' },
+                { label: '总任务', value: data.summary.totalTasks, icon: ClipboardList, tone: 'text-[var(--brand-600)] bg-[var(--brand-50)]' },
+                { label: '总报价', value: data.summary.totalBids, icon: TrendingUp, tone: 'text-[#5856d6] bg-[#f1f0ff]' },
+                { label: '总订单', value: data.summary.totalOrders, icon: Activity, tone: 'text-[var(--state-warning)] bg-[var(--state-warning-surface)]' },
+                { label: '在线 Agent', value: data.summary.onlineAgents, icon: Bot, tone: 'text-[var(--brand-600)] bg-[var(--brand-50)]' },
+                { label: '完成率', value: `${data.summary.completionRate}%`, icon: BarChart3, tone: 'text-[var(--state-success-text)] bg-[var(--state-success-surface)]' },
+              ].map((metric) => (
+                <div key={metric.label} className="min-w-0 p-5">
+                  <span className={`mb-5 flex h-9 w-9 items-center justify-center rounded-lg ${metric.tone}`}>
+                    <metric.icon className="h-4 w-4" />
+                  </span>
+                  <p className="truncate text-2xl font-bold tabular-nums text-[var(--text-900)]">{metric.value}</p>
+                  <p className="mt-1 text-xs text-[var(--text-500)]">{metric.label}</p>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-gray-200 truncate">
-                    {agent.name || '未命名 Agent'}
-                  </div>
-                  <div className="text-xs text-gray-500 font-mono">
-                    ID: {agent.id.slice(0, 12)}...
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-bold text-purple-400">
-                    {agent.bidCount} 次报价
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    均价 ¥{agent.avgPrice.toFixed(2)}
-                  </div>
-                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-[color:var(--border)] bg-white px-5 py-4">
+            <div className="border-b border-[color:var(--border)] pb-4">
+              <h2 className="font-semibold text-[var(--text-800)]">业务趋势</h2>
+              <p className="mt-1 text-xs text-[var(--text-500)]">对比任务供给、Agent 报价与订单转化变化</p>
+            </div>
+            <div className="grid lg:grid-cols-3">
+              <TrendChart data={data.trends.tasks} label="任务趋势" color="bg-[var(--brand-500)]" />
+              <TrendChart data={data.trends.bids} label="报价趋势" color="bg-[#5856d6]" />
+              <TrendChart data={data.trends.orders} label="订单趋势" color="bg-[var(--state-success)]" />
+            </div>
+          </section>
+
+          <section className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white">
+            <div className="flex flex-col gap-2 border-b border-[color:var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="font-semibold text-[var(--text-800)]">Agent 报价排行</h2>
+                <p className="mt-1 text-xs text-[var(--text-500)]">按当前周期内的报价次数排序</p>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 快速链接 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <button
-          onClick={() => navigate('/market')}
-          className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-6 text-left hover:border-blue-500/50 transition-colors"
-        >
-          <ClipboardList className="w-8 h-8 text-blue-400 mb-3" />
-          <div className="text-lg font-bold text-gray-200">任务大厅</div>
-          <div className="text-xs text-gray-500 mt-1">浏览和接取任务</div>
-        </button>
-
-        <button
-          onClick={() => navigate('/owner/agents')}
-          className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-6 text-left hover:border-purple-500/50 transition-colors"
-        >
-          <Bot className="w-8 h-8 text-purple-400 mb-3" />
-          <div className="text-lg font-bold text-gray-200">Agent 管理</div>
-          <div className="text-xs text-gray-500 mt-1">管理您的 Agent</div>
-        </button>
-
-        <button
-          onClick={() => navigate('/orders/mine')}
-          className="border border-gray-800 bg-[#0a0a0a] rounded-xl p-6 text-left hover:border-green-500/50 transition-colors"
-        >
-          <DollarSign className="w-8 h-8 text-green-400 mb-3" />
-          <div className="text-lg font-bold text-gray-200">我的订单</div>
-          <div className="text-xs text-gray-500 mt-1">查看订单和支付</div>
-        </button>
-      </div>
+              <p className="text-xs text-[var(--text-500)]">共 {data.agents.total} 个 · 在线 {data.agents.online} · 离线 {data.agents.offline}</p>
+            </div>
+            {data.agents.agents.length === 0 ? (
+              <div className="px-5 py-12 text-center text-sm text-[var(--text-500)]">暂无 Agent 报价数据</div>
+            ) : (
+              <div className="divide-y divide-[color:var(--border)]">
+                {data.agents.agents.slice(0, 10).map((agent, index) => (
+                  <div key={agent.id} className="grid gap-3 px-5 py-4 sm:grid-cols-[44px_minmax(0,1fr)_auto] sm:items-center">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--background-100)] text-sm font-semibold text-[var(--text-500)]">{index + 1}</span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-[var(--text-800)]">{agent.name || '未命名 Agent'}</p>
+                      <p className="mt-0.5 truncate font-mono text-xs text-[var(--text-400)]">{agent.id}</p>
+                    </div>
+                    <div className="flex items-baseline gap-4 sm:text-right">
+                      <span className="text-sm font-semibold text-[var(--brand-600)]">{agent.bidCount} 次报价</span>
+                      <span className="text-xs text-[var(--text-500)]">均价 ¥{agent.avgPrice.toFixed(2)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </>
+      )}
     </div>
   );
 }

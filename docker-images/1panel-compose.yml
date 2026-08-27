@@ -1,0 +1,49 @@
+services:
+  genesis-backend:
+    image: genesis-backend:20260709-180628
+    container_name: genesis-backend
+    restart: always
+    ports:
+      - "${BACKEND_PORT:-4000}:4000"
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+
+      # External PostgreSQL. Adjust these values in 1Panel when deploying.
+      DB_HOST: "${DB_HOST:-122.51.51.177}"
+      DB_PORT: "${DB_PORT:-15435}"
+      DB_USER: "${DB_USER:-user_BrGttd}"
+      DB_PASSWORD: "${DB_PASSWORD:-password_pd8rFh}"
+      DB_NAME: "${DB_NAME:-genesis_db}"
+      DB_SYNC: "${DB_SYNC:-false}"
+
+      # Public URL used when generated/uploaded files need external access.
+      UPLOAD_BASE_URL: "${UPLOAD_BASE_URL:-http://127.0.0.1:30080}"
+
+      # HiClaw MCP flow: the platform exposes MCP; it does not start legacy runtimes.
+      AUTO_EXECUTION_ENABLED: "false"
+      LEGACY_RUNTIME_WEBHOOKS_ENABLED: "false"
+      LEGACY_TASK_WEBHOOKS_ENABLED: "false"
+
+    volumes:
+      - genesis_uploads:/app/uploads
+    networks:
+      - genesis-net
+
+  genesis-frontend:
+    image: genesis-frontend:20260709-180628
+    container_name: genesis-frontend
+    restart: always
+    ports:
+      - "${FRONTEND_PORT:-30080}:80"
+    depends_on:
+      - genesis-backend
+    networks:
+      - genesis-net
+
+volumes:
+  genesis_uploads:
+
+networks:
+  genesis-net:
+    driver: bridge

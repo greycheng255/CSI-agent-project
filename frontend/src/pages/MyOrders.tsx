@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Loader2, Plus, ExternalLink, Package, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { CircleAlert, ClipboardList, ExternalLink, Inbox, Loader2, Package, Plus, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
+import { formatShanghaiDate } from '../utils/date';
 
 type TaskStatus = 'OPEN' | 'CLOSED' | 'CANCELED';
 
@@ -91,25 +93,25 @@ function taskStatusView(status: TaskStatus) {
     case 'OPEN':
       return {
         label: '招募中',
-        badge: 'bg-green-500/10 text-green-400 border border-green-500/20',
+        badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]',
         icon: <Clock className="w-4 h-4" />,
       };
     case 'CLOSED':
       return {
         label: '已结束',
-        badge: 'bg-gray-800 text-gray-300 border border-gray-700',
+        badge: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]',
         icon: <CheckCircle className="w-4 h-4" />,
       };
     case 'CANCELED':
       return {
         label: '已取消',
-        badge: 'bg-gray-800 text-gray-300 border border-gray-700',
+        badge: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]',
         icon: <XCircle className="w-4 h-4" />,
       };
     default:
       return {
         label: status,
-        badge: 'bg-gray-800 text-gray-400 border border-gray-700',
+        badge: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]',
         icon: <Package className="w-4 h-4" />,
       };
   }
@@ -120,61 +122,61 @@ function orderStatusView(status: OrderStatus) {
     case 'PENDING_PAYMENT':
       return {
         label: '待支付',
-        badge: 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20',
+        badge: 'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border border-[#f3d79a]',
         description: '请选择Agent并支付',
       };
     case 'IN_PROGRESS':
       return {
         label: '进行中',
-        badge: 'bg-blue-500/10 text-blue-400 border border-blue-500/20',
+        badge: 'bg-[var(--brand-50)] text-[var(--brand-700)] border border-[var(--brand-200)]',
         description: 'Agent正在执行任务',
       };
     case 'DELIVERED':
       return {
         label: '待验收',
-        badge: 'bg-purple-500/10 text-purple-400 border border-purple-500/20',
+        badge: 'bg-[#f1f0ff] text-[#514fc4] border border-[#d9d7ff]',
         description: 'Agent已提交交付物',
       };
     case 'ACCEPTED':
       return {
         label: '已验收',
-        badge: 'bg-green-500/10 text-green-400 border border-green-500/20',
+        badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]',
         description: '等待系统打款',
       };
     case 'COMPLETED':
       return {
         label: '已完成',
-        badge: 'bg-green-500/10 text-green-400 border border-green-500/20',
+        badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]',
         description: '任务已完成，资金已释放',
       };
     case 'REJECTED':
       return {
         label: '已拒绝',
-        badge: 'bg-red-500/10 text-red-400 border border-red-500/20',
+        badge: 'bg-[var(--state-error-surface)] text-[var(--state-error)] border border-[#ffc6c1]',
         description: '交付物未通过验收',
       };
     case 'ARBITRATING':
       return {
         label: '仲裁中',
-        badge: 'bg-orange-500/10 text-orange-400 border border-orange-500/20',
+        badge: 'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border border-[#f3d79a]',
         description: '正在处理争议',
       };
     case 'REFUNDED':
       return {
         label: '已退款',
-        badge: 'bg-gray-800 text-gray-300 border border-gray-700',
+        badge: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]',
         description: '资金已退回',
       };
     case 'CANCELED':
       return {
         label: '已取消',
-        badge: 'bg-gray-800 text-gray-300 border border-gray-700',
+        badge: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]',
         description: '订单已取消',
       };
     default:
       return {
         label: status,
-        badge: 'bg-gray-800 text-gray-400 border border-gray-700',
+        badge: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]',
         description: '',
       };
   }
@@ -261,51 +263,46 @@ export default function MyOrders() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">我发布的任务</h1>
-          <p className="text-sm text-gray-500 mt-2">展示我作为雇主发布的所有任务，包括招募中、进行中和已完成的任务。</p>
-        </div>
-        <div className="flex gap-3">
+    <div className="mx-auto w-full max-w-[1440px] space-y-6">
+      <WorkbenchPageHeader
+        icon={ClipboardList}
+        eyebrow="我的任务"
+        title="已发布任务"
+        description="跟进自己发布的任务，从 Agent 招募、订单支付到交付验收集中处理。"
+        actions={<>
           <Link
             to="/tasks/new"
-            className="text-sm bg-green-500/10 text-green-400 border border-green-500/30 px-3 py-1.5 rounded hover:bg-green-500/20 transition-colors flex items-center gap-2"
+            className="btn-cs btn-primary btn-sm"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="h-4 w-4" />
             发布新任务
           </Link>
-          <Link
-            to="/market"
-            className="text-sm text-gray-300 hover:text-green-400 border border-gray-700 px-3 py-1.5 rounded hover:border-green-500/30 transition-colors"
-          >
-            去任务大厅
-          </Link>
-        </div>
-      </div>
+          <Link to="/market" className="btn-cs btn-ghost-dark btn-sm">任务大厅</Link>
+        </>}
+      />
 
       {/* 统计卡片 */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-black/30 border border-gray-800 rounded-lg p-4">
-          <div className="text-2xl font-bold text-green-400">{tasks.filter(t => t.status === 'OPEN' && !t.hasOrder).length}</div>
-          <div className="text-xs text-gray-500">招募中</div>
+      <section className="grid grid-cols-2 overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white divide-x divide-y divide-[color:var(--border)] md:grid-cols-4 md:divide-y-0">
+        <div className="p-5">
+          <div className="text-2xl font-bold text-[var(--text-900)]">{tasks.filter(t => t.status === 'OPEN' && !t.hasOrder).length}</div>
+          <div className="mt-1 text-xs text-[var(--text-500)]">招募中</div>
         </div>
-        <div className="bg-black/30 border border-gray-800 rounded-lg p-4">
-          <div className="text-2xl font-bold text-blue-400">{orders.filter(o => ['PENDING_PAYMENT', 'IN_PROGRESS', 'DELIVERED'].includes(o.status)).length}</div>
-          <div className="text-xs text-gray-500">进行中</div>
+        <div className="p-5">
+          <div className="text-2xl font-bold text-[var(--text-900)]">{orders.filter(o => ['PENDING_PAYMENT', 'IN_PROGRESS', 'DELIVERED'].includes(o.status)).length}</div>
+          <div className="mt-1 text-xs text-[var(--text-500)]">进行中</div>
         </div>
-        <div className="bg-black/30 border border-gray-800 rounded-lg p-4">
-          <div className="text-2xl font-bold text-purple-400">{orders.filter(o => o.status === 'DELIVERED').length}</div>
-          <div className="text-xs text-gray-500">待验收</div>
+        <div className="p-5">
+          <div className="text-2xl font-bold text-[var(--text-900)]">{orders.filter(o => o.status === 'DELIVERED').length}</div>
+          <div className="mt-1 text-xs text-[var(--text-500)]">待验收</div>
         </div>
-        <div className="bg-black/30 border border-gray-800 rounded-lg p-4">
-          <div className="text-2xl font-bold text-gray-400">{orders.filter(o => ['COMPLETED', 'REFUNDED'].includes(o.status)).length}</div>
-          <div className="text-xs text-gray-500">已完成</div>
+        <div className="p-5">
+          <div className="text-2xl font-bold text-[var(--text-900)]">{orders.filter(o => ['COMPLETED', 'REFUNDED'].includes(o.status)).length}</div>
+          <div className="mt-1 text-xs text-[var(--text-500)]">已完成</div>
         </div>
-      </div>
+      </section>
 
       {/* 标签页 */}
-      <div className="flex gap-2 border-b border-gray-800 pb-2">
+      <div className="flex gap-1 overflow-x-auto rounded-xl bg-[var(--background-100)] p-1">
         {[
           { key: 'all', label: '全部', count: tasks.length },
           { key: 'open', label: '招募中', count: tasks.filter(t => t.status === 'OPEN' && !t.hasOrder).length },
@@ -315,40 +312,29 @@ export default function MyOrders() {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key as 'all' | 'open' | 'in_progress' | 'completed')}
-            className={`px-4 py-2 text-sm rounded-t-lg transition-colors ${
+            className={`min-h-10 whitespace-nowrap rounded-lg px-4 text-sm font-medium transition-colors ${
               activeTab === tab.key
-                ? 'text-green-400 border-b-2 border-green-400 bg-green-500/5'
-                : 'text-gray-400 hover:text-gray-300'
+                ? 'bg-white text-[var(--brand-700)] shadow-sm'
+                : 'text-[var(--text-500)] hover:text-[var(--text-800)]'
             }`}
           >
             {tab.label}
-            <span className="ml-1 text-xs text-gray-500">({tab.count})</span>
+            <span className="ml-1 text-xs text-[var(--text-400)]">{tab.count}</span>
           </button>
         ))}
       </div>
 
       {loading ? (
-        <div className="flex justify-center items-center py-20 text-gray-500">
-          <Loader2 className="w-6 h-6 animate-spin mr-3 text-green-500" />
+        <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white text-sm text-[var(--text-500)]">
+          <Loader2 className="mr-3 h-5 w-5 animate-spin text-[var(--brand-500)]" />
           正在读取数据...
         </div>
       ) : error ? (
-        <div className="p-4 border border-red-900/50 bg-red-900/10 text-red-400 rounded-lg text-center">
-          {error}
-        </div>
+        <WorkbenchStatePanel icon={CircleAlert} title="任务记录暂时无法加载" description={error} tone="error" />
       ) : filteredTasks.length === 0 && orders.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-gray-800 rounded-xl">
-          <p className="text-gray-500 mb-4">还没有发布任务</p>
-          <Link
-            to="/tasks/new"
-            className="text-green-400 hover:text-green-300 text-sm border border-green-500/30 px-4 py-2 rounded bg-green-500/10 transition-colors inline-flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            发布第一个任务
-          </Link>
-        </div>
+        <WorkbenchStatePanel icon={Inbox} title="还没有发布任务" description="发布首个任务后，可在这里持续跟进报价、支付、执行与验收。" action={<Link to="/tasks/new" className="btn-cs btn-primary btn-sm"><Plus className="h-4 w-4" />发布第一个任务</Link>} />
       ) : (
-        <div className="space-y-4">
+        <section className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white divide-y divide-[color:var(--border)]">
           {filteredTasks.map((task) => {
             const order = getTaskOrder(task.id);
             const taskStatusViewResult = taskStatusView(task.status);
@@ -358,12 +344,12 @@ export default function MyOrders() {
             return (
               <div
                 key={task.id}
-                className="border border-gray-800 rounded-xl p-5 hover:border-green-500/30 transition-colors bg-black/30"
+                className="p-5 transition-colors hover:bg-[var(--background-100)]"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="font-bold text-lg text-gray-200 truncate">
+                      <h3 className="truncate text-base font-semibold text-[var(--text-900)]">
                         {task.title}
                       </h3>
                       <span
@@ -376,44 +362,44 @@ export default function MyOrders() {
                     
                     {/* 状态描述 */}
                     {'description' in statusView && (
-                      <p className="text-xs text-gray-500 mb-2">{statusView.description}</p>
+                      <p className="mb-2 text-xs text-[var(--text-500)]">{statusView.description}</p>
                     )}
                     
-                    <p className="text-sm text-gray-500 line-clamp-2 mb-3">
+                    <p className="mb-3 line-clamp-2 text-sm leading-6 text-[var(--text-500)]">
                       {task.description || '暂无描述'}
                     </p>
                     
-                    <div className="flex items-center gap-4 text-xs text-gray-500">
-                      <span>预算: <span className="text-green-400">¥{task.budgetCny || 0}</span></span>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--text-500)]">
+                      <span>预算：<span className="font-medium text-[var(--text-800)]">¥{task.budgetCny || 0}</span></span>
                       {order ? (
                         <>
-                          <span>成交价: <span className="text-blue-400">¥{order.amountCny}</span></span>
-                          <span>Agent: <span className="text-purple-400">{order.bid?.agent?.name || '未知'}</span></span>
+                          <span>成交价：<span className="font-medium text-[var(--text-800)]">¥{order.amountCny}</span></span>
+                          <span>Agent：<span className="font-medium text-[var(--text-800)]">{order.bid?.agent?.name || '未知'}</span></span>
                         </>
                       ) : (
-                        <span className="text-yellow-400">等待Agent投标</span>
+                        <span className="text-[var(--state-warning)]">等待 Agent 投标</span>
                       )}
-                      <span>发布于: {new Date(task.createdAt).toLocaleDateString()}</span>
+                      <span>发布于: {formatShanghaiDate(task.createdAt)}</span>
                       {task.expectedDeliveryAt && (
-                        <span>期望交付: {new Date(task.expectedDeliveryAt).toLocaleDateString()}</span>
+                        <span>期望交付: {formatShanghaiDate(task.expectedDeliveryAt)}</span>
                       )}
                     </div>
                     
                     {/* 交付物信息 */}
                     {order?.deliveryUrl && (
-                      <div className="mt-3 p-3 bg-gray-900/50 rounded-lg">
-                        <div className="text-xs text-gray-500 mb-1">交付物:</div>
+                      <div className="mt-3 rounded-xl bg-[var(--background-100)] p-3">
+                        <div className="mb-1 text-xs text-[var(--text-500)]">交付物</div>
                         <a 
                           href={order.deliveryUrl} 
                           target="_blank" 
                           rel="noopener noreferrer"
-                          className="text-sm text-green-400 hover:text-green-300 flex items-center gap-1"
+                          className="flex items-center gap-1 text-sm text-[var(--brand-600)] hover:text-[var(--brand-700)]"
                         >
                           <ExternalLink className="w-3 h-3" />
                           {order.deliveryUrl}
                         </a>
                         {order.deliverySummary && (
-                          <p className="text-xs text-gray-500 mt-1">{order.deliverySummary}</p>
+                          <p className="mt-1 text-xs text-[var(--text-500)]">{order.deliverySummary}</p>
                         )}
                       </div>
                     )}
@@ -422,7 +408,7 @@ export default function MyOrders() {
                   <div className="flex flex-col gap-2">
                     <Link
                       to={`/tasks/${task.id}`}
-                      className="text-sm text-gray-400 hover:text-green-400 border border-gray-700 hover:border-green-500/30 px-3 py-1.5 rounded transition-colors flex items-center gap-1"
+                      className="inline-flex min-h-9 items-center gap-1 rounded-full border border-[color:var(--border)] px-3 text-sm font-medium text-[var(--text-600)] hover:border-[var(--brand-300)] hover:text-[var(--brand-600)]"
                     >
                       查看详情
                       <ExternalLink className="w-3 h-3" />
@@ -432,7 +418,7 @@ export default function MyOrders() {
                     {order?.status === 'PENDING_PAYMENT' && (
                       <Link
                         to={`/orders/${order.id}`}
-                        className="text-sm bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 px-3 py-1.5 rounded hover:bg-yellow-500/20 transition-colors text-center"
+                        className="min-h-9 rounded-full bg-[var(--state-warning-surface)] px-3 py-2 text-center text-sm font-medium text-[var(--state-warning)]"
                       >
                         去支付
                       </Link>
@@ -441,21 +427,21 @@ export default function MyOrders() {
                     {order?.status === 'DELIVERED' && (
                       <Link
                         to={`/orders/${order.id}`}
-                        className="text-sm bg-purple-500/10 text-purple-400 border border-purple-500/30 px-3 py-1.5 rounded hover:bg-purple-500/20 transition-colors text-center"
+                        className="min-h-9 rounded-full bg-[var(--brand-50)] px-3 py-2 text-center text-sm font-medium text-[var(--brand-700)]"
                       >
                         去验收
                       </Link>
                     )}
                     
                     {order?.status === 'IN_PROGRESS' && (
-                      <span className="text-xs text-blue-400 text-center">
-                        Agent执行中...
+                      <span className="text-center text-xs text-[var(--brand-600)]">
+                        Agent 执行中...
                       </span>
                     )}
                     
                     {!order && task.status === 'OPEN' && (
-                      <span className="text-xs text-gray-500 text-center">
-                        等待Agent投标
+                      <span className="text-center text-xs text-[var(--text-500)]">
+                        等待 Agent 投标
                       </span>
                     )}
                   </div>
@@ -472,12 +458,12 @@ export default function MyOrders() {
               return (
                 <div
                   key={order.id}
-                  className="border border-gray-800 rounded-xl p-5 hover:border-green-500/30 transition-colors bg-black/30"
+                  className="p-5 transition-colors hover:bg-[var(--background-100)]"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
-                        <h3 className="font-bold text-lg text-gray-200 truncate">
+                        <h3 className="truncate text-base font-semibold text-[var(--text-900)]">
                           {order.task?.title || '未知任务'}
                         </h3>
                         <span
@@ -488,14 +474,14 @@ export default function MyOrders() {
                       </div>
                       <p className="text-xs text-gray-500 mb-2">{orderStatusViewResult.description}</p>
                       <div className="flex items-center gap-4 text-xs text-gray-500">
-                        <span>成交价: <span className="text-blue-400">¥{order.amountCny}</span></span>
-                        <span>Agent: <span className="text-purple-400">{order.bid?.agent?.name || '未知'}</span></span>
+                        <span>成交价：<span className="font-medium text-[var(--text-800)]">¥{order.amountCny}</span></span>
+                        <span>Agent：<span className="font-medium text-[var(--text-800)]">{order.bid?.agent?.name || '未知'}</span></span>
                       </div>
                     </div>
                     <div className="flex flex-col gap-2">
                       <Link
                         to={`/orders/${order.id}`}
-                        className="text-sm text-gray-400 hover:text-green-400 border border-gray-700 hover:border-green-500/30 px-3 py-1.5 rounded transition-colors"
+                        className="inline-flex min-h-9 items-center rounded-full border border-[color:var(--border)] px-3 text-sm font-medium text-[var(--text-600)] hover:border-[var(--brand-300)] hover:text-[var(--brand-600)]"
                       >
                         查看订单
                       </Link>
@@ -513,12 +499,12 @@ export default function MyOrders() {
               return (
                 <div
                   key={order.id}
-                  className="border border-gray-800 rounded-xl p-5 hover:border-green-500/30 transition-colors bg-black/30"
+                  className="p-5 transition-colors hover:bg-[var(--background-100)]"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
-                        <h3 className="font-bold text-lg text-gray-200 truncate">
+                        <h3 className="truncate text-base font-semibold text-[var(--text-900)]">
                           {order.task?.title || '未知任务'}
                         </h3>
                         <span
@@ -529,22 +515,22 @@ export default function MyOrders() {
                       </div>
                       <p className="text-xs text-gray-500 mb-2">{orderStatusViewResult.description}</p>
                       <div className="flex items-center gap-4 text-xs text-gray-500">
-                        <span>成交价: <span className="text-blue-400">¥{order.amountCny}</span></span>
-                        <span>Agent: <span className="text-purple-400">{order.bid?.agent?.name || '未知'}</span></span>
+                        <span>成交价：<span className="font-medium text-[var(--text-800)]">¥{order.amountCny}</span></span>
+                        <span>Agent：<span className="font-medium text-[var(--text-800)]">{order.bid?.agent?.name || '未知'}</span></span>
                         {order.acceptedAt && (
-                          <span>完成于: {new Date(order.acceptedAt).toLocaleDateString()}</span>
+                          <span>完成于: {formatShanghaiDate(order.acceptedAt)}</span>
                         )}
                       </div>
                       
                       {/* 交付物信息 */}
                       {order.deliveryUrl && (
-                        <div className="mt-3 p-3 bg-gray-900/50 rounded-lg">
+                        <div className="mt-3 rounded-xl bg-[var(--background-100)] p-3">
                           <div className="text-xs text-gray-500 mb-1">交付物:</div>
                           <a 
                             href={order.deliveryUrl} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="text-sm text-green-400 hover:text-green-300 flex items-center gap-1"
+                            className="flex items-center gap-1 text-sm text-[var(--brand-600)] hover:text-[var(--brand-700)]"
                           >
                             <ExternalLink className="w-3 h-3" />
                             {order.deliveryUrl}
@@ -558,7 +544,7 @@ export default function MyOrders() {
                     <div className="flex flex-col gap-2">
                       <Link
                         to={`/orders/${order.id}`}
-                        className="text-sm text-gray-400 hover:text-green-400 border border-gray-700 hover:border-green-500/30 px-3 py-1.5 rounded transition-colors"
+                        className="inline-flex min-h-9 items-center rounded-full border border-[color:var(--border)] px-3 text-sm font-medium text-[var(--text-600)] hover:border-[var(--brand-300)] hover:text-[var(--brand-600)]"
                       >
                         查看订单
                       </Link>
@@ -567,8 +553,10 @@ export default function MyOrders() {
                 </div>
               );
             })}
-        </div>
+        </section>
       )}
     </div>
   );
 }
+
+

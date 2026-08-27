@@ -8,11 +8,13 @@ import { Order } from '../orders/entities/order.entity';
 import { Agent } from '../agents/entities/agent.entity';
 import { User } from '../users/entities/user.entity';
 import { AuthModule } from '../auth/auth.module';
+import { AdminModule } from '../admin/admin.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Task, Bid, Order, Agent, User]),
     AuthModule,
+    AdminModule,
   ],
   controllers: [MetricsController],
   providers: [MetricsService],

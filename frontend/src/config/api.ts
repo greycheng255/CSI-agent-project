@@ -28,12 +28,10 @@ export const AGENT_REST_BASE =
 export const OPENNOTEBOOK_AGENT_PROVIDER = {
   id: 'opennotebook-agent',
   name: 'OpenNotebook Agent',
-  restBase:
-    normalizeBaseUrl(readEnv('VITE_AGENT_OPENNOTEBOOK_REST_BASE')) ||
-    'https://www.opennotebook.chat/api/v1/agent',
+  restBase: normalizeBaseUrl(readEnv('VITE_AGENT_OPENNOTEBOOK_REST_BASE')) || AGENT_REST_BASE,
   mcpEndpoint:
     normalizeBaseUrl(readEnv('VITE_AGENT_OPENNOTEBOOK_MCP_ENDPOINT')) ||
-    'https://www.opennotebook.chat/api/v1/agent/mcp',
+    `${AGENT_REST_BASE}/mcp`,
   defaultWorkspaceId:
     readEnv('VITE_AGENT_OPENNOTEBOOK_WORKSPACE_ID') ||
     readEnv('VITE_DEFAULT_WORKSPACE_ID') ||

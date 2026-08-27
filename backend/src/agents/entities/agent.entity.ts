@@ -3,12 +3,18 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   ManyToOne,
   JoinColumn,
   OneToMany,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Bid } from '../../bids/entities/bid.entity';
+import { AgentCard } from './agent-card.entity';
+import { AgentCapability } from './agent-capability.entity';
+import { AgentTag } from './agent-tag.entity';
+import { AgentHeartbeat } from './agent-heartbeat.entity';
+import { AgentAuditLog } from './agent-audit-log.entity';
 
 const isSqlite = process.env.DB_TYPE === 'sqlite';
 
@@ -21,6 +27,26 @@ export enum OpenclawStatus {
   CONNECTED = 'CONNECTED',
   DISCONNECTED = 'DISCONNECTED',
   UNKNOWN = 'UNKNOWN',
+}
+
+export enum AgentApprovalStatus {
+  DRAFT = 'draft',
+  PENDING_REVIEW = 'pending_review',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+  DISABLED = 'disabled',
+}
+
+export enum AgentRuntimeStatus {
+  ONLINE = 'online',
+  DEGRADED = 'degraded',
+  OFFLINE = 'offline',
+  UNKNOWN = 'unknown',
+}
+
+export enum AgentType {
+  PLATFORM_MANAGED = 'platform-managed',
+  SELF_HOSTED = 'self-hosted',
 }
 
 @Entity('agents')
@@ -58,6 +84,9 @@ export class Agent {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+
   @Column({
     name: 'last_heartbeat_at',
     type: isSqlite ? 'datetime' : 'timestamp with time zone',
@@ -73,6 +102,21 @@ export class Agent {
 
   @OneToMany(() => Bid, (bid) => bid.agent)
   bids: Bid[];
+
+  @OneToMany(() => AgentCard, (card) => card.agent)
+  cards: AgentCard[];
+
+  @OneToMany(() => AgentCapability, (capability) => capability.agent)
+  capabilities: AgentCapability[];
+
+  @OneToMany(() => AgentTag, (tag) => tag.agent)
+  tags: AgentTag[];
+
+  @OneToMany(() => AgentHeartbeat, (heartbeat) => heartbeat.agent)
+  heartbeats: AgentHeartbeat[];
+
+  @OneToMany(() => AgentAuditLog, (auditLog) => auditLog.agent)
+  auditLogs: AgentAuditLog[];
 
   @Column({ name: 'pod_name', nullable: true })
   podName: string;
@@ -124,4 +168,80 @@ export class Agent {
 
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean;
+
+  @Column({ name: 'agent_type', type: 'varchar', default: AgentType.SELF_HOSTED })
+  agentType: AgentType;
+
+  @Column({
+    name: 'approval_status',
+    type: 'varchar',
+    default: AgentApprovalStatus.PENDING_REVIEW,
+  })
+  approvalStatus: AgentApprovalStatus;
+
+  @Column({
+    name: 'runtime_status',
+    type: 'varchar',
+    default: AgentRuntimeStatus.UNKNOWN,
+  })
+  runtimeStatus: AgentRuntimeStatus;
+
+  @Column({ name: 'visibility', type: 'varchar', default: 'public' })
+  visibility: 'public' | 'private' | 'internal';
+
+  @Column({ name: 'version', type: 'varchar', default: '1.0.0' })
+  version: string;
+
+  @Column({ name: 'card_url', type: 'text', nullable: true })
+  cardUrl: string | null;
+
+  @Column({ name: 'endpoint_url', type: 'text', nullable: true })
+  endpointUrl: string | null;
+
+  @Column({ name: 'health_url', type: 'text', nullable: true })
+  healthUrl: string | null;
+
+  @Column({ name: 'auth_type', type: 'varchar', default: 'bearer' })
+  authType: 'bearer' | 'api_key' | 'signature' | 'mtls' | 'none';
+
+  @Column({ name: 'pricing_model', type: 'varchar', default: 'quote' })
+  pricingModel: string;
+
+  @Column({
+    name: 'base_price',
+    type: isSqlite ? 'float' : 'numeric',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
+  basePrice: number | null;
+
+  @Column({ name: 'currency', type: 'varchar', default: 'CNY' })
+  currency: string;
+
+  @Column({
+    name: 'reputation_score',
+    type: isSqlite ? 'float' : 'numeric',
+    precision: 3,
+    scale: 2,
+    default: 5.0,
+  })
+  reputationScore: number;
+
+  @Column({
+    name: 'approved_at',
+    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    nullable: true,
+  })
+  approvedAt: Date | null;
+
+  @Column({ name: 'contact_email', type: 'varchar', nullable: true })
+  contactEmail: string | null;
+
+  @Column({
+    name: 'metadata',
+    type: isSqlite ? 'simple-json' : 'jsonb',
+    nullable: true,
+  })
+  metadata: Record<string, unknown> | null;
 }

@@ -1,27 +1,27 @@
 import { Video } from 'lucide-react';
 import type { AgentPanelProps } from './types';
-import { ChoicePills, PanelHeader, PanelInput, SubmitBlock } from './shared';
+import { AttachmentUpload, ChoicePills, PanelHeader, SubmitBlock } from './shared';
 
 export default function DigiHumanPlugin(props: AgentPanelProps) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <PanelHeader
         icon={<Video className="h-5 w-5" />}
         title="数字人"
         description="使用人物图片和音频驱动数字人视频。"
         accent={props.accent}
       />
-      <PanelInput
-        label="人物图片 URL"
-        value={props.formValues.imageUrl || ''}
-        onChange={(value) => props.updateField('imageUrl', value)}
-        placeholder="https://example.com/avatar.png"
+      <AttachmentUpload
+        label="人物图片"
+        value={props.formValues.image_url || ''}
+        onChange={(value) => props.updateField('image_url', value)}
+        accept="image/*"
       />
-      <PanelInput
-        label="音频 URL"
-        value={props.formValues.audioUrl || ''}
-        onChange={(value) => props.updateField('audioUrl', value)}
-        placeholder="https://example.com/speech.mp3"
+      <AttachmentUpload
+        label="口播音频"
+        value={props.formValues.audio_url || ''}
+        onChange={(value) => props.updateField('audio_url', value)}
+        accept="audio/*"
       />
       <ChoicePills
         label="分辨率"
@@ -39,6 +39,7 @@ export default function DigiHumanPlugin(props: AgentPanelProps) {
         error={props.runError}
         taskId={props.taskId}
         label="生成数字人"
+        accent={props.accent}
       />
     </div>
   );

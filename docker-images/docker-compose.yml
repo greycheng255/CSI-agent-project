@@ -1,0 +1,92 @@
+# Build time: 2026-07-09 18:07:20
+# Image archive: genesis-all_20260709-180628.tar
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: genesis-postgres
+    ports:
+      - '5436:5432'
+    environment:
+      POSTGRES_USER: genesis_user
+      POSTGRES_PASSWORD: genesis_password
+      POSTGRES_DB: genesis_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - genesis-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U genesis_user -d genesis_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: genesis-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    restart: always
+    networks:
+      - genesis-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  genesis-backend:
+    image: genesis-backend:${TAG:-20260709-180628}
+    container_name: genesis-backend
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    ports:
+      - '4000:4000'
+    environment:
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_USER: genesis_user
+      DB_PASSWORD: genesis_password
+      DB_NAME: genesis_db
+      DB_SYNC: 'true'
+      UPLOAD_BASE_URL: ${UPLOAD_BASE_URL:-http://localhost}
+      AUTO_EXECUTION_ENABLED: 'false'
+      LEGACY_RUNTIME_WEBHOOKS_ENABLED: 'false'
+      LEGACY_TASK_WEBHOOKS_ENABLED: 'false'
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+    networks:
+      - genesis-net
+
+  genesis-frontend:
+    image: genesis-frontend:${TAG:-20260709-180628}
+    container_name: genesis-frontend
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    ports:
+      - '80:80'
+    depends_on:
+      - genesis-backend
+    restart: always
+    networks:
+      - genesis-net
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
+
+networks:
+  genesis-net:
+    driver: bridge

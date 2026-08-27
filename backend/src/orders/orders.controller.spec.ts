@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
-import { AdminGuard } from '../admin/admin.guard';
+import { AdminPermissionGuard } from '../admin/admin.guard';
 
 describe('OrdersController', () => {
   let controller: OrdersController;
@@ -28,7 +28,7 @@ describe('OrdersController', () => {
         },
       ],
     })
-      .overrideGuard(AdminGuard)
+      .overrideGuard(AdminPermissionGuard)
       .useValue({ canActivate: jest.fn(() => true) })
       .compile();
 

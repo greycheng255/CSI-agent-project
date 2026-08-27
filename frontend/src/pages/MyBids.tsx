@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, Package, Clock, CheckCircle, XCircle, DollarSign, FileText, TrendingUp } from 'lucide-react';
+import { CheckCircle, ChevronRight, CircleAlert, Clock, FileText, Inbox, Loader2, Package, RefreshCw, TrendingUp, X, XCircle } from 'lucide-react';
+import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
 
@@ -64,41 +65,42 @@ function bidStatusView(status: BidStatus) {
     case 'ACTIVE':
       return {
         label: '有效',
-        badge: 'bg-green-500/10 text-green-400 border border-green-500/20',
+        badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]',
         icon: <Clock className="w-4 h-4" />,
         description: '报价有效，等待雇主选择',
       };
     case 'EXPIRED':
       return {
         label: '已过期',
-        badge: 'bg-gray-800 text-gray-400 border border-gray-700',
+        badge: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]',
         icon: <XCircle className="w-4 h-4" />,
         description: '报价已过期或任务已结束',
       };
     case 'ACCEPTED':
       return {
         label: '已中标',
-        badge: 'bg-blue-500/10 text-blue-400 border border-blue-500/20',
+        badge: 'bg-[var(--brand-50)] text-[var(--brand-700)] border border-[var(--brand-200)]',
         icon: <CheckCircle className="w-4 h-4" />,
         description: '报价已被雇主接受',
       };
     case 'REJECTED':
       return {
         label: '未中标',
-        badge: 'bg-red-500/10 text-red-400 border border-red-500/20',
+        badge: 'bg-[var(--state-error-surface)] text-[var(--state-error)] border border-[#ffc6c1]',
         icon: <XCircle className="w-4 h-4" />,
         description: '报价未被选择',
       };
     default:
       return {
         label: status,
-        badge: 'bg-gray-800 text-gray-400 border border-gray-700',
+        badge: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]',
         icon: <Package className="w-4 h-4" />,
         description: '',
       };
   }
 }
 
+/* eslint-disable react-hooks/exhaustive-deps -- bid refresh is intentionally driven by the authenticated account effect */
 export default function MyBids() {
   const { token } = useAuthStore();
   const [bids, setBids] = useState<BidItem[]>([]);
@@ -239,304 +241,85 @@ export default function MyBids() {
     totalAmount: bids.reduce((sum, b) => sum + b.priceCny, 0),
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-gray-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* 页面标题 */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">我的报价记录</h1>
-          <p className="text-gray-400">查看您对所有任务的报价记录和状态</p>
-        </div>
+    <div className="mx-auto w-full max-w-[1440px] space-y-6">
+      <WorkbenchPageHeader
+        icon={TrendingUp}
+        eyebrow="我的报价"
+        title="报价记录"
+        description="查看名下 Agent 对任务提交的报价、评估依据和中标结果。"
+        actions={<button type="button" onClick={() => void fetchMyBids()} disabled={loading} className="btn-cs btn-ghost-dark btn-sm disabled:opacity-60"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />刷新</button>}
+      />
 
-        {/* 统计卡片 */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-[#111] border border-gray-800 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-500/10 rounded-lg">
-                <Package className="w-5 h-5 text-blue-400" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-400">总报价数</p>
-                <p className="text-2xl font-bold text-white">{stats.total}</p>
-              </div>
+      {loading && bids.length === 0 ? (
+        <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white text-sm text-[var(--text-500)]"><Loader2 className="mr-3 h-5 w-5 animate-spin text-[var(--brand-500)]" />正在读取报价记录...</div>
+      ) : error && bids.length === 0 ? (
+        <WorkbenchStatePanel icon={CircleAlert} title="报价记录暂时无法加载" description={error} tone="error" action={<button type="button" onClick={() => void fetchMyBids()} className="btn-cs btn-primary btn-sm">重新加载</button>} />
+      ) : (
+        <>
+          <section className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white">
+            <div className="grid grid-cols-2 divide-x divide-y divide-[color:var(--border)] md:grid-cols-5 md:divide-y-0">
+              {[
+                { label: '全部报价', value: stats.total },
+                { label: '有效报价', value: stats.active },
+                { label: '已中标', value: stats.accepted },
+                { label: '已过期', value: stats.expired },
+                { label: '报价总额', value: formatPrice(stats.totalAmount) },
+              ].map((item) => <div key={item.label} className="p-5"><p className="text-2xl font-bold tabular-nums text-[var(--text-900)]">{item.value}</p><p className="mt-1 text-xs text-[var(--text-500)]">{item.label}</p></div>)}
             </div>
-          </div>
-          
-          <div className="bg-[#111] border border-gray-800 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-500/10 rounded-lg">
-                <Clock className="w-5 h-5 text-green-400" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-400">有效报价</p>
-                <p className="text-2xl font-bold text-white">{stats.active}</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-[#111] border border-gray-800 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-500/10 rounded-lg">
-                <CheckCircle className="w-5 h-5 text-blue-400" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-400">已中标</p>
-                <p className="text-2xl font-bold text-white">{stats.accepted}</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-[#111] border border-gray-800 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gray-500/10 rounded-lg">
-                <XCircle className="w-5 h-5 text-gray-400" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-400">已过期</p>
-                <p className="text-2xl font-bold text-white">{stats.expired}</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-[#111] border border-gray-800 rounded-lg p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-yellow-500/10 rounded-lg">
-                <DollarSign className="w-5 h-5 text-yellow-400" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-400">报价总额</p>
-                <p className="text-2xl font-bold text-white">{formatPrice(stats.totalAmount)}</p>
-              </div>
-            </div>
-          </div>
-        </div>
+          </section>
 
-        {/* 错误提示 */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400">
-            {error}
-          </div>
-        )}
+          {error && <div className="flex items-center gap-2 rounded-xl border border-[color:var(--state-error)] bg-[var(--state-error-surface)] px-4 py-3 text-sm text-[var(--state-error)]"><CircleAlert className="h-4 w-4" />刷新失败，当前仍展示已读取的记录。</div>}
 
-        {/* 报价列表 */}
-        {bids.length === 0 ? (
-          <div className="bg-[#111] border border-gray-800 rounded-lg p-12 text-center">
-            <Package className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-white mb-2">暂无报价记录</h3>
-            <p className="text-gray-400 mb-4">您还没有对任何任务进行报价</p>
-            <Link
-              to="/market"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-            >
-              <TrendingUp className="w-4 h-4" />
-              去任务大厅
-            </Link>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {bids.map((bid) => {
-              const statusView = bidStatusView(bid.status);
-              return (
-                <div
-                  key={bid.id}
-                  className="bg-[#111] border border-gray-800 rounded-lg p-6 hover:border-gray-700 transition-colors"
-                >
-                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                    {/* 左侧：任务信息 */}
-                    <div className="flex-1">
-                      <div className="flex items-start gap-3 mb-3">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusView.badge}`}>
-                          {statusView.icon}
-                          {statusView.label}
-                        </span>
-                        <span className="text-sm text-gray-500">
-                          报价时间：{formatDate(bid.createdAt)}
-                        </span>
+          {bids.length === 0 ? (
+            <WorkbenchStatePanel icon={Inbox} title="暂无报价记录" description="Agent 尚未对公开任务提交报价，可前往任务大厅寻找合适机会。" action={<Link to="/market" className="btn-cs btn-primary btn-sm"><TrendingUp className="h-4 w-4" />去任务大厅</Link>} />
+          ) : (
+            <section className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white">
+              <div className="border-b border-[color:var(--border)] px-5 py-4"><h2 className="font-semibold text-[var(--text-800)]">全部报价</h2><p className="mt-1 text-xs text-[var(--text-500)]">按提交时间展示，点击查看完整定价依据</p></div>
+              <div className="divide-y divide-[color:var(--border)]">
+                {bids.map((bid) => {
+                  const statusView = bidStatusView(bid.status);
+                  return (
+                    <article key={bid.id} className="grid gap-5 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_220px]">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${statusView.badge}`}>{statusView.icon}{statusView.label}</span><span className="text-xs text-[var(--text-400)]">{formatDate(bid.createdAt)}</span></div>
+                        <Link to={`/tasks/${bid.taskId}`} className="mt-3 block truncate text-base font-semibold text-[var(--text-900)] hover:text-[var(--brand-600)]">{bid.task?.title || '未知任务'}</Link>
+                        {bid.task?.description && <p className="mt-1 line-clamp-2 text-sm leading-6 text-[var(--text-500)]">{bid.task.description}</p>}
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {bid.pricingMeta?.evaluation?.complexityCn && <span className="rounded-lg bg-[var(--background-100)] px-2.5 py-1 text-xs text-[var(--text-600)]">复杂度：{bid.pricingMeta.evaluation.complexityCn}</span>}
+                          {bid.pricingMeta?.evaluation?.estimatedHours && <span className="rounded-lg bg-[var(--background-100)] px-2.5 py-1 text-xs text-[var(--text-600)]">预估工时：{bid.pricingMeta.evaluation.estimatedHours} 小时</span>}
+                        </div>
+                        <p className="mt-3 line-clamp-2 text-sm text-[var(--text-500)]">{bid.planSummary || statusView.description}</p>
                       </div>
-                      
-                      <Link
-                        to={`/tasks/${bid.taskId}`}
-                        className="text-lg font-semibold text-white hover:text-blue-400 transition-colors block mb-2"
-                      >
-                        {bid.task?.title || '未知任务'}
-                      </Link>
-                      
-                      {bid.task?.description && (
-                        <p className="text-gray-400 text-sm line-clamp-2 mb-3">
-                          {bid.task.description}
-                        </p>
-                      )}
-                      
-                      {/* 报价详情摘要 */}
-                      {bid.pricingMeta?.evaluation && (
-                        <div className="flex flex-wrap gap-2 mb-3">
-                          {bid.pricingMeta.evaluation.complexityCn && (
-                            <span className="px-2 py-1 bg-gray-800 rounded text-xs text-gray-300">
-                              复杂度：{bid.pricingMeta.evaluation.complexityCn}
-                            </span>
-                          )}
-                          {bid.pricingMeta.evaluation.estimatedHours && (
-                            <span className="px-2 py-1 bg-gray-800 rounded text-xs text-gray-300">
-                              预估工时：{bid.pricingMeta.evaluation.estimatedHours}小时
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      
-                      <p className="text-sm text-gray-400 line-clamp-2">
-                        {bid.planSummary || '暂无报价说明'}
-                      </p>
-                    </div>
-
-                    {/* 右侧：价格和操作 */}
-                    <div className="lg:text-right flex flex-row lg:flex-col items-center lg:items-end gap-4 lg:gap-2">
-                      <div>
-                        <p className="text-sm text-gray-400 mb-1">报价金额</p>
-                        <p className="text-2xl font-bold text-white">{formatPrice(bid.priceCny)}</p>
+                      <div className="flex items-center justify-between gap-4 border-t border-[color:var(--border)] pt-4 lg:flex-col lg:items-end lg:justify-center lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0 lg:text-right">
+                        <div><p className="text-xs text-[var(--text-500)]">报价金额</p><p className="mt-1 text-2xl font-bold tabular-nums text-[var(--text-900)]">{formatPrice(bid.priceCny)}</p>{bid.task?.budgetCny && <p className="mt-1 text-xs text-[var(--text-400)]">任务预算 {formatPrice(bid.task.budgetCny)}</p>}</div>
+                        <button type="button" onClick={() => setSelectedBid(bid)} className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[color:var(--border)] px-4 text-sm font-semibold text-[var(--text-700)] hover:border-[var(--brand-300)] hover:text-[var(--brand-600)]"><FileText className="h-4 w-4" />查看详情<ChevronRight className="h-4 w-4" /></button>
                       </div>
-                      
-                      {bid.task?.budgetCny && (
-                        <div className="text-sm">
-                          <span className="text-gray-500">雇主预算：</span>
-                          <span className="text-gray-300">{formatPrice(bid.task.budgetCny)}</span>
-                        </div>
-                      )}
-                      
-                      <button
-                        onClick={() => setSelectedBid(bid)}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-colors text-sm"
-                      >
-                        <FileText className="w-4 h-4" />
-                        查看详情
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* 报价详情弹窗 */}
-        {selectedBid && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-[#111] border border-gray-800 rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6 border-b border-gray-800">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-bold text-white">报价详情</h2>
-                  <button
-                    onClick={() => setSelectedBid(null)}
-                    className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
-                  >
-                    <XCircle className="w-5 h-5 text-gray-400" />
-                  </button>
-                </div>
+                    </article>
+                  );
+                })}
               </div>
-              
-              <div className="p-6 space-y-6">
-                {/* 任务信息 */}
-                <div>
-                  <h3 className="text-sm font-medium text-gray-400 mb-2">任务信息</h3>
-                  <Link
-                    to={`/tasks/${selectedBid.taskId}`}
-                    className="text-lg font-semibold text-blue-400 hover:text-blue-300"
-                  >
-                    {selectedBid.task?.title}
-                  </Link>
-                  {selectedBid.task?.description && (
-                    <p className="text-gray-400 mt-2 text-sm">{selectedBid.task.description}</p>
-                  )}
-                </div>
+            </section>
+          )}
+        </>
+      )}
 
-                {/* 报价信息 */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-gray-800/50 rounded-lg p-4">
-                    <p className="text-sm text-gray-400 mb-1">报价金额</p>
-                    <p className="text-2xl font-bold text-white">{formatPrice(selectedBid.priceCny)}</p>
-                  </div>
-                  <div className="bg-gray-800/50 rounded-lg p-4">
-                    <p className="text-sm text-gray-400 mb-1">状态</p>
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium ${bidStatusView(selectedBid.status).badge}`}>
-                      {bidStatusView(selectedBid.status).icon}
-                      {bidStatusView(selectedBid.status).label}
-                    </span>
-                  </div>
-                </div>
-
-                {/* 评估信息 */}
-                {selectedBid.pricingMeta?.evaluation && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-400 mb-3">评估信息</h3>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      {selectedBid.pricingMeta.evaluation.complexityCn && (
-                        <div className="flex justify-between py-2 border-b border-gray-800">
-                          <span className="text-gray-500">复杂度</span>
-                          <span className="text-gray-300">{selectedBid.pricingMeta.evaluation.complexityCn}</span>
-                        </div>
-                      )}
-                      {selectedBid.pricingMeta.evaluation.estimatedHours && (
-                        <div className="flex justify-between py-2 border-b border-gray-800">
-                          <span className="text-gray-500">预估工时</span>
-                          <span className="text-gray-300">{selectedBid.pricingMeta.evaluation.estimatedHours}小时</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* 执行计划 */}
-                {selectedBid.pricingMeta?.evaluation?.executionPlan && selectedBid.pricingMeta.evaluation.executionPlan.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-400 mb-3">执行计划</h3>
-                    <div className="space-y-2">
-                      {selectedBid.pricingMeta.evaluation.executionPlan.map((step, idx) => (
-                        <div key={idx} className="flex gap-3 text-sm">
-                          <span className="text-blue-400 font-medium">{idx + 1}.</span>
-                          <span className="text-gray-300">{step}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 详细分析 */}
-                {selectedBid.pricingMeta?.evaluation?.analysis && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-400 mb-3">详细分析</h3>
-                    <div className="bg-gray-800/30 rounded-lg p-4 text-sm text-gray-300 whitespace-pre-wrap">
-                      {selectedBid.pricingMeta.evaluation.analysis}
-                    </div>
-                  </div>
-                )}
-
-                {/* 报价说明 */}
-                {selectedBid.planSummary && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-400 mb-2">报价说明</h3>
-                    <p className="text-gray-300 text-sm">{selectedBid.planSummary}</p>
-                  </div>
-                )}
-
-                {/* 时间信息 */}
-                <div className="text-sm text-gray-500 space-y-1">
-                  <p>报价时间：{formatDate(selectedBid.createdAt)}</p>
-                  {selectedBid.expiresAt && (
-                    <p>过期时间：{formatDate(selectedBid.expiresAt)}</p>
-                  )}
-                </div>
-              </div>
+      {selectedBid && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/35 p-4" role="dialog" aria-modal="true" aria-label="报价详情">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-[color:var(--border)] bg-white">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[color:var(--border)] bg-white px-6 py-4"><div><h2 className="text-lg font-semibold text-[var(--text-900)]">报价详情</h2><p className="mt-1 text-xs text-[var(--text-500)]">提交于 {formatDate(selectedBid.createdAt)}</p></div><button type="button" onClick={() => setSelectedBid(null)} className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-500)] hover:bg-[var(--background-100)] hover:text-[var(--text-800)]" aria-label="关闭"><X className="h-5 w-5" /></button></div>
+            <div className="space-y-6 p-6">
+              <div><p className="text-xs font-semibold text-[var(--text-500)]">关联任务</p><Link to={`/tasks/${selectedBid.taskId}`} className="mt-2 block text-lg font-semibold text-[var(--brand-600)] hover:text-[var(--brand-700)]">{selectedBid.task?.title || '未知任务'}</Link>{selectedBid.task?.description && <p className="mt-2 text-sm leading-6 text-[var(--text-500)]">{selectedBid.task.description}</p>}</div>
+              <div className="grid overflow-hidden rounded-xl border border-[color:var(--border)] sm:grid-cols-2 sm:divide-x sm:divide-[color:var(--border)]"><div className="p-4"><p className="text-xs text-[var(--text-500)]">报价金额</p><p className="mt-1 text-2xl font-bold text-[var(--text-900)]">{formatPrice(selectedBid.priceCny)}</p></div><div className="border-t border-[color:var(--border)] p-4 sm:border-t-0"><p className="mb-2 text-xs text-[var(--text-500)]">当前状态</p><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium ${bidStatusView(selectedBid.status).badge}`}>{bidStatusView(selectedBid.status).icon}{bidStatusView(selectedBid.status).label}</span></div></div>
+              {selectedBid.pricingMeta?.evaluation && <div><h3 className="text-sm font-semibold text-[var(--text-800)]">评估信息</h3><dl className="mt-3 grid rounded-xl bg-[var(--background-100)] sm:grid-cols-2">{selectedBid.pricingMeta.evaluation.complexityCn && <div className="p-4"><dt className="text-xs text-[var(--text-500)]">复杂度</dt><dd className="mt-1 text-sm font-medium text-[var(--text-800)]">{selectedBid.pricingMeta.evaluation.complexityCn}</dd></div>}{selectedBid.pricingMeta.evaluation.estimatedHours && <div className="p-4"><dt className="text-xs text-[var(--text-500)]">预估工时</dt><dd className="mt-1 text-sm font-medium text-[var(--text-800)]">{selectedBid.pricingMeta.evaluation.estimatedHours} 小时</dd></div>}</dl></div>}
+              {selectedBid.pricingMeta?.evaluation?.executionPlan?.length ? <div><h3 className="text-sm font-semibold text-[var(--text-800)]">执行计划</h3><ol className="mt-3 space-y-3">{selectedBid.pricingMeta.evaluation.executionPlan.map((step, index) => <li key={`${index}-${step}`} className="flex gap-3 text-sm leading-6 text-[var(--text-600)]"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--brand-50)] text-xs font-semibold text-[var(--brand-600)]">{index + 1}</span>{step}</li>)}</ol></div> : null}
+              {selectedBid.pricingMeta?.evaluation?.analysis && <div><h3 className="text-sm font-semibold text-[var(--text-800)]">详细分析</h3><p className="mt-3 whitespace-pre-wrap rounded-xl bg-[var(--background-100)] p-4 text-sm leading-6 text-[var(--text-600)]">{selectedBid.pricingMeta.evaluation.analysis}</p></div>}
+              {selectedBid.planSummary && <div><h3 className="text-sm font-semibold text-[var(--text-800)]">报价说明</h3><p className="mt-2 text-sm leading-6 text-[var(--text-600)]">{selectedBid.planSummary}</p></div>}
+              {selectedBid.expiresAt && <p className="text-xs text-[var(--text-400)]">有效期至：{formatDate(selectedBid.expiresAt)}</p>}
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

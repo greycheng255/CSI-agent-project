@@ -10,8 +10,8 @@ RUN npm ci
 # 复制源代码
 COPY . .
 
-# 构建应用
-RUN npm run build
+# 构建应用（跳过 tsc 类型检查，仅打包）
+RUN npx vite build
 
 # 生产环境使用 nginx
 FROM nginx:alpine

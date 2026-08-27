@@ -1,85 +1,161 @@
-import { useState, useEffect } from 'react';
-import { Clock, CheckCircle, XCircle, RotateCcw, FileText, ExternalLink } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+  Clock,
+  ExternalLink,
+  FileText,
+  History,
+  RefreshCw,
+  RotateCcw,
+  XCircle,
+} from 'lucide-react';
 import { getDeliveryHistory } from '../api/deliveryApi';
-import type { Delivery } from '../types/delivery';
+import type { Delivery, DeliveryStatus, RevisionType } from '../types/delivery';
+import { formatShanghaiDateTime } from '../utils/date';
 
 interface DeliveryHistoryProps {
   orderId: string;
+  initialDeliveries?: Delivery[];
+  embedded?: boolean;
 }
 
-const statusConfig = {
-  PENDING_REVIEW: { label: '待审核', color: 'text-yellow-600', bg: 'bg-yellow-50', icon: Clock },
-  ACCEPTED: { label: '已接受', color: 'text-green-600', bg: 'bg-green-50', icon: CheckCircle },
-  REJECTED: { label: '已拒绝', color: 'text-red-600', bg: 'bg-red-50', icon: XCircle },
-  SUPERSEDED: { label: '已替代', color: 'text-gray-600', bg: 'bg-gray-50', icon: RotateCcw },
+const statusConfig: Record<
+  DeliveryStatus,
+  { label: string; className: string; icon: typeof Clock }
+> = {
+  PENDING_REVIEW: {
+    label: '待验收',
+    className: 'bg-[color:var(--state-warning-surface)] text-[color:var(--state-warning)]',
+    icon: Clock,
+  },
+  ACCEPTED: {
+    label: '已接受',
+    className: 'bg-[color:var(--state-success-surface)] text-[color:var(--state-success-text)]',
+    icon: CheckCircle2,
+  },
+  REJECTED: {
+    label: '已拒绝',
+    className: 'bg-[color:var(--state-error-surface)] text-[color:var(--state-error)]',
+    icon: XCircle,
+  },
+  SUPERSEDED: {
+    label: '已被替代',
+    className: 'bg-[color:var(--background-200)] text-[color:var(--text-500)]',
+    icon: RotateCcw,
+  },
 };
 
-export default function DeliveryHistory({ orderId }: DeliveryHistoryProps) {
-  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
-  const [loading, setLoading] = useState(true);
+const revisionLabels: Record<RevisionType, string> = {
+  SUBMIT: '首次提交',
+  MODIFY: '修改提交',
+  ACCEPT: '验收通过',
+  REJECT: '退回修改',
+};
+
+export default function DeliveryHistory({
+  orderId,
+  initialDeliveries,
+  embedded = false,
+}: DeliveryHistoryProps) {
+  const [deliveries, setDeliveries] = useState<Delivery[]>(initialDeliveries ?? []);
+  const [loading, setLoading] = useState(initialDeliveries === undefined);
   const [error, setError] = useState('');
   const [expandedDelivery, setExpandedDelivery] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadDeliveries();
-  }, [orderId]);
-
-  const loadDeliveries = async () => {
+  const loadDeliveries = useCallback(async () => {
     try {
       setLoading(true);
+      setError('');
       const data = await getDeliveryHistory(orderId);
       setDeliveries(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '加载失败');
+    } catch {
+      setError('交付记录暂时无法加载');
     } finally {
       setLoading(false);
     }
-  };
+  }, [orderId]);
+
+  useEffect(() => {
+    if (initialDeliveries !== undefined) {
+      setDeliveries(initialDeliveries);
+      setError('');
+      setLoading(false);
+      return;
+    }
+    void loadDeliveries();
+  }, [initialDeliveries, loadDeliveries]);
+
+  const containerClass = embedded
+    ? 'py-6'
+    : 'rounded-2xl border border-[color:var(--border)] bg-white p-5 md:p-6';
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2 text-gray-600">加载交付历史中...</span>
+      <section className={containerClass} aria-label="正在加载交付记录">
+        <div className="space-y-3">
+          <div className="h-5 w-24 animate-pulse rounded bg-[color:var(--background-200)]" />
+          <div className="h-16 animate-pulse rounded-xl bg-[color:var(--background-100)]" />
+          <div className="h-16 animate-pulse rounded-xl bg-[color:var(--background-100)]" />
         </div>
-      </div>
+      </section>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="text-red-600 text-center py-4">{error}</div>
-        <button
-          onClick={loadDeliveries}
-          className="w-full py-2 text-blue-600 hover:text-blue-800 text-sm"
-        >
-          重新加载
-        </button>
-      </div>
+      <section className={containerClass}>
+        <div className="flex items-center gap-2">
+          <History className="h-4 w-4 text-[color:var(--brand-600)]" />
+          <h2 className="font-semibold text-[color:var(--text-900)]">交付记录</h2>
+        </div>
+        <div className="mt-4 flex flex-col gap-3 border-y border-[color:var(--border)] py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm text-[color:var(--state-warning)]">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{error}，订单其他信息不受影响。</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadDeliveries()}
+            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-current px-3 text-sm font-medium"
+          >
+            <RefreshCw className="h-4 w-4" />
+            重新加载
+          </button>
+        </div>
+      </section>
     );
   }
 
   if (deliveries.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">交付历史</h3>
-        <div className="text-gray-500 text-center py-8">暂无交付记录</div>
-      </div>
+      <section className={containerClass}>
+        <div className="flex items-center gap-2">
+          <History className="h-4 w-4 text-[color:var(--brand-600)]" />
+          <h2 className="font-semibold text-[color:var(--text-900)]">交付记录</h2>
+        </div>
+        <div className="mt-4 border-y border-[color:var(--border)] py-8 text-center">
+          <p className="text-sm font-medium text-[color:var(--text-700)]">暂无单独的交付记录</p>
+          <p className="mt-1 text-xs text-[color:var(--text-500)]">智能体提交成果后，版本与验收信息会显示在这里。</p>
+        </div>
+      </section>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">
-        交付历史
-        <span className="ml-2 text-sm font-normal text-gray-500">
+    <section className={containerClass}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <History className="h-4 w-4 text-[color:var(--brand-600)]" />
+          <h2 className="font-semibold text-[color:var(--text-900)]">交付记录</h2>
+        </div>
+        <span className="rounded-full bg-[color:var(--background-200)] px-2.5 py-1 text-xs text-[color:var(--text-secondary)]">
           共 {deliveries.length} 个版本
         </span>
-      </h3>
+      </div>
 
-      <div className="space-y-4">
+      <div className="mt-4 divide-y divide-[color:var(--border)] border-y border-[color:var(--border)]">
         {deliveries.map((delivery, index) => {
           const config = statusConfig[delivery.status];
           const StatusIcon = config.icon;
@@ -87,162 +163,177 @@ export default function DeliveryHistory({ orderId }: DeliveryHistoryProps) {
           const isLatest = index === 0;
 
           return (
-            <div
+            <article
               key={delivery.id}
-              className={`border rounded-lg overflow-hidden transition-all ${
-                isLatest ? 'border-blue-300 ring-1 ring-blue-100' : 'border-gray-200'
-              }`}
+              className="overflow-hidden"
             >
-              {/* 头部信息 */}
-              <div
-                className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50"
+              <button
+                type="button"
+                className={`flex min-h-16 w-full items-center justify-between gap-4 px-1 py-4 text-left transition-colors hover:bg-[color:var(--background-100)] ${
+                  isLatest ? 'text-[color:var(--text-900)]' : ''
+                }`}
                 onClick={() => setExpandedDelivery(isExpanded ? null : delivery.id)}
+                aria-expanded={isExpanded}
               >
-                <div className="flex items-center space-x-3">
-                  <div className={`p-2 rounded-full ${config.bg}`}>
-                    <StatusIcon className={`w-5 h-5 ${config.color}`} />
-                  </div>
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="font-medium text-gray-900">
-                        版本 {delivery.version}
-                      </span>
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${config.className}`}>
+                    <StatusIcon className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-2">
+                      <span className="font-medium text-[color:var(--text-primary)]">版本 {delivery.version}</span>
                       {isLatest && (
-                        <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">
+                        <span className="rounded-full bg-[color:var(--brand-50)] px-2 py-0.5 text-xs font-medium text-[color:var(--brand-700)]">
                           最新
                         </span>
                       )}
-                    </div>
-                    <span className="text-sm text-gray-500">
-                      {new Date(delivery.createdAt).toLocaleString('zh-CN')}
                     </span>
-                  </div>
+                    <span className="mt-0.5 block text-xs text-[color:var(--text-tertiary)]">
+                      {formatShanghaiDateTime(delivery.createdAt)}
+                    </span>
+                  </span>
                 </div>
 
-                <div className="flex items-center space-x-3">
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${config.bg} ${config.color}`}>
+                <span className="flex shrink-0 items-center gap-3">
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${config.className}`}>
                     {config.label}
                   </span>
-                  <svg
-                    className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </div>
+                  <ChevronDown className={`h-4 w-4 text-[color:var(--text-tertiary)] transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                </span>
+              </button>
 
-              {/* 展开详情 */}
               {isExpanded && (
-                <div className="border-t border-gray-200 p-4 bg-gray-50">
-                  {/* 交付说明 */}
+                <div className="space-y-5 border-t border-[color:var(--border)] bg-[color:var(--background-100)] p-4">
                   {delivery.deliveryText && (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">交付说明</h4>
-                      <div className="bg-white p-3 rounded border text-gray-700 whitespace-pre-wrap">
-                        {delivery.deliveryText}
-                      </div>
-                    </div>
+                    <DetailBlock title="交付说明">
+                      <p className="whitespace-pre-wrap text-sm text-[color:var(--text-secondary)]">{delivery.deliveryText}</p>
+                    </DetailBlock>
                   )}
 
-                  {/* 附件链接 */}
                   {delivery.attachmentUrl && (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">附件</h4>
-                      <a
-                        href={delivery.attachmentUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                      >
-                        <FileText className="w-4 h-4 mr-2" />
-                        查看附件
-                        <ExternalLink className="w-3 h-3 ml-2" />
-                      </a>
-                    </div>
+                    <DetailBlock title="附件">
+                      <ResourceLink url={delivery.attachmentUrl} label="查看交付附件" />
+                    </DetailBlock>
                   )}
 
-                  {/* 预览数据 */}
-                  {delivery.previewData && (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">预览</h4>
-                      <div className="bg-white p-3 rounded border">
-                        {delivery.previewData.type === 'code' && (
-                          <pre className="text-sm bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto">
-                            <code>{delivery.previewData.content}</code>
-                          </pre>
-                        )}
-                        {delivery.previewData.type === 'text' && (
-                          <p className="text-gray-700 whitespace-pre-wrap">{delivery.previewData.content}</p>
-                        )}
-                        {delivery.previewData.type === 'link' && (
-                          <a
-                            href={delivery.previewData.content}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline"
-                          >
-                            {delivery.previewData.content}
-                          </a>
-                        )}
-                        {delivery.previewData.type === 'image' && (
-                          <img
-                            src={delivery.previewData.content}
-                            alt="交付预览"
-                            className="max-w-full h-auto rounded"
-                          />
-                        )}
+                  {delivery.artifactUrls && delivery.artifactUrls.length > 0 && (
+                    <DetailBlock title="交付材料">
+                      <div className="space-y-2">
+                        {delivery.artifactUrls.map((url, urlIndex) => (
+                          <ResourceLink key={`${delivery.id}-${urlIndex}`} url={url} label={url} />
+                        ))}
                       </div>
-                    </div>
+                    </DetailBlock>
                   )}
 
-                  {/* 拒绝原因 */}
+                  {delivery.commitHash && (
+                    <DetailBlock title="Commit Hash">
+                      <code className="block break-all rounded-lg border border-[color:var(--border-default)] bg-white p-3 text-sm text-[color:var(--text-secondary)]">
+                        {delivery.commitHash}
+                      </code>
+                    </DetailBlock>
+                  )}
+
+                  {delivery.evidenceBundle && (
+                    <DetailBlock title="证据包">
+                      <pre className="overflow-x-auto rounded-lg bg-[#111827] p-3 text-xs text-slate-100">
+                        {JSON.stringify(delivery.evidenceBundle, null, 2)}
+                      </pre>
+                    </DetailBlock>
+                  )}
+
+                  {delivery.previewData && (
+                    <DetailBlock title="成果预览">
+                      <Preview delivery={delivery} />
+                    </DetailBlock>
+                  )}
+
                   {delivery.rejectionReason && (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-medium text-red-700 mb-2">拒绝原因</h4>
-                      <div className="bg-red-50 border border-red-200 p-3 rounded text-red-700">
+                    <DetailBlock title="退回原因">
+                      <div className="rounded-lg bg-[color:var(--state-error-surface)] p-3 text-sm text-[color:var(--state-error)]">
                         {delivery.rejectionReason}
                       </div>
-                    </div>
+                    </DetailBlock>
                   )}
 
-                  {/* 修订历史 */}
                   {delivery.revisions && delivery.revisions.length > 0 && (
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">修订记录</h4>
+                    <DetailBlock title="修订记录">
                       <div className="space-y-2">
                         {delivery.revisions.map((revision) => (
-                          <div
-                            key={revision.id}
-                            className="bg-white p-3 rounded border text-sm"
-                          >
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="font-medium text-gray-700">
-                                {revision.type === 'SUBMIT' && '初始提交'}
-                                {revision.type === 'MODIFY' && '修改提交'}
-                                {revision.type === 'ACCEPT' && '接受'}
-                                {revision.type === 'REJECT' && '拒绝'}
+                          <div key={revision.id} className="rounded-lg border border-[color:var(--border-default)] bg-white p-3 text-sm">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-medium text-[color:var(--text-primary)]">
+                                {revisionLabels[revision.type]}
                               </span>
-                              <span className="text-gray-500">
-                                {new Date(revision.createdAt).toLocaleString('zh-CN')}
+                              <span className="text-xs text-[color:var(--text-tertiary)]">
+                                {formatShanghaiDateTime(revision.createdAt)}
                               </span>
                             </div>
                             {revision.comment && (
-                              <p className="text-gray-600">{revision.comment}</p>
+                              <p className="mt-2 text-[color:var(--text-secondary)]">{revision.comment}</p>
                             )}
                           </div>
                         ))}
                       </div>
-                    </div>
+                    </DetailBlock>
                   )}
                 </div>
               )}
-            </div>
+            </article>
           );
         })}
       </div>
+    </section>
+  );
+}
+
+function DetailBlock({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="mb-2 text-sm font-semibold text-[color:var(--text-primary)]">{title}</h3>
+      {children}
     </div>
+  );
+}
+
+function ResourceLink({ url, label }: { url: string; label: string }) {
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex min-h-11 items-center gap-2 rounded-lg border border-[color:var(--border-default)] bg-white px-3 text-sm text-[color:var(--brand-700)] transition-colors hover:border-[color:var(--brand-300)] hover:bg-[color:var(--brand-50)]"
+    >
+      <FileText className="h-4 w-4 shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+    </a>
+  );
+}
+
+function Preview({ delivery }: { delivery: Delivery }) {
+  const preview = delivery.previewData;
+  if (!preview) return null;
+
+  if (preview.type === 'code') {
+    return (
+      <pre className="overflow-x-auto rounded-lg bg-[#111827] p-3 text-sm text-slate-100">
+        <code>{preview.content}</code>
+      </pre>
+    );
+  }
+  if (preview.type === 'text') {
+    return <p className="whitespace-pre-wrap text-sm text-[color:var(--text-secondary)]">{preview.content}</p>;
+  }
+  if (preview.type === 'link') {
+    return <ResourceLink url={preview.content} label={preview.content} />;
+  }
+  return (
+                          <img
+                            loading="lazy"
+      src={preview.content}
+      alt="交付成果预览"
+      className="max-h-[480px] max-w-full rounded-lg border border-[color:var(--border-default)] object-contain"
+    />
   );
 }

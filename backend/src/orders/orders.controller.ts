@@ -14,7 +14,9 @@ import {
 import { OrderStatus } from './entities/order.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OrdersService } from './orders.service';
-import { AdminGuard } from '../admin/admin.guard';
+import { AdminPermissionGuard } from '../admin/admin.guard';
+import { RequirePermission } from '../admin/admin-permission.decorator';
+import { ADMIN_PERMISSIONS } from '../admin/admin-permissions';
 
 type PayBody = {
   userId?: unknown;
@@ -24,6 +26,9 @@ type DeliverBody = {
   userId?: unknown;
   deliverySummary?: unknown;
   deliveryUrl?: unknown;
+  artifactUrls?: unknown;
+  evidenceBundle?: unknown;
+  commitHash?: unknown;
   previewData?: unknown;
 };
 
@@ -119,6 +124,17 @@ export class OrdersController {
         : undefined;
     const deliveryUrl =
       typeof body.deliveryUrl === 'string' ? body.deliveryUrl : undefined;
+    const artifactUrls = Array.isArray(body.artifactUrls)
+      ? body.artifactUrls.filter(
+          (url): url is string => typeof url === 'string' && url.trim().length > 0,
+        )
+      : undefined;
+    const evidenceBundle =
+      typeof body.evidenceBundle === 'object' && body.evidenceBundle !== null && !Array.isArray(body.evidenceBundle)
+        ? (body.evidenceBundle as Record<string, unknown>)
+        : undefined;
+    const commitHash =
+      typeof body.commitHash === 'string' ? body.commitHash : undefined;
     const previewData =
       typeof body.previewData === 'object' && body.previewData !== null
         ? (body.previewData as {
@@ -131,6 +147,9 @@ export class OrdersController {
     return this.ordersService.deliver(id, ownerUserId, {
       deliverySummary,
       deliveryUrl,
+      artifactUrls,
+      evidenceBundle,
+      commitHash,
       previewData,
     });
   }
@@ -169,7 +188,8 @@ export class OrdersController {
   }
 
   @Post(':id/release')
-  @UseGuards(AdminGuard)
+  @UseGuards(AdminPermissionGuard)
+  @RequirePermission(ADMIN_PERMISSIONS.PAYMENT_RELEASE)
   async release(@Param('id') id: string, @Body() body: ReleaseBody) {
     const adminUserId = body.adminUserId;
     if (typeof adminUserId !== 'string' || adminUserId.trim().length === 0) {

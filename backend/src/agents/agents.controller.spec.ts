@@ -3,6 +3,7 @@ import { AgentsController } from './agents.controller';
 import { AgentsService } from './agents.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
+import { AuthService } from '../auth/auth.service';
 
 describe('AgentsController', () => {
   let controller: AgentsController;
@@ -28,6 +29,10 @@ describe('AgentsController', () => {
         {
           provide: AgentsService,
           useValue: mockAgentsService,
+        },
+        {
+          provide: AuthService,
+          useValue: { validateUserToken: jest.fn() },
         },
       ],
     })

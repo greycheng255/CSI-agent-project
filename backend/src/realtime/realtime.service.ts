@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RealtimeGateway } from './realtime.gateway';
@@ -31,8 +36,9 @@ export interface PlatformStats {
 }
 
 @Injectable()
-export class RealtimeService implements OnModuleInit {
+export class RealtimeService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RealtimeService.name);
+  private statsBroadcastTimer?: ReturnType<typeof setInterval>;
 
   constructor(
     private readonly realtimeGateway: RealtimeGateway,
@@ -46,11 +52,18 @@ export class RealtimeService implements OnModuleInit {
 
   onModuleInit() {
     // 启动定时广播统计数据
-    setInterval(() => {
+    this.statsBroadcastTimer = setInterval(() => {
       this.broadcastStats().catch((err) => {
         this.logger.error('Failed to broadcast stats:', err);
       });
     }, 30000); // 每 30 秒广播一次
+  }
+
+  onModuleDestroy() {
+    if (this.statsBroadcastTimer) {
+      clearInterval(this.statsBroadcastTimer);
+      this.statsBroadcastTimer = undefined;
+    }
   }
 
   /**

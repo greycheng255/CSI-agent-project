@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Loader2, 
@@ -86,7 +86,7 @@ const statusConfig: Record<OrderStatus, {
 }> = {
   COMPLETED: {
     label: '已收款',
-    badge: 'bg-green-500/10 text-green-400 border border-green-500/20',
+    badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]',
     icon: <CheckCircle className="w-4 h-4" />,
     description: '款项已到账',
     progress: 100,
@@ -110,7 +110,7 @@ const statusConfig: Record<OrderStatus, {
   },
   IN_PROGRESS: {
     label: '执行中',
-    badge: 'bg-blue-500/10 text-blue-400 border border-blue-500/20',
+    badge: 'bg-[var(--brand-50)] text-[var(--brand-600)] border border-blue-500/20',
     icon: <TrendingUp className="w-4 h-4" />,
     description: '任务正在执行中',
     progress: 50,
@@ -118,7 +118,7 @@ const statusConfig: Record<OrderStatus, {
   },
   PENDING_PAYMENT: {
     label: '待支付',
-    badge: 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20',
+    badge: 'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border border-yellow-500/20',
     icon: <CreditCard className="w-4 h-4" />,
     description: '等待雇主支付',
     progress: 25,
@@ -126,7 +126,7 @@ const statusConfig: Record<OrderStatus, {
   },
   REJECTED: {
     label: '被拒绝',
-    badge: 'bg-red-500/10 text-red-400 border border-red-500/20',
+    badge: 'bg-red-500/10 text-[var(--state-error)] border border-red-500/20',
     icon: <AlertCircle className="w-4 h-4" />,
     description: '雇主拒绝验收，等待平台处理',
     progress: 75,
@@ -134,7 +134,7 @@ const statusConfig: Record<OrderStatus, {
   },
   ARBITRATING: {
     label: '仲裁中',
-    badge: 'bg-red-500/10 text-red-400 border border-red-500/20',
+    badge: 'bg-red-500/10 text-[var(--state-error)] border border-red-500/20',
     icon: <AlertCircle className="w-4 h-4" />,
     description: '争议仲裁中',
     progress: 75,
@@ -142,7 +142,7 @@ const statusConfig: Record<OrderStatus, {
   },
   REFUNDED: {
     label: '已退款',
-    badge: 'bg-gray-800 text-gray-300 border border-gray-700',
+        badge: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]',
     icon: <Clock className="w-4 h-4" />,
     description: '订单已退款',
     progress: 0,
@@ -150,7 +150,7 @@ const statusConfig: Record<OrderStatus, {
   },
   CANCELED: {
     label: '已取消',
-    badge: 'bg-gray-800 text-gray-300 border border-gray-700',
+        badge: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]',
     icon: <Clock className="w-4 h-4" />,
     description: '订单已取消',
     progress: 0,
@@ -169,7 +169,7 @@ const getEstimatedPaymentTime = (status: OrderStatus, acceptedAt?: string) => {
   return '-';
 };
 
-export default function MyReceipts() {
+export default function MyReceipts({ embedded }: { embedded?: boolean }) {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const [receipts, setReceipts] = useState<ReceiptItem[]>([]);
@@ -194,7 +194,7 @@ export default function MyReceipts() {
 
     fetch(`${apiBase}/api/v1/orders/owner/${user.id}`, {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
+        'Authorization': `Bearer ${useAuthStore.getState().token || ''}`,
       },
     })
       .then((res) => {
@@ -290,14 +290,14 @@ export default function MyReceipts() {
           <div key={idx} className="flex items-center">
             <div className={`text-xs px-2 py-0.5 rounded ${
               step.active 
-                ? 'bg-green-500/20 text-green-400' 
-                : 'bg-gray-800 text-gray-500'
+                ? 'bg-[var(--state-success-surface)] text-[var(--state-success-text)]'
+                : 'bg-[var(--background-100)] text-[var(--text-500)]'
             }`}>
               {step.label}
             </div>
             {idx < steps.length - 1 && (
               <div className={`w-4 h-0.5 mx-1 ${
-                step.active ? 'bg-green-500/50' : 'bg-gray-800'
+                step.active ? 'bg-[var(--state-success)]' : 'bg-[var(--border)]'
               }`} />
             )}
           </div>
@@ -307,92 +307,94 @@ export default function MyReceipts() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className={embedded ? '' : 'min-h-screen bg-white'}>
+      <div className={embedded ? '' : 'max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8'}>
         {/* 头部 */}
+        {!embedded && (
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
             <Link
               to="/owner/agents"
-              className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+            className="flex items-center gap-2 text-[var(--text-500)] transition-colors hover:text-[var(--brand-600)]"
             >
               <ArrowLeft className="w-5 h-5" />
               返回
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                <Wallet className="w-7 h-7 text-green-400" />
+              <h1 className="flex items-center gap-2 text-2xl font-bold text-[var(--text-900)]">
+                <Wallet className="w-7 h-7 text-[var(--state-success-text)]" />
                 我的收款记录
               </h1>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-[var(--text-500)] mt-1">
                 查看您作为开发者的所有收款记录
               </p>
             </div>
           </div>
           <Link
             to="/owner/payment-codes"
-            className="text-sm text-blue-400 hover:text-blue-300 border border-blue-500/30 px-4 py-2 rounded-lg bg-blue-500/10 transition-colors flex items-center gap-2"
+            className="text-sm text-[var(--brand-600)] hover:text-[var(--brand-700)] border border-[var(--brand-300)] px-4 py-2 rounded-lg bg-[var(--brand-50)] transition-colors flex items-center gap-2"
           >
             <DollarSign className="w-4 h-4" />
             管理收款码
           </Link>
         </div>
+        )}
 
         {/* 统计卡片 - 重新设计 */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-[#111] border border-gray-800 rounded-xl p-5">
+        <div className="mb-6 grid grid-cols-2 overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white divide-x divide-y divide-[color:var(--border)] md:grid-cols-4 md:divide-y-0">
+          <div className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm">总订单数</p>
-                <p className="text-2xl font-bold text-white mt-1">{stats.totalReceipts}</p>
+                <p className="text-sm text-[var(--text-500)]">总订单数</p>
+                <p className="mt-1 text-2xl font-bold text-[var(--text-900)]">{stats.totalReceipts}</p>
               </div>
-              <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center">
-                <Package className="w-6 h-6 text-blue-400" />
+              <div className="w-12 h-12 bg-[var(--brand-50)] rounded-xl flex items-center justify-center">
+                <Package className="w-6 h-6 text-[var(--brand-600)]" />
               </div>
             </div>
           </div>
           
-          <div className="bg-[#111] border border-gray-800 rounded-xl p-5">
+          <div className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm">预计总收款</p>
-                <p className="text-2xl font-bold text-blue-400 mt-1">{formatCurrency(stats.totalAmount)}</p>
+                <p className="text-sm text-[var(--text-500)]">预计总收款</p>
+                <p className="mt-1 text-2xl font-bold text-[var(--text-900)]">{formatCurrency(stats.totalAmount)}</p>
               </div>
-              <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-blue-400" />
+              <div className="w-12 h-12 bg-[var(--brand-50)] rounded-xl flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-[var(--brand-600)]" />
               </div>
             </div>
           </div>
           
-          <div className="bg-[#111] border border-gray-800 rounded-xl p-5">
+          <div className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm">已到账</p>
-                <p className="text-2xl font-bold text-green-400 mt-1">{formatCurrency(stats.completedAmount)}</p>
+                <p className="text-sm text-[var(--text-500)]">已到账</p>
+                <p className="mt-1 text-2xl font-bold text-[var(--text-900)]">{formatCurrency(stats.completedAmount)}</p>
               </div>
-              <div className="w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-green-400" />
+              <div className="w-12 h-12 bg-[var(--state-success-surface)] rounded-xl flex items-center justify-center">
+                <CheckCircle className="w-6 h-6 text-[var(--state-success-text)]" />
               </div>
             </div>
             {stats.completedAmount > 0 && (
-              <p className="text-xs text-green-400/70 mt-2">
+              <p className="text-xs text-[var(--state-success-text)]/70 mt-2">
                 占比 {(stats.completedAmount / stats.totalAmount * 100).toFixed(1)}%
               </p>
             )}
           </div>
           
-          <div className="bg-[#111] border border-gray-800 rounded-xl p-5">
+          <div className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm">待到账</p>
-                <p className="text-2xl font-bold text-yellow-400 mt-1">{formatCurrency(stats.pendingAmount)}</p>
+                <p className="text-sm text-[var(--text-500)]">待到账</p>
+                <p className="mt-1 text-2xl font-bold text-[var(--text-900)]">{formatCurrency(stats.pendingAmount)}</p>
               </div>
-              <div className="w-12 h-12 bg-yellow-500/10 rounded-xl flex items-center justify-center">
-                <Clock className="w-6 h-6 text-yellow-400" />
+              <div className="w-12 h-12 bg-[var(--state-warning-surface)] rounded-xl flex items-center justify-center">
+                <Clock className="w-6 h-6 text-[var(--state-warning)]" />
               </div>
             </div>
             {stats.inProgressCount > 0 && (
-              <p className="text-xs text-yellow-400/70 mt-2">
+              <p className="text-xs text-[var(--state-warning)]/70 mt-2">
                 {stats.inProgressCount} 个任务进行中
               </p>
             )}
@@ -400,7 +402,7 @@ export default function MyReceipts() {
         </div>
 
         {/* 筛选标签 */}
-        <div className="flex gap-2 mb-6">
+        <div className="mb-6 flex gap-1 rounded-xl bg-[var(--background-100)] p-1">
           {[
             { key: 'all', label: '全部', count: receipts.length },
             { key: 'pending', label: '进行中', count: receipts.filter(r => ['IN_PROGRESS', 'DELIVERED', 'ACCEPTED', 'PENDING_PAYMENT'].includes(r.status)).length },
@@ -409,10 +411,10 @@ export default function MyReceipts() {
             <button
               key={filter.key}
               onClick={() => setActiveFilter(filter.key as 'all' | 'pending' | 'completed')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`min-h-10 rounded-lg px-4 text-sm font-medium transition-colors ${
                 activeFilter === filter.key
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                  ? 'bg-white text-[var(--brand-700)] shadow-sm'
+                  : 'text-[var(--text-500)] hover:text-[var(--text-800)]'
               }`}
             >
               {filter.label}
@@ -423,29 +425,29 @@ export default function MyReceipts() {
 
         {/* 收款列表 */}
         {loading ? (
-          <div className="flex justify-center items-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-green-500 mr-3" />
-            <span className="text-gray-400">正在读取收款记录...</span>
+          <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white">
+            <Loader2 className="mr-3 h-5 w-5 animate-spin text-[var(--brand-500)]" />
+            <span className="text-sm text-[var(--text-500)]">正在读取收款记录...</span>
           </div>
         ) : error ? (
-          <div className="p-6 border border-red-900/50 bg-red-900/10 text-red-400 rounded-xl text-center">
+          <div className="rounded-2xl border border-[color:var(--state-error)] bg-[var(--state-error-surface)] p-6 text-center text-[var(--state-error)]">
             <AlertCircle className="w-8 h-8 mx-auto mb-2" />
             {error}
           </div>
         ) : filteredReceipts.length === 0 ? (
-          <div className="text-center py-20 bg-[#111] border border-gray-800 rounded-xl">
-            <Wallet className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-            <p className="text-lg text-gray-400 mb-2">暂无收款记录</p>
-            <p className="text-sm text-gray-500">您的 Agent 还没有承接任何订单</p>
+          <div className="rounded-2xl border border-dashed border-[color:var(--border)] bg-white py-20 text-center">
+            <Wallet className="mx-auto mb-4 h-12 w-12 text-[var(--text-300)]" />
+            <p className="mb-2 text-lg text-[var(--text-700)]">暂无收款记录</p>
+            <p className="text-sm text-[var(--text-500)]">您的 Agent 还没有承接任何订单</p>
             <Link
               to="/owner/agents"
-              className="inline-block mt-6 text-green-400 hover:text-green-300 border border-green-500/30 px-6 py-2 rounded-lg bg-green-500/10 transition-colors"
+              className="btn-cs btn-primary btn-sm mt-6"
             >
               去管理我的 Agent
             </Link>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white divide-y divide-[color:var(--border)]">
             {filteredReceipts.map((receipt) => {
               const config = statusConfig[receipt.status];
               const isCompleted = receipt.status === 'COMPLETED';
@@ -454,7 +456,7 @@ export default function MyReceipts() {
               return (
                 <div
                   key={receipt.id}
-                  className="bg-[#111] border border-gray-800 rounded-xl overflow-hidden hover:border-gray-700 transition-all"
+                  className="overflow-hidden transition-colors hover:bg-[var(--background-100)]"
                 >
                   {/* 卡片头部 */}
                   <div className="p-5">
@@ -462,7 +464,7 @@ export default function MyReceipts() {
                       <div className="flex-1">
                         {/* 标题行 */}
                         <div className="flex items-center gap-3 mb-3">
-                          <h3 className="text-lg font-semibold text-white">
+                          <h3 className="text-base font-semibold text-[var(--text-900)]">
                             {receipt.taskTitle}
                           </h3>
                           <span className={`px-2.5 py-1 text-xs rounded-lg border ${config.badge} flex items-center gap-1.5`}>
@@ -472,7 +474,7 @@ export default function MyReceipts() {
                         </div>
                         
                         {/* 状态描述 */}
-                        <p className="text-sm text-gray-400 mb-4">{config.description}</p>
+                        <p className="mb-4 text-sm text-[var(--text-500)]">{config.description}</p>
                         
                         {/* 进度条 - 仅进行中的任务显示 */}
                         {(isInProgress || ['DELIVERED', 'ACCEPTED'].includes(receipt.status)) && renderProgressBar(receipt.status)}
@@ -480,34 +482,34 @@ export default function MyReceipts() {
 
                       {/* 金额区域 */}
                       <div className="text-right ml-6">
-                        <div className="text-2xl font-bold text-green-400">
+                        <div className="text-2xl font-bold text-[var(--text-900)]">
                           {formatCurrency(receipt.payoutCny)}
                         </div>
-                        <div className="text-sm text-gray-500 mt-1">
+                        <div className="mt-1 text-sm text-[var(--text-500)]">
                           实际收款
                         </div>
                       </div>
                     </div>
 
                     {/* 详情网格 */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5 pt-5 border-t border-gray-800">
-                      <div className="bg-gray-800/30 rounded-lg p-3">
-                        <div className="text-gray-500 text-xs mb-1">订单金额</div>
-                        <div className="text-white font-medium">{formatCurrency(receipt.amountCny)}</div>
+                    <div className="mt-5 grid grid-cols-2 gap-4 border-t border-[color:var(--border)] pt-5 md:grid-cols-4">
+                      <div className="rounded-lg bg-[var(--background-100)] p-3">
+                        <div className="mb-1 text-xs text-[var(--text-500)]">订单金额</div>
+                        <div className="font-medium text-[var(--text-800)]">{formatCurrency(receipt.amountCny)}</div>
                       </div>
-                      <div className="bg-gray-800/30 rounded-lg p-3">
-                        <div className="text-gray-500 text-xs mb-1">平台服务费</div>
-                        <div className="text-red-400 font-medium">-{formatCurrency(receipt.platformFeeCny)}</div>
+                      <div className="rounded-lg bg-[var(--background-100)] p-3">
+                        <div className="text-[var(--text-500)] text-xs mb-1">平台服务费</div>
+                        <div className="text-[var(--state-error)] font-medium">-{formatCurrency(receipt.platformFeeCny)}</div>
                       </div>
-                      <div className="bg-gray-800/30 rounded-lg p-3">
-                        <div className="text-gray-500 text-xs mb-1">创建时间</div>
-                        <div className="text-gray-300 text-sm">{formatDateTime(receipt.createdAt)}</div>
+                      <div className="rounded-lg bg-[var(--background-100)] p-3">
+                        <div className="text-[var(--text-500)] text-xs mb-1">创建时间</div>
+                        <div className="text-[var(--text-700)] text-sm">{formatDateTime(receipt.createdAt)}</div>
                       </div>
-                      <div className="bg-gray-800/30 rounded-lg p-3">
-                        <div className="text-gray-500 text-xs mb-1">
+                      <div className="rounded-lg bg-[var(--background-100)] p-3">
+                        <div className="text-[var(--text-500)] text-xs mb-1">
                           {isCompleted ? '到账时间' : '预计到账'}
                         </div>
-                        <div className={`text-sm ${isCompleted ? 'text-green-400' : 'text-yellow-400'}`}>
+                        <div className={`text-sm ${isCompleted ? 'text-[var(--state-success-text)]' : 'text-[var(--state-warning)]'}`}>
                           {isCompleted 
                             ? formatDateTime(receipt.releasedAt)
                             : getEstimatedPaymentTime(receipt.status, receipt.acceptedAt)
@@ -518,15 +520,15 @@ export default function MyReceipts() {
 
                     {/* 参与方信息 */}
                     {receipt.clientPhone && (
-                      <div className="mt-4 pt-4 border-t border-gray-800 flex items-center gap-6 text-sm">
-                        <div className="flex items-center gap-2 text-gray-400">
+                      <div className="mt-4 flex items-center gap-6 border-t border-[color:var(--border)] pt-4 text-sm">
+                        <div className="flex items-center gap-2 text-[var(--text-600)]">
                           <User className="w-4 h-4" />
-                          <span>雇主: <span className="text-gray-300">{receipt.clientPhone}</span></span>
+                          <span>雇主: <span className="text-[var(--text-700)]">{receipt.clientPhone}</span></span>
                         </div>
                         {receipt.agentName && (
-                          <div className="flex items-center gap-2 text-gray-400">
+                          <div className="flex items-center gap-2 text-[var(--text-600)]">
                             <Package className="w-4 h-4" />
-                            <span>Agent: <span className="text-gray-300">{receipt.agentName}</span></span>
+                            <span>Agent: <span className="text-[var(--text-700)]">{receipt.agentName}</span></span>
                           </div>
                         )}
                       </div>
@@ -534,13 +536,13 @@ export default function MyReceipts() {
                   </div>
 
                   {/* 底部操作栏 */}
-                  <div className="px-5 py-3 bg-gray-800/30 border-t border-gray-800 flex items-center justify-between">
+                  <div className="flex items-center justify-between border-t border-[color:var(--border)] px-5 py-3">
                     <div className="flex items-center gap-4 text-sm">
-                      <span className="text-gray-500">订单号: <span className="text-gray-400 font-mono">{receipt.orderId.slice(0, 16)}...</span></span>
+                      <span className="text-[var(--text-500)]">订单号: <span className="text-[var(--text-600)] font-mono">{receipt.orderId.slice(0, 16)}...</span></span>
                     </div>
                     <Link
                       to={`/orders/${receipt.orderId}`}
-                      className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                      className="flex items-center gap-1 text-sm font-medium text-[var(--brand-600)] hover:text-[var(--brand-700)]"
                     >
                       查看详情
                       <ChevronRight className="w-4 h-4" />
@@ -555,3 +557,5 @@ export default function MyReceipts() {
     </div>
   );
 }
+
+

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, CreditCard, CheckCircle, Clock, ArrowLeft, Bot } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
@@ -66,7 +66,7 @@ function paymentStatusView(status: OrderStatus) {
     case 'COMPLETED':
       return {
         label: '已完成',
-        badge: 'bg-green-500/10 text-green-400 border border-green-500/20',
+        badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]',
         icon: <CheckCircle className="w-4 h-4" />,
         description: '订单已完成，款项已支付给开发者',
       };
@@ -87,56 +87,56 @@ function paymentStatusView(status: OrderStatus) {
     case 'IN_PROGRESS':
       return {
         label: '执行中',
-        badge: 'bg-blue-500/10 text-blue-400 border border-blue-500/20',
+        badge: 'bg-[var(--brand-50)] text-[var(--brand-600)] border border-blue-500/20',
         icon: <Clock className="w-4 h-4" />,
         description: '已支付，Agent正在执行任务',
       };
     case 'PENDING_PAYMENT':
       return {
         label: '待支付',
-        badge: 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20',
+        badge: 'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border border-yellow-500/20',
         icon: <Clock className="w-4 h-4" />,
         description: '请选择Agent并完成支付',
       };
     case 'REJECTED':
       return {
         label: '已拒绝',
-        badge: 'bg-red-500/10 text-red-400 border border-red-500/20',
+        badge: 'bg-red-500/10 text-[var(--state-error)] border border-red-500/20',
         icon: <Clock className="w-4 h-4" />,
         description: '您已拒绝验收，等待平台处理',
       };
     case 'ARBITRATING':
       return {
         label: '仲裁中',
-        badge: 'bg-red-500/10 text-red-400 border border-red-500/20',
+        badge: 'bg-red-500/10 text-[var(--state-error)] border border-red-500/20',
         icon: <Clock className="w-4 h-4" />,
         description: '争议仲裁中',
       };
     case 'REFUNDED':
       return {
         label: '已退款',
-        badge: 'bg-gray-800 text-gray-300 border border-gray-700',
+        badge: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]',
         icon: <CheckCircle className="w-4 h-4" />,
         description: '订单已退款',
       };
     case 'CANCELED':
       return {
         label: '已取消',
-        badge: 'bg-gray-800 text-gray-300 border border-gray-700',
+        badge: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]',
         icon: <Clock className="w-4 h-4" />,
         description: '订单已取消',
       };
     default:
       return {
         label: status,
-        badge: 'bg-gray-800 text-gray-400 border border-gray-700',
+        badge: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]',
         icon: <Clock className="w-4 h-4" />,
         description: '',
       };
   }
 }
 
-export default function MyPayments() {
+export default function MyPayments({ embedded }: { embedded?: boolean }) {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const [payments, setPayments] = useState<PaymentItem[]>([]);
@@ -161,7 +161,7 @@ export default function MyPayments() {
     // 获取雇主（Client）的订单列表
     fetch(`${apiBase}/api/v1/orders/client/${user.id}`, {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
+        'Authorization': `Bearer ${useAuthStore.getState().token || ''}`,
       },
     })
       .then((res) => {
@@ -234,94 +234,96 @@ export default function MyPayments() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className={embedded ? 'space-y-6' : 'max-w-6xl mx-auto space-y-6'}>
       {/* 头部 */}
+      {!embedded && (
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link
             to="/orders/mine"
-            className="flex items-center gap-2 text-gray-400 hover:text-green-400 transition-colors"
+            className="flex items-center gap-2 text-[var(--text-600)] hover:text-[var(--state-success-text)] transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
             返回
           </Link>
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <CreditCard className="w-7 h-7 text-blue-400" />
+              <CreditCard className="w-7 h-7 text-[var(--brand-600)]" />
               我的支付记录
             </h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-[var(--text-500)] mt-1">
               查看您作为雇主的所有支付记录
             </p>
           </div>
         </div>
         <Link
           to="/market"
-          className="text-sm text-green-400 hover:text-green-300 border border-green-500/30 px-3 py-1.5 rounded bg-green-500/10 transition-colors"
+          className="text-sm text-[var(--state-success-text)] hover:text-[var(--state-success-text)] border border-[var(--state-success)] px-3 py-1.5 rounded bg-[var(--state-success-surface)] transition-colors"
         >
           去发布任务
         </Link>
       </div>
+      )}
 
       {/* 统计卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-          <div className="text-gray-400 text-sm mb-1">总订单数</div>
-          <div className="text-2xl font-bold text-white">{stats.totalPayments}</div>
+      <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white divide-x divide-y divide-[color:var(--border)] md:grid-cols-5 md:divide-y-0">
+        <div className="p-5">
+          <div className="mb-1 text-sm text-[var(--text-500)]">总订单数</div>
+          <div className="text-2xl font-bold text-[var(--text-900)]">{stats.totalPayments}</div>
         </div>
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-          <div className="text-gray-400 text-sm mb-1">总支付金额</div>
-          <div className="text-2xl font-bold text-blue-400">{formatCurrency(stats.totalAmount)}</div>
+        <div className="p-5">
+          <div className="text-[var(--text-600)] text-sm mb-1">总支付金额</div>
+          <div className="text-2xl font-bold text-[var(--text-900)]">{formatCurrency(stats.totalAmount)}</div>
         </div>
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-          <div className="text-gray-400 text-sm mb-1">已完成支付</div>
-          <div className="text-2xl font-bold text-green-400">{formatCurrency(stats.completedAmount)}</div>
+        <div className="p-5">
+          <div className="text-[var(--text-600)] text-sm mb-1">已完成支付</div>
+          <div className="text-2xl font-bold text-[var(--text-900)]">{formatCurrency(stats.completedAmount)}</div>
         </div>
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-          <div className="text-gray-400 text-sm mb-1">进行中</div>
-          <div className="text-2xl font-bold text-yellow-400">{formatCurrency(stats.pendingAmount)}</div>
+        <div className="p-5">
+          <div className="text-[var(--text-600)] text-sm mb-1">进行中</div>
+          <div className="text-2xl font-bold text-[var(--text-900)]">{formatCurrency(stats.pendingAmount)}</div>
         </div>
-        <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-          <div className="text-gray-400 text-sm mb-1">已退款</div>
-          <div className="text-2xl font-bold text-gray-400">{formatCurrency(stats.refundedAmount)}</div>
+        <div className="p-5">
+          <div className="text-[var(--text-600)] text-sm mb-1">已退款</div>
+          <div className="text-2xl font-bold text-[var(--text-900)]">{formatCurrency(stats.refundedAmount)}</div>
         </div>
       </div>
 
       {/* 支付列表 */}
       {loading ? (
-        <div className="flex justify-center items-center py-20 text-gray-500">
-          <Loader2 className="w-6 h-6 animate-spin mr-3 text-blue-500" />
+        <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white text-[var(--text-500)]">
+          <Loader2 className="mr-3 h-5 w-5 animate-spin text-[var(--brand-500)]" />
           正在读取支付记录...
         </div>
       ) : error ? (
-        <div className="p-4 border border-red-900/50 bg-red-900/10 text-red-400 rounded-lg text-center">
+        <div className="rounded-2xl border border-[color:var(--state-error)] bg-[var(--state-error-surface)] p-4 text-center text-[var(--state-error)]">
           {error}
         </div>
       ) : payments.length === 0 ? (
-        <div className="text-center py-20 text-gray-500">
-          <CreditCard className="w-16 h-16 mx-auto mb-4 text-gray-600" />
+        <div className="rounded-2xl border border-dashed border-[color:var(--border)] bg-white py-20 text-center text-[var(--text-500)]">
+          <CreditCard className="w-16 h-16 mx-auto mb-4 text-[var(--text-400)]" />
           <p className="text-lg mb-2">暂无支付记录</p>
           <p className="text-sm">您还没有发布过任务或创建过订单</p>
           <Link
             to="/tasks/new"
-            className="inline-block mt-4 text-green-400 hover:text-green-300 border border-green-500/30 px-4 py-2 rounded bg-green-500/10 transition-colors"
+            className="btn-cs btn-primary btn-sm mt-4"
           >
             去发布任务
           </Link>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white divide-y divide-[color:var(--border)]">
           {payments.map((payment) => {
             const statusView = paymentStatusView(payment.status);
             return (
               <div
                 key={payment.id}
-                className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 hover:border-gray-700 transition-colors"
+                className="p-6 transition-colors hover:bg-[var(--background-100)]"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold text-white">
+                      <h3 className="text-base font-semibold text-[var(--text-900)]">
                         {payment.taskTitle}
                       </h3>
                       <span className={`px-2 py-0.5 text-xs rounded border ${statusView.badge} flex items-center gap-1`}>
@@ -329,29 +331,29 @@ export default function MyPayments() {
                         {statusView.label}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-400 mb-4">{statusView.description}</p>
+                    <p className="mb-4 text-sm text-[var(--text-500)]">{statusView.description}</p>
                     
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
-                        <div className="text-gray-500 mb-1">任务金额</div>
-                        <div className="text-white font-medium">{formatCurrency(payment.amountCny)}</div>
+                        <div className="text-[var(--text-500)] mb-1">任务金额</div>
+                        <div className="font-medium text-[var(--text-800)]">{formatCurrency(payment.amountCny)}</div>
                       </div>
                       <div>
-                        <div className="text-gray-500 mb-1">支付金额</div>
-                        <div className="text-blue-400 font-bold text-lg">{formatCurrency(payment.totalAmount)}</div>
+                        <div className="text-[var(--text-500)] mb-1">支付金额</div>
+                        <div className="text-lg font-bold text-[var(--text-900)]">{formatCurrency(payment.totalAmount)}</div>
                       </div>
                       <div>
-                        <div className="text-gray-500 mb-1">订单时间</div>
-                        <div className="text-gray-300">{formatDate(payment.createdAt)}</div>
+                        <div className="text-[var(--text-500)] mb-1">订单时间</div>
+                        <div className="text-[var(--text-600)]">{formatDate(payment.createdAt)}</div>
                       </div>
                       <div>
-                        <div className="text-gray-500 mb-1">支付时间</div>
-                        <div className="text-gray-300">{formatDate(payment.escrowedAt)}</div>
+                        <div className="text-[var(--text-500)] mb-1">支付时间</div>
+                        <div className="text-[var(--text-600)]">{formatDate(payment.escrowedAt)}</div>
                       </div>
                     </div>
 
                     {payment.agentName && (
-                      <div className="mt-4 pt-4 border-t border-gray-800 flex items-center gap-2 text-sm text-gray-400">
+                      <div className="mt-4 flex items-center gap-2 border-t border-[color:var(--border)] pt-4 text-sm text-[var(--text-500)]">
                         <Bot className="w-4 h-4" />
                         执行 Agent: {payment.agentName}
                         {payment.ownerPhone && (
@@ -364,14 +366,14 @@ export default function MyPayments() {
                     )}
 
                     {payment.releasedAt && (
-                      <div className="mt-2 text-sm text-green-400 flex items-center gap-2">
+                      <div className="mt-2 text-sm text-[var(--state-success-text)] flex items-center gap-2">
                         <CheckCircle className="w-4 h-4" />
                         放款时间: {formatDate(payment.releasedAt)}
                       </div>
                     )}
 
                     {payment.refundedAt && (
-                      <div className="mt-2 text-sm text-gray-400 flex items-center gap-2">
+                      <div className="mt-2 text-sm text-[var(--text-600)] flex items-center gap-2">
                         <CheckCircle className="w-4 h-4" />
                         退款时间: {formatDate(payment.refundedAt)}
                       </div>
@@ -381,14 +383,14 @@ export default function MyPayments() {
                   <div className="ml-4 flex flex-col gap-2">
                     <Link
                       to={`/orders/${payment.orderId}`}
-                      className="text-sm text-blue-400 hover:text-blue-300 border border-blue-500/30 px-3 py-1.5 rounded bg-blue-500/10 transition-colors text-center"
+                      className="rounded-full border border-[var(--brand-200)] bg-[var(--brand-50)] px-3 py-2 text-center text-sm font-medium text-[var(--brand-700)]"
                     >
                       查看订单
                     </Link>
                     {payment.status === 'DELIVERED' && (
                       <Link
                         to={`/orders/${payment.orderId}`}
-                        className="text-sm text-green-400 hover:text-green-300 border border-green-500/30 px-3 py-1.5 rounded bg-green-500/10 transition-colors text-center"
+                        className="rounded-full border border-[#bde9c9] bg-[var(--state-success-surface)] px-3 py-2 text-center text-sm font-medium text-[var(--state-success-text)]"
                       >
                         去验收
                       </Link>
@@ -396,7 +398,7 @@ export default function MyPayments() {
                     {payment.status === 'PENDING_PAYMENT' && (
                       <Link
                         to={`/orders/${payment.orderId}`}
-                        className="text-sm text-yellow-400 hover:text-yellow-300 border border-yellow-500/30 px-3 py-1.5 rounded bg-yellow-500/10 transition-colors text-center"
+                        className="rounded-full border border-[#f3d79a] bg-[var(--state-warning-surface)] px-3 py-2 text-center text-sm font-medium text-[var(--state-warning)]"
                       >
                         去支付
                       </Link>
@@ -411,3 +413,5 @@ export default function MyPayments() {
     </div>
   );
 }
+
+

@@ -1,4 +1,4 @@
-node_modules
+# node_modules - 需要从宿主机复制
 npm-debug.log
 .git
 .gitignore

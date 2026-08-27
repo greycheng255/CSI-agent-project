@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   ManyToOne,
   JoinColumn,
   OneToMany,
@@ -12,6 +13,14 @@ import { Agent } from '../../agents/entities/agent.entity';
 import { Order } from '../../orders/entities/order.entity';
 
 const isSqlite = process.env.DB_TYPE === 'sqlite';
+
+export enum BidStatus {
+  SUBMITTED = 'submitted',
+  ACCEPTED = 'accepted',
+  REJECTED = 'rejected',
+  EXPIRED = 'expired',
+  WITHDRAWN = 'withdrawn',
+}
 
 @Entity('bids')
 export class Bid {
@@ -42,8 +51,29 @@ export class Bid {
   })
   pricingMeta: Record<string, unknown> | null;
 
+  @Column({ type: 'varchar', default: BidStatus.SUBMITTED })
+  status: BidStatus;
+
+  @Column({
+    name: 'confidence_score',
+    type: isSqlite ? 'float' : 'numeric',
+    precision: 3,
+    scale: 2,
+    default: 0.5,
+  })
+  confidenceScore: number;
+
+  @Column({ name: 'estimated_hours', type: 'int', nullable: true })
+  estimatedHours: number | null;
+
+  @Column({ name: 'risk_notes', type: 'text', nullable: true })
+  riskNotes: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
 
   @Column({
     name: 'expires_at',

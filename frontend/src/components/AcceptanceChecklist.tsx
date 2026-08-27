@@ -1,5 +1,6 @@
+/* eslint-disable react-hooks/exhaustive-deps -- checklist reloads are intentionally keyed only by orderId */
 import { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, MinusCircle, Circle, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle, XCircle, MinusCircle, Circle, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { getChecklist, getChecklistStats, generateChecklist, updateChecklist } from '../api/deliveryApi';
 import type { AcceptanceChecklist, ChecklistStats, ChecklistItemStatus } from '../types/delivery';
 
@@ -9,6 +10,7 @@ interface AcceptanceChecklistProps {
   isClient: boolean;
   orderStatus: string;
   onStatusChange?: () => void;
+  embedded?: boolean;
 }
 
 const statusConfig: Record<ChecklistItemStatus, { label: string; icon: typeof Circle; color: string }> = {
@@ -24,6 +26,7 @@ export default function AcceptanceChecklistComponent({
   isClient,
   orderStatus,
   onStatusChange,
+  embedded = false,
 }: AcceptanceChecklistProps) {
   const [checklist, setChecklist] = useState<AcceptanceChecklist[]>([]);
   const [stats, setStats] = useState<ChecklistStats | null>(null);
@@ -32,6 +35,9 @@ export default function AcceptanceChecklistComponent({
   const [generating, setGenerating] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const containerClass = embedded
+    ? 'py-6'
+    : 'rounded-2xl border border-[color:var(--border)] bg-white p-5 md:p-6';
 
   useEffect(() => {
     loadChecklist();
@@ -92,18 +98,18 @@ export default function AcceptanceChecklistComponent({
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow p-6">
+      <section className={containerClass}>
         <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2 text-gray-600">加载检查清单...</span>
+          <Loader2 className="h-8 w-8 animate-spin text-[var(--brand-600)]" aria-hidden="true" />
+          <span className="ml-2 text-[var(--text-500)]">加载检查清单...</span>
         </div>
-      </div>
+      </section>
     );
   }
 
   if (checklist.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow p-6">
+      <section className={containerClass}>
         <h3 className="text-lg font-semibold text-gray-900 mb-4">验收检查清单</h3>
         <div className="text-center py-8">
           <p className="text-gray-500 mb-4">暂无验收检查清单</p>
@@ -117,12 +123,12 @@ export default function AcceptanceChecklistComponent({
             </button>
           )}
         </div>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <section className={containerClass}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900">验收检查清单</h3>
         {stats && (
@@ -277,6 +283,6 @@ export default function AcceptanceChecklistComponent({
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }
