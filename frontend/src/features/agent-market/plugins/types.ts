@@ -13,8 +13,6 @@ export type AgentPluginProviderConfig = {
   restBase: string;
   mcpEndpoint?: string;
   defaultWorkspaceId?: string;
-  defaultTenantId?: string;
-  defaultUserId?: string;
   authorization?: string;
   headers?: Record<string, string>;
 };

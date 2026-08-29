@@ -3,7 +3,8 @@ import type { AgentPanelProps } from './types';
 import {
   ChoicePills,
   PanelHeader,
-  PanelSelect,
+  ModelSelect,
+  PanelInput,
   PanelTextarea,
   SubmitBlock,
 } from './shared';
@@ -25,9 +26,14 @@ export default function MusicPlugin(props: AgentPanelProps) {
     <div className="space-y-3">
       <PanelHeader
         icon={<Music className="h-5 w-5" />}
-        title="Suno V4.5"
-        description="输入歌词与音乐描述，生成完整歌曲或无人声纯音乐。"
+        title={props.selectedModel?.label || props.selectedModel?.name || '音乐生成'}
+        description={props.selectedModel?.description || '输入歌词与音乐描述，生成完整歌曲或无人声纯音乐。'}
         accent={props.accent}
+      />
+      <ModelSelect
+        models={props.compatibleModels}
+        selectedModel={props.selectedModelName}
+        onChange={props.setSelectedModelName}
       />
       <ChoicePills
         label="生成模式"
@@ -67,50 +73,12 @@ export default function MusicPlugin(props: AgentPanelProps) {
           rows={9}
         />
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        <PanelSelect
-          label="模型版本"
-          value={props.formValues.mv || 'chirp-v4-5'}
-          onChange={(value) => props.updateField('mv', value)}
-          options={[
-            { value: 'chirp-v4-5', label: 'V4.5 最新（推荐）' },
-            { value: 'chirp-v4', label: 'V4' },
-            { value: 'chirp-v3-5', label: 'V3.5' },
-            { value: 'chirp-bluejay', label: 'Bluejay（实验）' },
-          ]}
-        />
-        {!instrumental && (
-          <PanelSelect
-            label="演唱声音"
-            value={props.formValues.vocal_gender || 'auto'}
-            onChange={(value) => props.updateField('vocal_gender', value)}
-            options={[
-              { value: 'auto', label: '自动' },
-              { value: 'm', label: '男声' },
-              { value: 'f', label: '女声' },
-            ]}
-          />
-        )}
-        <PanelSelect
-          label="采样率"
-          value={props.formValues.sample_rate || '44100'}
-          onChange={(value) => props.updateField('sample_rate', value)}
-          options={[
-            { value: '44100', label: '44100 Hz（CD 品质）' },
-            { value: '48000', label: '48000 Hz（高品质）' },
-          ]}
-        />
-        <PanelSelect
-          label="比特率"
-          value={props.formValues.bitrate || '192000'}
-          onChange={(value) => props.updateField('bitrate', value)}
-          options={[
-            { value: '128000', label: '128 kbps' },
-            { value: '192000', label: '192 kbps（推荐）' },
-            { value: '256000', label: '256 kbps' },
-          ]}
-        />
-      </div>
+      <PanelInput
+        label="风格标签（可选）"
+        value={props.formValues.tags || ''}
+        onChange={(value) => props.updateField('tags', value)}
+        placeholder="例如：流行、钢琴、女声、电影感"
+      />
       <SubmitBlock
         submitting={props.submitting}
         onSubmit={props.onSubmit}

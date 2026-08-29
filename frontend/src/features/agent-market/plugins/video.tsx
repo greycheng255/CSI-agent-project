@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Video } from 'lucide-react';
 import type { AgentPanelProps, ChoiceOption } from './types';
 import {
@@ -7,44 +8,30 @@ import {
   PanelSelect,
   PanelTextarea,
   SubmitBlock,
+  ToggleOption,
 } from './shared';
 
 const DURATION_OPTIONS: ChoiceOption[] = [
-  { value: 'auto', label: '自动' },
-  ...Array.from({ length: 12 }, (_, index) => {
-    const seconds = String(index + 4);
-    return { value: seconds, label: `${seconds} 秒` };
-  }),
+  { value: '5', label: '5 秒' },
+  { value: '10', label: '10 秒' },
 ];
-
-const ASPECT_RATIO_OPTIONS: ChoiceOption[] = [
-  { value: 'adaptive', label: '自适应' },
-  { value: '16:9', label: '16:9 横版' },
-  { value: '4:3', label: '4:3 横版' },
-  { value: '1:1', label: '1:1 方形' },
-  { value: '3:4', label: '3:4 竖版' },
-  { value: '9:16', label: '9:16 竖版' },
-  { value: '21:9', label: '21:9 超宽' },
-];
-
-function normalizeResolution(value: string) {
-  if (value.toLowerCase() === '4k') return '4K';
-  return value.toLowerCase();
-}
 
 export default function VideoPlugin(props: AgentPanelProps) {
   const videoType = props.formValues.video_type || 't2v';
-  const version = props.formValues.version || '标准';
-  const resolution = normalizeResolution(props.formValues.resolution || '720p');
-  const supportsHighResolution = version === '标准';
-  const modelLabel = videoType === 'r2v' ? 'Seedance 2.0 参考生' : 'Seedance 2.0 首尾帧';
+  const updateField = props.updateField;
+
+  useEffect(() => {
+    if ((videoType === 't2v' || videoType === 'r2v') && !props.formValues.size) {
+      updateField('size', '1280*720');
+    }
+  }, [props.formValues.size, updateField, videoType]);
 
   return (
     <div className="space-y-3">
       <PanelHeader
         icon={<Video className="h-5 w-5" />}
-        title={modelLabel}
-        description="使用 Seedance 2.0。"
+        title={props.workflowDefinition?.label || 'OpenNotebook 视频生成器'}
+        description={props.workflowDefinition?.description || '支持文生、首尾帧和参考图视频生成。'}
         accent={props.accent}
       />
       <ChoicePills
@@ -60,8 +47,8 @@ export default function VideoPlugin(props: AgentPanelProps) {
       />
       <PanelTextarea
         label="提示词"
-        value={props.prompt}
-        onChange={props.setPrompt}
+        value={props.formValues.prompt || ''}
+        onChange={(value) => props.updateField('prompt', value)}
         placeholder="描述场景、动作、镜头、光线、节奏和风格..."
         rows={7}
       />
@@ -93,21 +80,6 @@ export default function VideoPlugin(props: AgentPanelProps) {
       )}
       <div className="grid gap-3 md:grid-cols-2">
         <PanelSelect
-          label="速度版本"
-          value={version}
-          onChange={(value) => {
-            props.updateField('version', value);
-            if (value !== '标准' && (resolution === '1080p' || resolution === '4K')) {
-              props.updateField('resolution', '720p');
-            }
-          }}
-          options={[
-            { value: '标准', label: '标准（高质量）' },
-            { value: '快速', label: '快速' },
-            { value: 'Mini', label: 'Mini' },
-          ]}
-        />
-        <PanelSelect
           label="时长"
           value={props.formValues.duration || '5'}
           onChange={(value) => props.updateField('duration', value)}
@@ -116,27 +88,44 @@ export default function VideoPlugin(props: AgentPanelProps) {
       </div>
       <ChoicePills
         label="分辨率"
-        value={resolution}
+        value={props.formValues.resolution || '720P'}
         accent={props.accent}
         onChange={(value) => props.updateField('resolution', value)}
         options={[
-          { value: '480p', label: '480p' },
-          { value: '720p', label: '720p' },
-          ...(supportsHighResolution
-            ? [
-                { value: '1080p', label: '1080p' },
-                { value: '4K', label: '4K' },
-              ]
-            : []),
+          { value: '480P', label: '480P' },
+          { value: '720P', label: '720P' },
+          { value: '1080P', label: '1080P' },
         ]}
       />
-      <ChoicePills
-        label="画幅比例"
-        value={props.formValues.aspect_ratio || 'adaptive'}
-        accent={props.accent}
-        onChange={(value) => props.updateField('aspect_ratio', value)}
-        options={ASPECT_RATIO_OPTIONS}
+      {(videoType === 't2v' || videoType === 'r2v') && (
+        <PanelSelect
+          label="画面尺寸"
+          value={props.formValues.size || '1280*720'}
+          onChange={(value) => props.updateField('size', value)}
+          options={[
+            { value: '1280*720', label: '1280 × 720（横版）' },
+            { value: '720*1280', label: '720 × 1280（竖版）' },
+            { value: '960*960', label: '960 × 960（方形）' },
+          ]}
+        />
+      )}
+      <PanelSelect
+        label="镜头类型"
+        value={props.formValues.shot_type || 'single'}
+        onChange={(value) => props.updateField('shot_type', value)}
+        options={[
+          { value: 'single', label: '单镜头' },
+          { value: 'multi', label: '多镜头' },
+        ]}
       />
+      {videoType === 'r2v' && (
+        <ToggleOption
+          label="生成声音"
+          value={(props.formValues.audio || 'true') === 'true'}
+          onChange={(value) => props.updateField('audio', String(value))}
+          accent={props.accent}
+        />
+      )}
       <SubmitBlock
         submitting={props.submitting}
         onSubmit={props.onSubmit}

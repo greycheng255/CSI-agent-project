@@ -75,8 +75,6 @@ const FIELD_LABELS: Record<string, string> = {
 
 type ContextState = {
   workspaceId: string;
-  tenantId: string;
-  userId: string;
 };
 
 type NormalizedOption = {
@@ -94,8 +92,6 @@ function readStoredContext(
 ): ContextState {
   const fallback = {
     workspaceId: defaults.workspaceId || '',
-    tenantId: defaults.tenantId || '',
-    userId: defaults.userId || '',
   };
   if (typeof window === 'undefined') return fallback;
 
@@ -110,14 +106,6 @@ function readStoredContext(
         typeof parsed.workspaceId === 'string' && parsed.workspaceId.trim()
           ? parsed.workspaceId
           : fallback.workspaceId,
-      tenantId:
-        typeof parsed.tenantId === 'string' && parsed.tenantId.trim()
-          ? parsed.tenantId
-          : fallback.tenantId,
-      userId:
-        typeof parsed.userId === 'string' && parsed.userId.trim()
-          ? parsed.userId
-          : fallback.userId,
     };
   } catch {
     return fallback;
@@ -346,6 +334,9 @@ function validateRequiredParams(params: AgentParamMap, values: Record<string, st
 function validateConditionalParams(agentId: string, values: Record<string, string>) {
   if (agentId === 'video') {
     const videoType = values.video_type || 't2v';
+    if (!values.prompt?.trim()) {
+      return '请填写视频提示词';
+    }
     if (videoType === 'i2v' && !values.first_frame_url?.trim()) {
       return '请填写首帧 URL';
     }
@@ -384,39 +375,12 @@ function buildSunoPrompt(lyrics: string, stylePrompt: string, mode: string) {
 function sanitizeAgentParams(agentId: string, params: Record<string, unknown>) {
   if (agentId === 'music') {
     return {
-      mv: params.mv || 'chirp-v4-5',
-      make_instrumental: params.make_instrumental || 'song',
-      vocal_gender: params.vocal_gender || 'auto',
-      sample_rate: params.sample_rate || '44100',
-      bitrate: params.bitrate || '192000',
-      model_name: 'Suno Music Generation 4.5',
+      is_music: typeof params.is_music === 'boolean' ? params.is_music : true,
+      ...(typeof params.tags === 'string' && params.tags.trim() ? { tags: params.tags } : {}),
     };
   }
 
-  if (agentId !== 'video') return params;
-
-  const videoType = String(params.video_type || 't2v');
-  const rawResolution = String(params.resolution || '720p');
-  const common: Record<string, unknown> = {
-    version: params.version || '标准',
-    duration: params.duration || '5',
-    aspect_ratio: params.aspect_ratio || 'adaptive',
-    resolution: rawResolution.toLowerCase() === '4k' ? '4K' : rawResolution.toLowerCase(),
-  };
-
-  const rawImages = videoType === 'r2v'
-    ? params.reference_urls
-    : [params.first_frame_url, params.last_frame_url].filter(Boolean);
-  const images = Array.isArray(rawImages)
-    ? rawImages.filter(Boolean)
-    : typeof rawImages === 'string' && rawImages.trim()
-      ? [rawImages.trim()]
-      : [];
-  if (videoType !== 't2v' && images.length > 0) {
-    common.images = images.length === 1 ? images[0] : images;
-  }
-
-  return common;
+  return params;
 }
 
 function StatusPanel({
@@ -683,13 +647,9 @@ export default function AgentRun() {
     setContext(
       readStoredContext(contextStorageKey, {
         workspaceId: bootstrapProvider?.defaultWorkspaceId,
-        tenantId: bootstrapProvider?.defaultTenantId,
-        userId: bootstrapProvider?.defaultUserId,
       }),
     );
   }, [
-    bootstrapProvider?.defaultTenantId,
-    bootstrapProvider?.defaultUserId,
     bootstrapProvider?.defaultWorkspaceId,
     contextStorageKey,
   ]);
@@ -751,8 +711,6 @@ export default function AgentRun() {
     if (!agent || !directory || !runnable || submitting || taskRunning) return;
 
     const workspaceId = context.workspaceId.trim();
-    const tenantId = context.tenantId.trim();
-    const userId = context.userId.trim();
     if (!workspaceId) {
       setRunError('请先填写 workspaceId。');
       return;
@@ -792,8 +750,6 @@ export default function AgentRun() {
           type: agent.capability.workflowType,
           params,
           workspaceId,
-          tenantId: tenantId || undefined,
-          userId: userId || undefined,
           count: Number.isFinite(parsedCount) ? parsedCount : 1,
         }, activeProvider);
         setTaskId(newTaskId);
@@ -804,10 +760,8 @@ export default function AgentRun() {
           agent.id,
           normalizeParams(currentParams, formValues, true),
         );
-        const type = agent.id === 'music' ? 'music' : selectedModel?.type;
-        const model = agent.id === 'video'
-          ? formValues.video_type === 'r2v' ? 'kwvideo-v2-ref' : 'kwvideo-v2'
-          : agent.id === 'music' ? 'suno-v4.5' : selectedModelName;
+        const type = selectedModel?.type;
+        const model = selectedModelName;
         const taskPrompt = agent.id === 'music'
           ? buildSunoPrompt(
               formValues.lyrics || '',
@@ -821,8 +775,6 @@ export default function AgentRun() {
           prompt: taskPrompt,
           params,
           workspaceId,
-          tenantId: tenantId || undefined,
-          userId: userId || undefined,
           count: Number.isFinite(parsedCount) ? parsedCount : 1,
         }, activeProvider);
         setTaskId(newTaskId);
@@ -931,7 +883,7 @@ export default function AgentRun() {
               </span>
               <div>
                 <h2 className="text-base font-bold text-[var(--text-900)]">运行设置</h2>
-                <p className="mt-0.5 text-xs text-[var(--text-500)]">设置结果归属与使用身份</p>
+                <p className="mt-0.5 text-xs text-[var(--text-500)]">设置结果归属工作区</p>
               </div>
             </div>
 
@@ -941,14 +893,6 @@ export default function AgentRun() {
                 <input id="agent-run-workspace" value={context.workspaceId} onChange={(event) => setContext((current) => ({ ...current, workspaceId: event.target.value }))} placeholder={activeProvider?.defaultWorkspaceId || 'workspace_id'} className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10" />
                 <p className="mt-2 text-xs leading-5 text-[var(--text-500)]">生成结果会写入第三方后端的这个工作区。</p>
               </div>
-              <div>
-                <label htmlFor="agent-run-tenant" className="mb-2 block text-[13px] font-semibold text-[var(--text-600)]">租户 ID</label>
-                <input id="agent-run-tenant" value={context.tenantId} onChange={(event) => setContext((current) => ({ ...current, tenantId: event.target.value }))} placeholder={activeProvider?.defaultTenantId || 'tenant_id'} className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10" />
-              </div>
-              <div>
-                <label htmlFor="agent-run-user" className="mb-2 block text-[13px] font-semibold text-[var(--text-600)]">用户 ID</label>
-                <input id="agent-run-user" value={context.userId} onChange={(event) => setContext((current) => ({ ...current, userId: event.target.value }))} placeholder={activeProvider?.defaultUserId || 'user_id'} className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10" />
-              </div>
             </div>
 
             {activeProvider && (
@@ -956,7 +900,7 @@ export default function AgentRun() {
                 <div className="font-semibold text-[var(--text-700)]">{activeProvider.name}</div>
                 <div className="mt-1">{activeProvider.restBase}</div>
                 {activeProvider.mcpEndpoint && <div className="mt-1">{activeProvider.mcpEndpoint}</div>}
-                {activeProvider.authorization && <div className="mt-1 text-[var(--state-success-text)]">Authorization ready</div>}
+                {activeProvider.authorization && <div className="mt-1 text-[var(--state-success-text)]">OpenNotebook API Key 已配置</div>}
               </div>
             )}
           </section>

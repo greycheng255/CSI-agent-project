@@ -8,14 +8,14 @@ export default function VoiceClonePlugin(props: AgentPanelProps) {
       <PanelHeader
         icon={<Mic2 className="h-5 w-5" />}
         title="声音克隆"
-        description="OpenNotebook 管理端已有声音克隆交互，但公共 Agent REST API 尚未暴露对应 workflow 或 media model。"
+        description="OpenNotebook 管理端已有声音克隆交互，但公共 Agent Runs API 尚未暴露对应 agent 或 media model。"
         accent={props.accent}
       />
       <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
         <div className="flex items-start gap-3">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
           <div className="text-[11px] leading-5 text-gray-400">
-            <div className="font-semibold text-amber-300">当前不能通过 `/api/v1/agent/generate` 提交</div>
+            <div className="font-semibold text-amber-300">当前不能通过 `/api/v1/agent-runs` 提交</div>
             <p className="mt-1">
               OpenNotebook 自有前端使用附件上传和服务端 action 保存克隆音色；这不是公开 Agent API 合约。
               因此 CSI 不再把 `sourceAudioUrl`、`prompt`、`format` 伪装成可执行参数。
