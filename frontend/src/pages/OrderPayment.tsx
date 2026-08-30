@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2, CreditCard, ImagePlus, Loader2, QrCode, Receip
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
 import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { OnlineAlipayPayment } from '../features/pay/components/OnlineAlipayPayment';
 
 interface PlatformCode {
   id: string;
@@ -150,10 +151,23 @@ export default function OrderPayment() {
       <WorkbenchPageHeader
         icon={CreditCard}
         eyebrow="订单支付"
-        title="完成付款并提交凭证"
-        description="选择平台收款方式完成转账，然后上传支付成功截图供平台核验。"
+        title="完成订单付款"
+        description="推荐使用支付宝在线支付自动确认；扫码转账与凭证上传保留为人工兜底。"
         actions={<Link to={`/orders/${orderId}`} className="btn-cs btn-ghost-dark btn-sm"><ArrowLeft className="h-4 w-4" />返回订单</Link>}
       />
+
+      <OnlineAlipayPayment
+        orderId={orderId || ''}
+        token={token}
+        amountCny={orderPayment.amountCny}
+        onPaid={() => navigate(`/orders/${orderId}`, { replace: true })}
+      />
+
+      <div className="flex items-center gap-3 text-xs text-[var(--text-500)]">
+        <span className="h-px flex-1 bg-[var(--border)]" />
+        <span>在线支付不可用时，可使用下方人工转账</span>
+        <span className="h-px flex-1 bg-[var(--border)]" />
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
         <section className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white">

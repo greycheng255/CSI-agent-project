@@ -26,7 +26,8 @@
     "test:hiclaw-mcp": "node scripts/hiclaw-mcp-workflow-test.js",
     "test:hiclaw-events": "node scripts/hiclaw-event-consumption-e2e.js",
     "db:optimize-task-market": "node scripts/optimize-task-market-indexes.js",
-    "db:migrate-order-fulfillment": "node scripts/wp4-order-fulfillment-migration.js"
+    "db:migrate-order-fulfillment": "node scripts/wp4-order-fulfillment-migration.js",
+    "db:migrate-alipay-payments": "node scripts/alipay-payment-migration.js"
   },
   "dependencies": {
     "@alicloud/dysmsapi20170525": "^4.6.0",
