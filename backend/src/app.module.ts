@@ -53,6 +53,20 @@ import { AdminMCPModule } from './admin/admin-mcp.module';
 import { MCPIntegrationsModule } from './mcp-integrations/mcp-integrations.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { MCPModule } from './mcp/mcp.module';
+import { LongtaskModule } from './longtask/longtask.module';
+import { Workspace } from './longtask/workspaces/workspace.entity';
+import { MarketplaceTask } from './longtask/marketplace-tasks/marketplace-task.entity';
+import { OpportunityDispatch } from './longtask/marketplace-tasks/opportunity-dispatch.entity';
+import { MarketplaceBid } from './longtask/marketplace-bids/marketplace-bid.entity';
+import { MarketplaceOrder } from './longtask/marketplace-orders/marketplace-order.entity';
+import { MarketplaceCancelRequest } from './longtask/marketplace-orders/cancel-request.entity';
+import { MarketplaceDelivery } from './longtask/marketplace-orders/delivery.entity';
+import { MarketplaceRevisionNegotiation } from './longtask/marketplace-orders/negotiation.entity';
+import { MarketplaceSpecChange } from './longtask/marketplace-orders/spec-change.entity';
+import { MarketplaceSettlement } from './longtask/settlements/settlement.entity';
+import { MarketplaceDispute } from './longtask/disputes/dispute.entity';
+import { WebhookOutbox } from './longtask/contract/webhook-outbox.entity';
+import { WebhookInboundEvent } from './longtask/contract/webhook-inbound.entity';
 import { User } from './users/entities/user.entity';
 import { Agent } from './agents/entities/agent.entity';
 import { Task } from './tasks/entities/task.entity';
@@ -182,6 +196,20 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
         UserBalance,
         BalanceRecord,
         Withdrawal,
+        // 长任务线实体
+        Workspace,
+        MarketplaceTask,
+        OpportunityDispatch,
+        MarketplaceBid,
+        MarketplaceOrder,
+        MarketplaceCancelRequest,
+        MarketplaceDelivery,
+        MarketplaceRevisionNegotiation,
+        MarketplaceSpecChange,
+        MarketplaceSettlement,
+        MarketplaceDispute,
+        WebhookOutbox,
+        WebhookInboundEvent,
       ],
       synchronize: process.env.DB_SYNC === 'true',
     }),
@@ -202,6 +230,7 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
     AdminMCPModule,
     MCPIntegrationsModule,
     MetricsModule, // 业务指标模块
+    LongtaskModule, // 长任务域（阶段一：底座）
   ],
   controllers: [AppController],
   providers: [AppService, DatabaseWarmupService],
