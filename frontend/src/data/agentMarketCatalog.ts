@@ -58,7 +58,7 @@ export const AGENT_CATALOG: AgentCatalogItem[] = [
     tags: ['视频', '生成'],
     calls: 654,
     rating: 4.7,
-    capability: { kind: 'media', mediaTypes: ['video', 'videogen'], preferredModel: 'kwvideo-v2' },
+    capability: { kind: 'workflow', workflowType: 'videoagent' },
   },
   {
     id: 'music',
@@ -69,7 +69,7 @@ export const AGENT_CATALOG: AgentCatalogItem[] = [
     tags: ['音乐', '氛围'],
     calls: 445,
     rating: 4.8,
-    capability: { kind: 'media', mediaTypes: ['music', 'audiogen'], preferredModel: 'suno-v4.5' },
+    capability: { kind: 'media', mediaTypes: ['music', 'audiogen'], preferredModel: 'suno-v3' },
   },
   {
     id: 'storyboard',

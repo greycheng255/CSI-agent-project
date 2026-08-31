@@ -14,18 +14,24 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { PaymentService } from './payment.service';
+import { OnlinePaymentService } from './online-payment.service';
 import { PaymentCodeType } from './entities/user-payment-code.entity';
 import { PlatformCodeType } from './entities/platform-payment-code.entity';
-import { AuthGuard } from '../auth/auth.guard';
-import type { RequestWithUser } from '../auth/auth.guard';
+import {
+  UserOrAdminGuard,
+  type RequestWithUserOrAdmin,
+} from '../auth/user-or-admin.guard';
 import { AdminPermissionGuard } from '../admin/admin.guard';
 import { RequirePermission } from '../admin/admin-permission.decorator';
 import { ADMIN_PERMISSIONS } from '../admin/admin-permissions';
 
 @Controller('api/v1/payments')
-@UseGuards(AuthGuard)
+@UseGuards(UserOrAdminGuard)
 export class PaymentController {
-  constructor(private readonly paymentService: PaymentService) {}
+  constructor(
+    private readonly paymentService: PaymentService,
+    private readonly onlinePaymentService: OnlinePaymentService,
+  ) {}
 
   // ==================== 用户收款码管理 ====================
 
@@ -37,7 +43,7 @@ export class PaymentController {
   async uploadUserPaymentCode(
     @UploadedFile() file: Express.Multer.File,
     @Body() body: { type: PaymentCodeType; accountName?: string },
-    @Req() req: RequestWithUser,
+    @Req() req: RequestWithUserOrAdmin,
   ) {
     if (!file) {
       throw new BadRequestException('File is required');
@@ -68,7 +74,7 @@ export class PaymentController {
    * 获取我的收款码列表
    */
   @Get('my-codes')
-  async getMyPaymentCodes(@Req() req: RequestWithUser) {
+  async getMyPaymentCodes(@Req() req: RequestWithUserOrAdmin) {
     const userId = req.user?.id;
     if (!userId) {
       throw new BadRequestException('User not authenticated');
@@ -88,7 +94,7 @@ export class PaymentController {
   @Post('my-codes/:codeId/delete')
   async deleteUserPaymentCode(
     @Param('codeId') codeId: string,
-    @Req() req: RequestWithUser,
+    @Req() req: RequestWithUserOrAdmin,
   ) {
     const userId = req.user?.id;
     if (!userId) {
@@ -109,7 +115,7 @@ export class PaymentController {
   @Post('my-codes/:codeId/default')
   async setDefaultPaymentCode(
     @Param('codeId') codeId: string,
-    @Req() req: RequestWithUser,
+    @Req() req: RequestWithUserOrAdmin,
   ) {
     const userId = req.user?.id;
     if (!userId) {
@@ -146,7 +152,8 @@ export class PaymentController {
    * 上传平台收款码（管理员）
    */
   @Post('platform-codes')
-  @UseGuards(AdminPermissionGuard) @RequirePermission(ADMIN_PERMISSIONS.PLATFORM_CODES_MANAGE)
+  @UseGuards(AdminPermissionGuard)
+  @RequirePermission(ADMIN_PERMISSIONS.PLATFORM_CODES_MANAGE)
   @UseInterceptors(FileInterceptor('file'))
   async uploadPlatformPaymentCode(
     @UploadedFile() file: Express.Multer.File,
@@ -178,7 +185,8 @@ export class PaymentController {
    * 获取所有平台收款码（管理员，包括已禁用）
    */
   @Get('platform-codes/all')
-  @UseGuards(AdminPermissionGuard) @RequirePermission(ADMIN_PERMISSIONS.PLATFORM_CODES_MANAGE)
+  @UseGuards(AdminPermissionGuard)
+  @RequirePermission(ADMIN_PERMISSIONS.PLATFORM_CODES_MANAGE)
   async getAllPlatformPaymentCodes() {
     const result = await this.paymentService.getAllPlatformPaymentCodes();
 
@@ -192,7 +200,8 @@ export class PaymentController {
    * 更新平台收款码（管理员）
    */
   @Post('platform-codes/:codeId/update')
-  @UseGuards(AdminPermissionGuard) @RequirePermission(ADMIN_PERMISSIONS.PLATFORM_CODES_MANAGE)
+  @UseGuards(AdminPermissionGuard)
+  @RequirePermission(ADMIN_PERMISSIONS.PLATFORM_CODES_MANAGE)
   @UseInterceptors(FileInterceptor('file'))
   async updatePlatformPaymentCode(
     @Param('codeId') codeId: string,
@@ -217,7 +226,8 @@ export class PaymentController {
    * 删除平台收款码（管理员）
    */
   @Post('platform-codes/:codeId/delete')
-  @UseGuards(AdminPermissionGuard) @RequirePermission(ADMIN_PERMISSIONS.PLATFORM_CODES_MANAGE)
+  @UseGuards(AdminPermissionGuard)
+  @RequirePermission(ADMIN_PERMISSIONS.PLATFORM_CODES_MANAGE)
   async deletePlatformPaymentCode(@Param('codeId') codeId: string) {
     await this.paymentService.deletePlatformPaymentCode(codeId);
 
@@ -233,8 +243,15 @@ export class PaymentController {
    * 创建订单支付 - 获取平台收款码
    */
   @Post('order/:orderId/create')
-  async createOrderPayment(@Param('orderId') orderId: string) {
-    const result = await this.paymentService.createOrderPayment(orderId);
+  async createOrderPayment(
+    @Param('orderId') orderId: string,
+    @Req() req: RequestWithUserOrAdmin,
+  ) {
+    if (!req.user) throw new BadRequestException('User not authenticated');
+    const result = await this.paymentService.createOrderPayment(
+      orderId,
+      req.user.id,
+    );
 
     return {
       success: true,
@@ -246,8 +263,15 @@ export class PaymentController {
    * 获取订单支付信息
    */
   @Get('order/:orderId')
-  async getOrderPayment(@Param('orderId') orderId: string) {
-    const result = await this.paymentService.getOrderPayment(orderId);
+  async getOrderPayment(
+    @Param('orderId') orderId: string,
+    @Req() req: RequestWithUserOrAdmin,
+  ) {
+    if (!req.user) throw new BadRequestException('User not authenticated');
+    const result = await this.paymentService.getOrderPayment(
+      orderId,
+      req.user.id,
+    );
 
     return {
       success: true,
@@ -264,7 +288,7 @@ export class PaymentController {
     @Param('orderId') orderId: string,
     @UploadedFile() file: Express.Multer.File,
     @Body() body: { platformCodeId: string },
-    @Req() req: RequestWithUser,
+    @Req() req: RequestWithUserOrAdmin,
   ) {
     if (!file) {
       throw new BadRequestException('Payment proof file is required');
@@ -295,11 +319,13 @@ export class PaymentController {
    * 平台确认收到款项（管理员）
    */
   @Post('order/:orderId/confirm-received')
+  @UseGuards(AdminPermissionGuard)
+  @RequirePermission(ADMIN_PERMISSIONS.PAYMENT_RELEASE)
   async confirmPaymentReceived(
     @Param('orderId') orderId: string,
-    @Req() req: RequestWithUser,
+    @Req() req: RequestWithUserOrAdmin,
   ) {
-    const adminId = req.user?.id;
+    const adminId = req.admin?.id;
     if (!adminId) {
       throw new BadRequestException('Admin not authenticated');
     }
@@ -321,6 +347,8 @@ export class PaymentController {
    * 获取待打款信息
    */
   @Get('order/:orderId/payout-info')
+  @UseGuards(AdminPermissionGuard)
+  @RequirePermission(ADMIN_PERMISSIONS.PAYMENT_RELEASE)
   async getPayoutInfo(@Param('orderId') orderId: string) {
     const result = await this.paymentService.getPayoutInfo(orderId);
 
@@ -334,17 +362,19 @@ export class PaymentController {
    * 平台确认已打款给开发者（上传打款凭证）
    */
   @Post('order/:orderId/confirm-payout')
+  @UseGuards(AdminPermissionGuard)
+  @RequirePermission(ADMIN_PERMISSIONS.PAYMENT_RELEASE)
   @UseInterceptors(FileInterceptor('file'))
   async confirmPayout(
     @Param('orderId') orderId: string,
     @UploadedFile() file: Express.Multer.File,
-    @Req() req: RequestWithUser,
+    @Req() req: RequestWithUserOrAdmin,
   ) {
     if (!file) {
       throw new BadRequestException('Payout proof file is required');
     }
 
-    const adminId = req.user?.id;
+    const adminId = req.admin?.id;
     if (!adminId) {
       throw new BadRequestException('Admin not authenticated');
     }
@@ -367,7 +397,7 @@ export class PaymentController {
   @Post('order/:orderId/confirm-payout-received')
   async confirmPayoutReceived(
     @Param('orderId') orderId: string,
-    @Req() req: RequestWithUser,
+    @Req() req: RequestWithUserOrAdmin,
   ) {
     const userId = req.user?.id;
     if (!userId) {
@@ -385,6 +415,42 @@ export class PaymentController {
     };
   }
 
+  // ==================== 支付宝在线支付 ====================
+
+  /**
+   * 为当前用户自己的待支付订单创建支付宝电脑网站支付。
+   * 返回支付 URL，前端应在新窗口打开。
+   */
+  @Post('alipay/orders/:orderId')
+  async createOnlineAlipayPayment(
+    @Param('orderId') orderId: string,
+    @Req() req: RequestWithUserOrAdmin,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) throw new BadRequestException('User not authenticated');
+    const result = await this.onlinePaymentService.createAlipayPayment(
+      orderId,
+      userId,
+    );
+    return { success: true, data: result };
+  }
+
+  /** 查询当前用户自己的支付宝支付状态，可选主动向渠道刷新。 */
+  @Get('alipay/orders/:orderId/status')
+  async getOnlineAlipayPaymentStatus(
+    @Param('orderId') orderId: string,
+    @Query('refresh') refresh: string | undefined,
+    @Req() req: RequestWithUserOrAdmin,
+  ) {
+    if (!req.user) throw new BadRequestException('User not authenticated');
+    const result = await this.onlinePaymentService.getAlipayPaymentStatus(
+      orderId,
+      req.user.id,
+      refresh === '1',
+    );
+    return { success: true, data: result };
+  }
+
   // ==================== 兼容旧版 API ====================
 
   /**
@@ -393,7 +459,9 @@ export class PaymentController {
   @Post('alipay/create')
   async createAlipayOrder(
     @Body() body: { orderId: string; returnUrl?: string },
+    @Req() req: RequestWithUserOrAdmin,
   ) {
+    if (!req.user) throw new BadRequestException('User not authenticated');
     if (!body.orderId) {
       throw new BadRequestException('orderId is required');
     }
@@ -401,6 +469,7 @@ export class PaymentController {
     const result = await this.paymentService.createAlipayOrder(
       body.orderId,
       body.returnUrl,
+      req.user.id,
     );
 
     return {
@@ -413,6 +482,8 @@ export class PaymentController {
    * 模拟支付成功（用于测试）
    */
   @Get('alipay/mock-pay')
+  @UseGuards(AdminPermissionGuard)
+  @RequirePermission(ADMIN_PERMISSIONS.PAYMENT_RELEASE)
   async mockPay(@Query('out_trade_no') outTradeNo: string) {
     if (!outTradeNo) {
       throw new BadRequestException('out_trade_no is required');
@@ -430,6 +501,8 @@ export class PaymentController {
    * 执行分账（旧版兼容）
    */
   @Post(':orderId/payout')
+  @UseGuards(AdminPermissionGuard)
+  @RequirePermission(ADMIN_PERMISSIONS.PAYMENT_RELEASE)
   async executePayout(@Param('orderId') orderId: string) {
     await this.paymentService.executePayout(orderId);
 

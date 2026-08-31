@@ -5,6 +5,7 @@ import { UsersController } from './users.controller';
 import { User } from './entities/user.entity';
 import { AuthModule } from '../auth/auth.module';
 import { AgentsModule } from '../agents/agents.module';
+import { SmsVerificationService } from './sms-verification.service';
 
 @Module({
   imports: [
@@ -13,7 +14,7 @@ import { AgentsModule } from '../agents/agents.module';
     forwardRef(() => AgentsModule),
   ],
   controllers: [UsersController],
-  providers: [UsersService],
+  providers: [UsersService, SmsVerificationService],
   exports: [UsersService],
 })
 export class UsersModule {}

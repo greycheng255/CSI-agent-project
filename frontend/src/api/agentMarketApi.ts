@@ -50,8 +50,6 @@ export type AgentDirectory = {
 
 export type GenerateAgentPayload = {
   workspaceId: string;
-  tenantId?: string;
-  userId?: string;
   type?: string;
   model?: string;
   prompt?: string;
@@ -180,75 +178,6 @@ const FALLBACK_AGENTS: ApiAgentDefinition[] = [
   },
 ];
 
-const SEEDANCE_MODELS: ApiModelDefinition[] = [
-  {
-    name: 'kwvideo-v2',
-    type: 'video',
-    label: 'Seedance 2.0 首尾帧',
-    description: '支持文生视频、首帧图生视频和首尾帧视频，自动生成有声视频。',
-    params: {
-      prompt: { type: 'string', required: true },
-      version: { type: 'string', required: true, default: '标准', options: ['Mini', '快速', '标准'] },
-      duration: {
-        type: 'string',
-        required: true,
-        default: '5',
-        options: ['auto', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'],
-      },
-      aspect_ratio: {
-        type: 'string',
-        default: 'adaptive',
-        options: ['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16', '21:9'],
-      },
-      resolution: { type: 'string', required: true, default: '720p', options: ['480p', '720p', '1080p', '4K'] },
-      images: { type: 'upload', required: false, description: '0 张为文生视频，1 张为首帧，2 张为首尾帧' },
-    },
-  },
-  {
-    name: 'kwvideo-v2-ref',
-    type: 'video',
-    label: 'Seedance 2.0 参考生',
-    description: '支持 1–9 张参考图生成风格和主体一致的视频。',
-    params: {
-      prompt: { type: 'string', required: true },
-      version: { type: 'string', required: true, default: '标准', options: ['Mini', '快速', '标准'] },
-      duration: {
-        type: 'string',
-        required: true,
-        default: '5',
-        options: ['auto', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15'],
-      },
-      aspect_ratio: {
-        type: 'string',
-        default: 'adaptive',
-        options: ['adaptive', '16:9', '4:3', '1:1', '3:4', '9:16', '21:9'],
-      },
-      resolution: { type: 'string', required: true, default: '720p', options: ['480p', '720p', '1080p', '4K'] },
-      images: { type: 'upload', required: true, description: '1–9 张参考图片 URL' },
-    },
-  },
-];
-
-const SUNO_MUSIC_MODEL: ApiModelDefinition = {
-  name: 'suno-v4.5',
-  type: 'music',
-  label: 'Suno Music Generation 4.5',
-  description: '根据歌词与音乐描述生成完整人声歌曲或无人声纯音乐，最长支持约 4 分钟。',
-  params: {
-    mv: {
-      type: 'string',
-      default: 'chirp-v4-5',
-      options: ['chirp-v4-5', 'chirp-v4', 'chirp-v3-5', 'chirp-bluejay'],
-    },
-    make_instrumental: { type: 'string', default: 'song', options: ['song', 'instrumental'] },
-    vocal_gender: { type: 'string', default: 'auto', options: ['auto', 'm', 'f'] },
-    sample_rate: { type: 'string', default: '44100', options: ['44100', '48000'] },
-    bitrate: { type: 'string', default: '192000', options: ['128000', '192000', '256000'] },
-  },
-};
-
-const REQUIRED_MEDIA_MODELS = [...SEEDANCE_MODELS, SUNO_MUSIC_MODEL];
-
 const FALLBACK_MODELS: ApiModelDefinition[] = [
   {
     name: 'midjourney',
@@ -291,8 +220,6 @@ const FALLBACK_MODELS: ApiModelDefinition[] = [
       image_url: { type: 'string', required: false, description: '首帧参考图 URL' },
     },
   },
-  ...SEEDANCE_MODELS,
-  SUNO_MUSIC_MODEL,
   {
     name: 'suno-v3',
     type: 'music',
@@ -312,6 +239,10 @@ function asRecord(value: unknown): JsonRecord {
 
 function isString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function firstString(...values: unknown[]) {
+  return values.find(isString) as string | undefined;
 }
 
 function apiUrl(path: string, provider?: AgentRequestProvider) {
@@ -335,14 +266,24 @@ function buildHeaders(provider?: AgentRequestProvider, headers?: Record<string, 
 async function requestJson(path: string, init?: RequestInit, provider?: AgentRequestProvider) {
   const res = await fetch(apiUrl(path, provider), init);
   const text = await res.text();
-  const payload = text ? (JSON.parse(text) as unknown) : null;
+  let payload: unknown = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text) as unknown;
+    } catch {
+      payload = text;
+    }
+  }
 
   if (!res.ok) {
     const record = asRecord(payload);
+    const nestedError = asRecord(record.error);
     const message =
       (isString(record.message) && record.message) ||
       (isString(record.detail) && record.detail) ||
       (isString(record.error) && record.error) ||
+      (isString(nestedError.message) && nestedError.message) ||
+      (isString(payload) && payload) ||
       `请求失败 (${res.status})`;
     throw new Error(message);
   }
@@ -362,41 +303,30 @@ function readArray<T>(payload: unknown, key: string): T[] {
 }
 
 export async function loadAgentDirectory(provider?: AgentRequestProvider): Promise<AgentDirectory> {
-  const [agentsResult, modelsResult] = await Promise.allSettled([
-    requestJson('/agents', { headers: buildHeaders(provider) }, provider),
-    requestJson('/models', { headers: buildHeaders(provider) }, provider),
-  ]);
+  let directoryPayload: unknown = null;
+  let failure = '';
+  try {
+    directoryPayload = await requestJson(
+      '/agents',
+      { headers: buildHeaders(provider) },
+      provider,
+    );
+  } catch (error) {
+    failure = error instanceof Error ? error.message : String(error);
+  }
 
-  const agents =
-    agentsResult.status === 'fulfilled'
-      ? readArray<ApiAgentDefinition>(agentsResult.value, 'agents')
-      : [];
-  const models =
-    modelsResult.status === 'fulfilled'
-      ? readArray<ApiModelDefinition>(modelsResult.value, 'models')
-      : [];
-  const availableModels = models.length > 0
-    ? [
-        ...REQUIRED_MEDIA_MODELS.map((requiredModel) => {
-          const discovered = models.find((model) => model.name === requiredModel.name);
-          return discovered ? { ...discovered, type: requiredModel.type } : requiredModel;
-        }),
-        ...models.filter((model) =>
-          !REQUIRED_MEDIA_MODELS.some((requiredModel) => requiredModel.name === model.name),
-        ),
-      ]
-    : FALLBACK_MODELS;
-
-  const failures = [agentsResult, modelsResult]
-    .filter((result) => result.status === 'rejected')
-    .map((result) => (result as PromiseRejectedResult).reason)
-    .map((reason) => (reason instanceof Error ? reason.message : String(reason)));
+  const root = asRecord(directoryPayload);
+  const agents = Array.isArray(root.data)
+    ? root.data as ApiAgentDefinition[]
+    : readArray<ApiAgentDefinition>(directoryPayload, 'agents');
+  const models = readArray<ApiModelDefinition>(directoryPayload, 'models');
+  const availableModels = models.length > 0 ? models : FALLBACK_MODELS;
 
   return {
     agents: agents.length > 0 ? agents : FALLBACK_AGENTS,
     models: availableModels,
     usingFallback: agents.length === 0 || models.length === 0,
-    error: failures.length > 0 ? failures.join(' / ') : undefined,
+    error: failure || undefined,
   };
 }
 
@@ -420,17 +350,30 @@ export function isCatalogItemRunnable(agent: AgentCatalogItem, directory: AgentD
 }
 
 export async function createAgentTask(payload: GenerateAgentPayload, provider?: AgentRequestProvider) {
-  const headers: Record<string, string> = buildHeaders(provider, { 'Content-Type': 'application/json' });
-  if (payload.tenantId) headers['X-Tenant-ID'] = payload.tenantId;
-  if (payload.userId) headers['X-User-ID'] = payload.userId;
+  if (!payload.type) throw new Error('缺少智能体类型。');
 
+  const idempotencyKey =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const input = {
+    ...(payload.params || {}),
+    ...(payload.prompt ? { prompt: payload.prompt } : {}),
+    ...(payload.count && payload.count !== 1 ? { count: payload.count } : {}),
+  };
+  const headers = buildHeaders(provider, {
+    'Content-Type': 'application/json',
+    'Idempotency-Key': idempotencyKey,
+  });
   const body = {
-    ...payload,
-    tenant_id: payload.tenantId || undefined,
-    user_id: payload.userId || undefined,
+    agent: payload.type,
+    agent_version: 'v1',
+    workspace_id: payload.workspaceId,
+    input,
+    ...(payload.model ? { model: payload.model } : {}),
   };
 
-  const response = await requestJson('/generate', {
+  const response = await requestJson('/agent-runs', {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
@@ -438,10 +381,19 @@ export async function createAgentTask(payload: GenerateAgentPayload, provider?: 
 
   const root = asRecord(response);
   const data = asRecord(root.data);
-  const taskId = data.task_id ?? data.taskId ?? root.task_id ?? root.taskId;
+  const taskId = firstString(
+    data.id,
+    data.record_id,
+    data.run_id,
+    data.task_id,
+    root.id,
+    root.record_id,
+    root.run_id,
+    root.task_id,
+  );
 
   if (!isString(taskId)) {
-    throw new Error('生成任务已提交，但响应中没有 task_id。');
+    throw new Error('智能体运行已提交，但响应中没有运行记录 ID。');
   }
 
   return taskId;
@@ -452,28 +404,54 @@ export async function getAgentTaskStatus(
   provider?: AgentRequestProvider,
 ): Promise<AgentTaskStatus> {
   const response = await requestJson(
-    `/status?task_id=${encodeURIComponent(taskId)}`,
+    `/agent-runs/${encodeURIComponent(taskId)}`,
     { headers: buildHeaders(provider) },
     provider,
   );
   const root = asRecord(response);
   const data = asRecord(root.data);
   const source = Object.keys(data).length > 0 ? data : root;
+  const output = source.output ?? source.result_data ?? source.result ?? null;
+  const outputRecord = asRecord(output);
+  const status = firstString(source.status) || 'running';
+  const normalizedStatus = status.toLowerCase();
+  const errorRecord = asRecord(source.error);
 
   return {
-    task_id: isString(source.task_id) ? source.task_id : taskId,
-    status: isString(source.status) ? source.status : 'running',
-    is_final: typeof source.is_final === 'boolean' ? source.is_final : false,
+    task_id: firstString(source.id, source.record_id, source.run_id, source.task_id) || taskId,
+    status,
+    is_final:
+      typeof source.is_final === 'boolean'
+        ? source.is_final
+        : ['succeeded', 'failed', 'cancelled', 'canceled'].includes(normalizedStatus),
     progress:
       typeof source.progress === 'string' || typeof source.progress === 'number'
         ? source.progress
         : null,
-    current_step: isString(source.current_step) ? source.current_step : null,
-    result_url: isString(source.result_url) ? source.result_url : null,
-    result_data: source.result_data ?? null,
-    result_type: isString(source.result_type) ? source.result_type : undefined,
-    cost: typeof source.cost === 'number' ? source.cost : undefined,
-    error: isString(source.error) ? source.error : undefined,
+    current_step: firstString(source.current_step, source.step) || null,
+    result_url: firstString(
+      source.result_url,
+      outputRecord.result_url,
+      outputRecord.url,
+      outputRecord.image_url,
+      outputRecord.video_url,
+      outputRecord.audio_url,
+    ) || null,
+    result_data: output,
+    result_type: firstString(source.result_type, outputRecord.result_type, outputRecord.type),
+    cost:
+      typeof source.cost === 'number'
+        ? source.cost
+        : typeof source.actual_credits === 'number'
+          ? source.actual_credits
+          : undefined,
+    error: firstString(
+      source.error_message,
+      source.message,
+      source.error,
+      errorRecord.message,
+      source.error_code,
+    ),
   };
 }
 

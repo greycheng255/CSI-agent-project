@@ -3,6 +3,7 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, type FindOptionsWhere } from 'typeorm';
@@ -100,12 +101,15 @@ export class PaymentService {
     userId: string,
     type?: PaymentCodeType,
   ): Promise<UserPaymentCode | null> {
-    const where: Record<string, unknown> = { userId, isDefault: true };
+    const where: FindOptionsWhere<UserPaymentCode> = {
+      userId,
+      isDefault: true,
+    };
     if (type) {
       where.type = type;
     }
     return this.userPaymentCodeRepo.findOne({
-      where: where as unknown as FindOptionsWhere<UserPaymentCode>,
+      where,
     });
   }
 
@@ -257,17 +261,25 @@ export class PaymentService {
   /**
    * 创建订单支付 - 返回平台收款码给雇主扫码支付
    */
-  async createOrderPayment(orderId: string): Promise<{
+  async createOrderPayment(
+    orderId: string,
+    requesterUserId: string,
+  ): Promise<{
     orderPayment: OrderPayment;
     platformCodes: PlatformPaymentCode[];
   }> {
     const order = await this.orderRepo.findOne({
       where: { id: orderId },
-      relations: ['task', 'owner'],
+      relations: ['task', 'owner', 'client'],
     });
 
     if (!order) {
       throw new NotFoundException('Order not found');
+    }
+
+    const clientId = order.client?.id || order.clientUserId;
+    if (!clientId || clientId !== requesterUserId) {
+      throw new ForbiddenException('Only the client can create payment');
     }
 
     if (order.status !== OrderStatus.PENDING_PAYMENT) {
@@ -317,7 +329,19 @@ export class PaymentService {
   /**
    * 获取订单支付信息
    */
-  async getOrderPayment(orderId: string): Promise<OrderPayment | null> {
+  async getOrderPayment(
+    orderId: string,
+    requesterUserId: string,
+  ): Promise<OrderPayment | null> {
+    const order = await this.orderRepo.findOne({
+      where: { id: orderId },
+      relations: ['client'],
+    });
+    if (!order) throw new NotFoundException('Order not found');
+    const clientId = order.client?.id || order.clientUserId;
+    if (!clientId || clientId !== requesterUserId) {
+      throw new ForbiddenException('Only the client can view payment');
+    }
     const orderPayment = await this.orderPaymentRepo.findOne({
       where: { orderId },
       relations: ['platformCode', 'ownerCode'],
@@ -562,11 +586,16 @@ export class PaymentService {
    */
   async createAlipayOrder(
     orderId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _returnUrl?: string,
+    requesterUserId?: string,
   ): Promise<{ paymentUrl: string; outTradeNo: string }> {
-    const { orderPayment, platformCodes } =
-      await this.createOrderPayment(orderId);
+    if (!requesterUserId) {
+      throw new ForbiddenException('User is required');
+    }
+    const { orderPayment, platformCodes } = await this.createOrderPayment(
+      orderId,
+      requesterUserId,
+    );
 
     // 返回第一个平台收款码的 URL
     const firstCode = platformCodes[0];
@@ -586,6 +615,9 @@ export class PaymentService {
    * 模拟支付成功（旧版兼容，用于测试）
    */
   async mockPaymentSuccess(outTradeNo: string): Promise<void> {
+    if (process.env.NODE_ENV === 'production') {
+      throw new NotFoundException('Mock payment is not available');
+    }
     const orderPayment = await this.orderPaymentRepo.findOne({
       where: { id: outTradeNo },
       relations: ['order'],

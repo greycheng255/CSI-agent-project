@@ -41,12 +41,13 @@ const getErrorMessage = async (response: Response, fallback: string) => {
 export async function registerUser(
   phone: string,
   password: string,
+  verificationCode: string,
   displayName?: string,
 ): Promise<{ user: User; token: string }> {
   const response = await fetch(`${API_BASE}/api/v1/users/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone, password, displayName }),
+    body: JSON.stringify({ phone, password, verificationCode, displayName }),
   });
 
   if (!response.ok) {
@@ -56,6 +57,55 @@ export async function registerUser(
 
   // 注册成功后自动登录
   return loginUser(phone, password);
+}
+
+export type SmsVerificationScene = 'login' | 'register';
+
+export type SmsCodeResponse = {
+  message: string;
+  expiresInSeconds: number;
+  retryAfterSeconds: number;
+  debugCodeEnabled: boolean;
+};
+
+export async function sendSmsCode(
+  phone: string,
+  scene: SmsVerificationScene,
+): Promise<SmsCodeResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/users/sms-code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone, scene }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, '验证码发送失败'));
+  }
+
+  return parseApiJson<SmsCodeResponse>(response);
+}
+
+export async function loginWithSms(
+  phone: string,
+  verificationCode: string,
+): Promise<{ user: User; token: string; isNewUser: boolean }> {
+  const response = await fetch(`${API_BASE}/api/v1/users/login/sms`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone, verificationCode }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, '验证码登录失败'));
+  }
+
+  const data = await parseApiJson<{
+    user: User;
+    token: string;
+    isNewUser: boolean;
+  }>(response);
+  useAuthStore.getState().login(data.user, data.token);
+  return data;
 }
 
 /**
@@ -151,6 +201,8 @@ export const adminAuthService = {
 export const userAuthService = {
   register: registerUser,
   login: loginUser,
+  loginWithSms,
+  sendSmsCode,
   logout: logoutUser,
   getCurrentUser,
 };

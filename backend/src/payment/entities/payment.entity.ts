@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Order } from '../../orders/entities/order.entity';
 
@@ -22,6 +23,7 @@ export enum PaymentProvider {
 }
 
 @Entity('payments')
+@Index('idx_payments_order_time', ['order', 'createdAt'])
 export class Payment {
   @PrimaryGeneratedColumn('uuid')
   id: string;

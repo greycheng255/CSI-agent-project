@@ -1,6 +1,7 @@
 import { Controller, Post, Get, Body, Req, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { AuthGuard, type RequestWithUser } from '../auth/auth.guard';
+import type { SmsVerificationScene } from './sms-verification.service';
 
 /**
  * 注册请求DTO
@@ -8,6 +9,7 @@ import { AuthGuard, type RequestWithUser } from '../auth/auth.guard';
 interface RegisterDto {
   phone: string;
   password: string;
+  verificationCode: string;
   displayName?: string;
 }
 
@@ -17,6 +19,11 @@ interface RegisterDto {
 interface LoginDto {
   phone: string;
   password: string;
+}
+
+interface SmsLoginDto {
+  phone: string;
+  verificationCode: string;
 }
 
 /**
@@ -51,6 +58,24 @@ export class UsersController {
   @Post('login')
   login(@Body() body: LoginDto) {
     return this.usersService.login(body);
+  }
+
+  /**
+   * 发送登录或注册短信验证码
+   * POST /api/v1/users/sms-code
+   */
+  @Post('sms-code')
+  requestSmsCode(@Body() body: { phone: string; scene: SmsVerificationScene }) {
+    return this.usersService.requestSmsCode(body.phone, body.scene);
+  }
+
+  /**
+   * 短信验证码登录；手机号未注册时自动创建账号
+   * POST /api/v1/users/login/sms
+   */
+  @Post('login/sms')
+  loginWithSms(@Body() body: SmsLoginDto) {
+    return this.usersService.loginWithSms(body);
   }
 
   /**

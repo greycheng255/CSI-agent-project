@@ -20,6 +20,7 @@ import {
   loadAgentDirectory,
   type AgentDirectory,
 } from '../api/agentMarketApi';
+import { OPENNOTEBOOK_AGENT_PROVIDER } from '../config/api';
 import { AGENT_CATALOG, AGENT_STYLE, type AgentCatalogItem } from '../data/agentMarketCatalog';
 
 const INITIAL_TAG_LIMIT = 10;
@@ -142,7 +143,7 @@ export default function AgentMarketHub() {
   useEffect(() => {
     let cancelled = false;
 
-    loadAgentDirectory()
+    loadAgentDirectory(OPENNOTEBOOK_AGENT_PROVIDER)
       .then((data) => {
         if (cancelled) return;
         setDirectory(data);

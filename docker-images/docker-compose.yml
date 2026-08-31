@@ -57,6 +57,15 @@ services:
       AUTO_EXECUTION_ENABLED: 'false'
       LEGACY_RUNTIME_WEBHOOKS_ENABLED: 'false'
       LEGACY_TASK_WEBHOOKS_ENABLED: 'false'
+      PAYMENT_FRONTEND_BASE_URL: ${PAYMENT_FRONTEND_BASE_URL:-http://localhost}
+      ALIPAY_APP_ID: ${ALIPAY_APP_ID:-}
+      ALIPAY_PID: ${ALIPAY_PID:-}
+      ALIPAY_GATEWAY: ${ALIPAY_GATEWAY:-https://openapi.alipay.com/gateway.do}
+      ALIPAY_KEY_TYPE: ${ALIPAY_KEY_TYPE:-PKCS8}
+      ALIPAY_PRIVATE_KEY: ${ALIPAY_PRIVATE_KEY:-}
+      ALIPAY_PUBLIC_KEY: ${ALIPAY_PUBLIC_KEY:-}
+      ALIPAY_NOTIFY_URL: ${ALIPAY_NOTIFY_URL:-}
+      ALIPAY_RETURN_URL: ${ALIPAY_RETURN_URL:-}
     volumes:
       - uploads_data:/app/uploads
     depends_on:

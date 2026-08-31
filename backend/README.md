@@ -31,6 +31,25 @@
 $ npm install
 ```
 
+## 短信验证码配置
+
+后端使用阿里云短信服务发送验证码，需要在服务端运行环境配置：
+
+```dotenv
+ALIBABA_CLOUD_ACCESS_KEY_ID=
+ALIBABA_CLOUD_ACCESS_KEY_SECRET=
+ALIYUN_SMS_SIGN_NAME=
+ALIYUN_SMS_TEMPLATE_CODE=SMS_330310524
+ALIYUN_SMS_REGION_ID=cn-hangzhou
+ALIYUN_SMS_ENDPOINT=dysmsapi.aliyuncs.com
+# 模板中的验证码变量名，默认 code
+ALIYUN_SMS_TEMPLATE_PARAM_KEY=code
+```
+
+本地开发默认启用调试验证码 `121212`。生产环境默认禁用；也可通过
+`SMS_DEBUG_CODE_ENABLED=true|false` 显式控制。AccessKey 变量不得添加 `VITE_`
+前缀，否则可能被前端构建暴露。
+
 ## Compile and run the project
 
 ```bash

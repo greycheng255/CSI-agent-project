@@ -4,6 +4,9 @@ import { MulterModule } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { PaymentService } from './payment.service';
 import { PaymentController } from './payment.controller';
+import { AlipayCallbackController } from './alipay-callback.controller';
+import { AlipayClientService } from './alipay-client.service';
+import { OnlinePaymentService } from './online-payment.service';
 import { BalanceController } from './balance.controller';
 import { BalanceService } from './balance.service';
 import { Order } from '../orders/entities/order.entity';
@@ -12,6 +15,7 @@ import { Payout } from './entities/payout.entity';
 import { UserPaymentCode } from './entities/user-payment-code.entity';
 import { PlatformPaymentCode } from './entities/platform-payment-code.entity';
 import { OrderPayment } from './entities/order-payment.entity';
+import { PaymentNotification } from './entities/payment-notification.entity';
 import {
   UserBalance,
   BalanceRecord,
@@ -54,6 +58,7 @@ subDirs.forEach((dir) => {
       UserPaymentCode,
       PlatformPaymentCode,
       OrderPayment,
+      PaymentNotification,
       UserBalance,
       BalanceRecord,
       Withdrawal,
@@ -91,8 +96,13 @@ subDirs.forEach((dir) => {
     AuthModule,
     AdminModule,
   ],
-  controllers: [PaymentController, BalanceController],
-  providers: [PaymentService, BalanceService],
-  exports: [PaymentService, BalanceService],
+  controllers: [PaymentController, AlipayCallbackController, BalanceController],
+  providers: [
+    PaymentService,
+    OnlinePaymentService,
+    AlipayClientService,
+    BalanceService,
+  ],
+  exports: [PaymentService, OnlinePaymentService, BalanceService],
 })
 export class PaymentModule {}

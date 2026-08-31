@@ -82,6 +82,7 @@ import {
 } from './payment/entities/balance.entity';
 import { PlatformPaymentCode } from './payment/entities/platform-payment-code.entity';
 import { OrderPayment } from './payment/entities/order-payment.entity';
+import { PaymentNotification } from './payment/entities/payment-notification.entity';
 import {
   ExecutionPhase,
   ExecutionSubTask,
@@ -164,6 +165,7 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
         UserPaymentCode,
         PlatformPaymentCode,
         OrderPayment,
+        PaymentNotification,
         ExecutionPhase,
         ExecutionSubTask,
         ExecutionTrace,

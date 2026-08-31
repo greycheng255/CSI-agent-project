@@ -1,121 +1,162 @@
-# 智能体集市 14 个模块功能与运行验证报告
+# 智能体集市 OpenNotebook Agent Runs API 接入与验证报告
 
-验证时间：2026-06-28
+更新时间：2026-08-29
 
-## 1. 执行链路结论
+## 1. 接入结论
 
-智能体集市当前共有 14 个模块，执行方式分为三类：
+智能体集市当前代码目录共有 10 个模块。除 OpenNotebook 公共目录尚未开放的“声音克隆”外，其余 9 个模块已统一使用 `backend/app/api/v1/agent_runs.py` 对外提供的 Public Agent Runs API：
 
-1. 本地任务包模块  
-   不调用 OpenNotebook API，只在前端生成可复制的任务包文本。
+- 目录：`GET /api/v1/agents`
+- 提交：`POST /api/v1/agent-runs`
+- 状态：`GET /api/v1/agent-runs/{record_id}`
+- 鉴权：`Authorization: Bearer <OpenNotebook API Key>`
+- 幂等：每次提交发送唯一的 `Idempotency-Key`
 
-2. OpenNotebook workflow 模块  
-   前端调用 `POST /api/v1/agent/generate`，传入 `type` 和 `params`，再通过 `GET /api/v1/agent/status?task_id=...` 轮询结果。
+旧链路 `POST /api/v1/agent/generate` 和 `GET /api/v1/agent/status` 已从智能体集市调用代码中移除。
 
-3. OpenNotebook media/model 模块  
-   前端调用 `POST /api/v1/agent/generate`，传入 `type`、`model`、`prompt` 和 `params`，再轮询 `status`。
+请求不再传入以下参数：
 
-当前远端目录实际开放：
+- `tenantId` / `tenant_id`
+- `userId` / `user_id`
+- `X-Tenant-ID`
+- `X-User-ID`
 
-- workflow agents：`mindmap`、`flashcard`、`podcast`、`invoice`、`digihuman`、`videoagent`
-- models：`midjourney:image`、`gpt-image-2:image`、`kling-v1:video`、`suno-v3:music`、`framedirector-v1:framedirector`
+工作区 ID 仍然保留，因为 OpenNotebook 的 `AgentRunCreate` 合约要求 `workspace_id`。
 
-当前远端目录没有返回 `tts` 或 `audio` 模型，因此“语音合成”和“声音克隆”在前端会被判定为不可运行。
+## 2. 新请求结构
 
-## 2. 模块逐项梳理与验证结果
+工作流智能体示例：
 
-| 模块 | id | 类型 | 功能 | 当前结果 |
-| --- | --- | --- | --- | --- |
-| 脚本大师 | `script` | 本地 | 根据主题、形式、语气生成脚本任务包 | 前端本地可用，但不是远端执行 |
-| 语音合成 | `voice` | media | 文本转语音 | 不可运行：远端未返回 `tts/audio` 模型 |
-| 声音克隆 | `clone` | media | 参考录音 + 目标文本生成克隆音色语音 | 不可运行：远端未返回 `tts/audio` 模型 |
-| 视频生成 | `video` | workflow | `videoagent` 文生/图生/参考生视频 | 已调试修复，补传 `size=1280*720` 后完成 |
-| 配乐生成 | `music` | media | `suno-v3` 生成音乐/配乐 | 接口存在，但当前远端积分不足，提交被 402 拦截 |
-| 图片生成 | `storyboard` | media | `gpt-image-2` 文生图/图文生图 | 接口存在，但当前远端积分不足，提交被 402 拦截 |
-| 速记卡片 | `flashcard` | workflow | 学习材料生成问答/填空/配对/判断卡片 | 已完成 |
-| 思维导图 | `mindmap` | workflow | 文档/素材生成结构化导图树 | 已完成 |
-| 音频播客 | `podcast` | workflow | 素材生成播客脚本和音频 | 已完成 |
-| 数据可视化 | `data` | 本地 | 根据数据生成可视化任务包 | 前端本地可用，但不是远端执行 |
-| 多语翻译 | `translate` | 本地 | 根据文本生成翻译任务包 | 前端本地可用，但不是远端执行 |
-| 数字人 | `digihuman` | workflow | 人物图片 + 音频生成数字人视频 | 提交和轮询正常，远端仍在生成中 |
-| 财务发票识别 | `invoice` | workflow | 文本/图片/PDF 发票结构化识别 | 已完成 |
-| FrameDirector | `framedirector` | media | brief → 脚本/分镜/预览/渲染 | 接口存在，但当前远端积分不足，提交被 402 拦截 |
+```json
+{
+  "agent": "mindmap",
+  "agent_version": "v1",
+  "workspace_id": "<workspace-id>",
+  "input": {
+    "source_material": "待整理的内容",
+    "layout": "mindmap",
+    "depth": 0
+  }
+}
+```
 
-## 3. 本次远端测试记录
+媒体模型示例：
 
-### 3.1 已跑通到完成
+```json
+{
+  "agent": "image",
+  "agent_version": "v1",
+  "workspace_id": "<workspace-id>",
+  "model": "gpt-image-2",
+  "input": {
+    "prompt": "生成一张产品概念图",
+    "size": "1024x1024",
+    "quality": "auto"
+  }
+}
+```
 
-| 模块 | task_id | 最终状态 | 说明 |
+## 3. 当前模块映射
+
+| 模块 | id | Agent Runs 映射 | 当前状态 |
 | --- | --- | --- | --- |
-| 速记卡片 | `ef4545b9-b12e-4f52-be76-dbe4b64780e7` | `done` | 有 `result_data` |
-| 思维导图 | `b2f81de4-bd97-4699-afb1-6c8de6d4c163` | `done` | 有 `result_data` |
-| 音频播客 | `8a2497cb-de86-4f0e-a228-df12efa47dfc` | `done` | 有 `result_url` 和 `result_data` |
-| 财务发票识别 | `d7fe8ef0-1926-4921-bfb1-5d73cda2ab86` | `done` | 有 `result_data` |
-| 视频生成，修复后 | `e0fca51b-6acc-4469-8e88-6f72482199ab` | `done` | 有 `result_url` 和 `result_data` |
+| 语音合成 | `voice` | `agent=speech_synth` | 公共目录已开放 |
+| 声音克隆 | `clone` | 无 | 公共 `/api/v1/agents` 尚未提供对应 agent/model，保持不可运行 |
+| 视频生成 | `video` | `agent=videoagent` | 已改为公共工作流，不再伪造 Seedance 模型 |
+| 配乐生成 | `music` | `agent=music`、`model=suno-v3` | 使用公共目录实际模型 |
+| 图片生成 | `storyboard` | `agent=image`、所选图片模型 | 支持 `midjourney`、`gpt-image-2` |
+| 速记卡片 | `flashcard` | `agent=flashcard` | 公共目录已开放 |
+| 思维导图 | `mindmap` | `agent=mindmap` | 公共目录已开放 |
+| 音频播客 | `podcast` | `agent=podcast` | 公共目录已开放 |
+| 数字人 | `digihuman` | `agent=digihuman` | 公共目录已开放 |
+| 财务发票识别 | `invoice` | `agent=invoice` | 公共目录已开放 |
 
-### 3.2 提交/轮询通过，但等待远端完成
+## 4. 代码调整
 
-| 模块 | task_id | 当前状态 | 说明 |
-| --- | --- | --- | --- |
-| 数字人 | `1b187b29-7623-422c-af7f-3621fe5f7765` | `running`，`42%`，`generating` | 提交、扣费、状态轮询均正常，生成耗时较长 |
+### 4.1 API 客户端
 
-### 3.3 失败项
+文件：`frontend/src/api/agentMarketApi.ts`
 
-| 模块 | 失败阶段 | 错误 |
-| --- | --- | --- |
-| 图片生成 | submit | `402 Payment Required`，`INSUFFICIENT_CREDITS`，当前可用 `1.09 C`，需要 `5.00 C` |
-| 配乐生成 | submit | `402 Payment Required`，`INSUFFICIENT_CREDITS`，当前可用 `1.09 C`，需要 `5.00 C` |
-| FrameDirector | submit | `402 Payment Required`，`INSUFFICIENT_CREDITS`，当前可用 `1.09 C`，需要 `5.00 C` |
-| 视频生成，原参数 | status | `size is not supported` |
-| 语音合成 | 目录能力检查 | 远端 `/models` 未返回 `tts/audio` 模型 |
-| 声音克隆 | 目录能力检查 | 远端 `/models` 未返回 `tts/audio` 模型 |
+- 目录加载合并为带 API Key 的 `GET /api/v1/agents`；该响应同时包含 agents 和 models。
+- 提交体转换为 `agent / agent_version / workspace_id / input / model`。
+- 每次提交自动生成 `Idempotency-Key`。
+- 轮询改为 `GET /api/v1/agent-runs/{record_id}`。
+- 兼容解析 `id`、`record_id`、`run_id` 以及 `output` 等响应字段。
+- 移除租户 ID、用户 ID 和相关请求头。
 
-## 4. 已完成的调试修复
+### 4.2 运行页与集市页
 
 文件：
 
+- `frontend/src/pages/AgentMarketHub.tsx`
+- `frontend/src/pages/AgentRun.tsx`
+
+调整内容：
+
+- 集市目录请求统一携带 OpenNotebook API Key。
+- 运行设置仅保留工作区 ID。
+- 页面不再显示或缓存租户 ID、用户 ID。
+- 状态轮询和结果展示适配 Agent Runs 记录。
+
+### 4.3 模块能力映射
+
+文件：
+
+- `frontend/src/data/agentMarketCatalog.ts`
+- `frontend/src/features/agent-market/plugins/registry.tsx`
 - `frontend/src/features/agent-market/plugins/video.tsx`
+- `frontend/src/features/agent-market/plugins/music.tsx`
 
-修复内容：
+调整内容：
 
-- 视频生成面板默认写入 `size=1280*720`。
-- 将原来的自由输入“画幅/尺寸”改为固定选项：
-  - `1280*720`
-  - `720*1280`
-  - `960*960`
+- 视频生成改为 `videoagent` workflow。
+- 视频参数恢复为公共目录实际 schema：`video_type`、`prompt`、`resolution`、帧 URL、`size`、`duration`、`shot_type`、`reference_urls`、`audio`。
+- 配乐模型改为公共目录实际返回的 `suno-v3`。
+- 删除前端强行注入的 `kwvideo-v2`、`kwvideo-v2-ref` 和 `suno-v4.5` 目录项。
 
-原因：
+## 5. 配置
 
-远端 `videoagent` 在不传 `size` 或传不支持值时会在执行阶段失败，错误为 `size is not supported`。补测 `size=1280*720` 后任务完成。
+配置示例：
 
-## 5. 待修复/待确认事项
+```dotenv
+VITE_AGENT_API_BASE=https://api.opennotebook.chat
+VITE_AGENT_REST_BASE=https://api.opennotebook.chat/api/v1
+VITE_AGENT_OPENNOTEBOOK_REST_BASE=https://api.opennotebook.chat/api/v1
+VITE_AGENT_OPENNOTEBOOK_WORKSPACE_ID=<workspace-id>
+VITE_AGENT_OPENNOTEBOOK_API_KEY=<onb-api-key>
+```
 
-1. 脚本大师、数据可视化、多语翻译当前只是本地任务包  
-   如果产品目标是“真正跑通运行起来”，需要为这 3 个模块接入真实 OpenNotebook workflow 或平台自己的执行 API。
+实际 API Key 已写入本机被 Git 忽略的 `frontend/.env`，没有写入源码或本报告。
 
-2. 语音合成、声音克隆缺远端模型  
-   需要 OpenNotebook `/models` 返回 `tts` 或 `audio` 类型模型，或调整前端映射到当前实际可用的模型类型。
+注意：`VITE_*` 变量会被 Vite 打包进浏览器资源。当前实现符合“浏览器直接调用 OpenNotebook”的现有架构，但生产环境若不能公开此 Key，应改为由 CSI 后端代理请求，并把 Key 放在服务端环境变量中。
 
-3. 图片生成、配乐生成、FrameDirector 当前受积分限制  
-   代码侧能力匹配正常，失败原因是远端租户积分不足。充值或更换可用 tenant/workspace 后需要重新验证。
+## 6. 远端验证
 
-4. 数字人需要继续观察最终结果  
-   本轮验证已确认提交和状态轮询正常，但远端生成未在等待窗口内完成。
+### 6.1 已通过
 
-5. 视频尺寸选项需要与 OpenNotebook 后端保持同步  
-   当前只验证 `1280*720` 可用。`720*1280` 和 `960*960` 是按常见视频尺寸补充的候选项，后续最好由远端 `/agents` schema 返回明确 options。
+- 使用 API Key 请求 `GET /api/v1/agents` 成功。
+- 返回 9 个可用 workflow agents：`llm_chat`、`mindmap`、`flashcard`、`podcast`、`invoice`、`video_shot_analysis`、`digihuman`、`videoagent`、`speech_synth`。
+- 返回 5 个媒体模型：`midjourney`、`gpt-image-2`、`kling-v1`、`suno-v3`、`framedirector-v1`。
+- 使用 API Key 请求 `GET /api/v1/agent-runs` 成功，当前列表为空。
+- 前端 `npm run build` 通过。
 
-## 6. 验证命令
+### 6.2 当前阻塞
 
-前端构建验证：
+最小 `mindmap` 提交已到达 OpenNotebook 业务层，但返回：
+
+```text
+PRICING_UNAVAILABLE: No active pricing contract is available
+```
+
+这表明 API Key 鉴权和 Agent Runs 请求格式已被服务端接受，但当前环境没有有效计价合同，暂时无法创建实际运行记录。需要在 OpenNotebook 中为该 Key 所属账户/工作区启用有效计价合同后，再逐项做完成态验证。
+
+声音克隆仍是服务端能力缺口：公共目录未返回对应 agent/model，不能通过 `/api/v1/agent-runs` 合法提交。需要 OpenNotebook 后端先将声音克隆注册为公共 agent，前端才能接通。
+
+## 7. 验证命令
 
 ```bash
 cd frontend
-npm.cmd run build
+npm run build
 ```
 
-结果：
-
-- TypeScript 编译通过
-- Vite 构建通过
-- 仅有 chunk 大小提示，不影响本次功能
+结果：TypeScript 编译和 Vite 构建均通过；仅有既有 chunk 大小提示。

@@ -10,12 +10,14 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { BalanceService } from './balance.service';
-import { AuthGuard } from '../auth/auth.guard';
-import type { RequestWithUser } from '../auth/auth.guard';
+import {
+  UserOrAdminGuard,
+  type RequestWithUserOrAdmin,
+} from '../auth/user-or-admin.guard';
 import { AdminGuard } from '../admin/admin.guard';
 
 @Controller('api/v1/balance')
-@UseGuards(AuthGuard)
+@UseGuards(UserOrAdminGuard)
 export class BalanceController {
   constructor(private readonly balanceService: BalanceService) {}
 
@@ -23,7 +25,7 @@ export class BalanceController {
    * 获取我的余额
    */
   @Get('my')
-  async getMyBalance(@Req() req: RequestWithUser) {
+  async getMyBalance(@Req() req: RequestWithUserOrAdmin) {
     const userId = req.user?.id;
     if (!userId) {
       throw new BadRequestException('User not authenticated');
@@ -47,7 +49,7 @@ export class BalanceController {
    */
   @Get('records')
   async getBalanceRecords(
-    @Req() req: RequestWithUser,
+    @Req() req: RequestWithUserOrAdmin,
     @Query('limit') limit?: string,
   ) {
     const userId = req.user?.id;
@@ -71,7 +73,7 @@ export class BalanceController {
    */
   @Post('withdrawals')
   async requestWithdrawal(
-    @Req() req: RequestWithUser,
+    @Req() req: RequestWithUserOrAdmin,
     @Body()
     body: {
       amountCny: number;
@@ -113,7 +115,7 @@ export class BalanceController {
    * 获取我的提现记录
    */
   @Get('withdrawals')
-  async getMyWithdrawals(@Req() req: RequestWithUser) {
+  async getMyWithdrawals(@Req() req: RequestWithUserOrAdmin) {
     const userId = req.user?.id;
     if (!userId) {
       throw new BadRequestException('User not authenticated');
@@ -150,14 +152,14 @@ export class BalanceController {
   @UseGuards(AdminGuard)
   async reviewWithdrawal(
     @Param('id') withdrawalId: string,
-    @Req() req: RequestWithUser,
+    @Req() req: RequestWithUserOrAdmin,
     @Body()
     body: {
       approved: boolean;
       notes?: string;
     },
   ) {
-    const adminId = req.user?.id;
+    const adminId = req.admin?.id;
     if (!adminId) {
       throw new BadRequestException('Admin not authenticated');
     }

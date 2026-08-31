@@ -1,22 +1,51 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { UserPlus, Loader2, Eye, EyeOff, CheckCircle } from 'lucide-react';
-import { registerUser } from '../services/auth.service';
+import { registerUser, sendSmsCode } from '../services/auth.service';
 
 export default function Register() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const [debugCodeEnabled, setDebugCodeEnabled] = useState(import.meta.env.DEV);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   
   const navigate = useNavigate();
 
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = window.setTimeout(() => setCountdown((value) => value - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [countdown]);
+
   const validatePhone = (phone: string) => {
     return /^1[3-9]\d{9}$/.test(phone);
+  };
+
+  const handleSendCode = async () => {
+    setError('');
+    if (!validatePhone(phone)) {
+      setError('请输入正确的手机号');
+      return;
+    }
+
+    setSendingCode(true);
+    try {
+      const result = await sendSmsCode(phone, 'register');
+      setCountdown(result.retryAfterSeconds);
+      setDebugCodeEnabled(result.debugCodeEnabled);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : '验证码发送失败，请稍后重试');
+    } finally {
+      setSendingCode(false);
+    }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -24,7 +53,7 @@ export default function Register() {
     setError('');
 
     // 验证输入
-    if (!phone || !password || !confirmPassword) {
+    if (!phone || !password || !confirmPassword || !verificationCode) {
       setError('请填写所有必填项');
       return;
     }
@@ -44,10 +73,15 @@ export default function Register() {
       return;
     }
 
+    if (!/^\d{6}$/.test(verificationCode)) {
+      setError('请输入6位短信验证码');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      await registerUser(phone, password, displayName || undefined);
+      await registerUser(phone, password, verificationCode, displayName || undefined);
 
       setSuccess(true);
       
@@ -104,6 +138,37 @@ export default function Register() {
               autoComplete="off"
               className="input-cs"
             />
+          </div>
+
+          <div>
+            <label className="label-cs">
+              短信验证码 <span className="text-[var(--state-error)]">*</span>
+            </label>
+            <div className="flex gap-3">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={verificationCode}
+                onChange={e => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="请输入6位验证码"
+                maxLength={6}
+                autoComplete="one-time-code"
+                className="input-cs min-w-0 flex-1"
+              />
+              <button
+                type="button"
+                onClick={handleSendCode}
+                disabled={sendingCode || countdown > 0}
+                className="btn-cs btn-secondary shrink-0 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {sendingCode ? <Loader2 className="h-4 w-4 animate-spin" /> : countdown > 0 ? `${countdown}s` : '获取验证码'}
+              </button>
+            </div>
+            {debugCodeEnabled && (
+              <p className="mt-2 text-xs text-[var(--text-400)]">
+                调试模式可直接使用验证码 121212
+              </p>
+            )}
           </div>
 
           <div>
