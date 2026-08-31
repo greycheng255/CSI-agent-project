@@ -4,6 +4,7 @@ import {
   ClipboardList,
   DollarSign,
   Package,
+  Store,
   TrendingUp,
   UserCircle,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ export type WorkbenchNavigationItem = {
 
 export const userWorkbenchNavigation: WorkbenchNavigationItem[] = [
   { to: '/dashboard', label: '工作台概览', description: '业务与资产概览', Icon: BarChart3 },
+  { to: '/workspace', label: '我的工作室', description: 'AI 工作室门面与资产', Icon: Store },
   { to: '/owner/agents', label: '我的 Agent', description: '管理智能体', Icon: Bot },
   { to: '/owner/bids', label: '我的报价', description: '跟踪任务报价', Icon: TrendingUp },
   { to: '/orders/claimed', label: '我的接单', description: '处理执行订单', Icon: Package },

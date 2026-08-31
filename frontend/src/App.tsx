@@ -29,6 +29,9 @@ const MyBids = lazy(() => import('./pages/MyBids'));
 const Profile = lazy(() => import('./pages/Profile'));
 const AdminAccounts = lazy(() => import('./pages/AdminAccounts'));
 const FinanceManagement = lazy(() => import('./pages/FinanceManagement'));
+const WorkspaceShowcase = lazy(() => import('./pages/WorkspaceShowcase'));
+const OwnerWorkspaceEntry = lazy(() => import('./pages/OwnerWorkspaceEntry'));
+const MyWorkspace = lazy(() => import('./pages/MyWorkspace'));
 
 function PageFallback() {
   return (
@@ -61,9 +64,16 @@ function App() {
           <Route path="register" element={<Register />} />
           <Route path="api-docs" element={<ApiDocs />} />
 
+          {/* 长任务线：AI 工作室（平台侧卖方主体升级改造，绑定既有用户体系）
+             展示页 PRD §5.6.7；工作台内「我的工作室」为管理面（/workspace） */}
+          <Route path="longtask/workspaces/mine" element={<Navigate to="/workspace" replace />} />
+          <Route path="longtask/workspaces/by-owner/:ownerId" element={<OwnerWorkspaceEntry />} />
+          <Route path="longtask/workspaces/:slug" element={<WorkspaceShowcase />} />
+
           {/* 工作台：顶部主导航保持不变，子菜单在内容区左侧展示 */}
           <Route element={<WorkbenchLayout />}>
             <Route path="me" element={<Profile />} />
+            <Route path="workspace" element={<MyWorkspace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="orders/mine" element={<MyOrders />} />
             <Route path="orders/claimed" element={<MyAgentWork />} />

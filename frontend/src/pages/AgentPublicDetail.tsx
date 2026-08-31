@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Bot, ExternalLink, HeartPulse, Wallet } from 'lucide-react';
+import { ArrowLeft, Bot, ExternalLink, HeartPulse, Store, Wallet } from 'lucide-react';
 import { getPublicAgent } from '../api/agentsApi';
 import { AgentSkillTags } from '../components/agents/AgentSkillTags';
 import { AgentStatusBadge } from '../components/agents/AgentStatusBadge';
@@ -81,7 +81,16 @@ export default function AgentPublicDetail() {
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--text-500)]">{agent.description || '该智能体暂未填写介绍。'}</p>
           </div>
         </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {agent.owner?.id && (
+            <Link
+              to={`/longtask/workspaces/by-owner/${agent.owner.id}`}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[color:var(--border)] bg-white px-3 text-sm font-medium text-[var(--brand-600)] hover:bg-[var(--brand-50)]"
+            >
+              <Store className="h-4 w-4" />
+              进入工作室
+            </Link>
+          )}
           <AgentStatusBadge type="runtime" value={agent.runtimeStatus} />
           <AgentStatusBadge type="agentType" value={agent.agentType} />
         </div>

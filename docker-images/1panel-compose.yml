@@ -1,6 +1,6 @@
 services:
   genesis-backend:
-    image: genesis-backend:20260709-180628
+    image: genesis-backend:20260802-132739
     container_name: genesis-backend
     restart: always
     ports:
@@ -31,7 +31,7 @@ services:
       - genesis-net
 
   genesis-frontend:
-    image: genesis-frontend:20260709-180628
+    image: genesis-frontend:20260802-132739
     container_name: genesis-frontend
     restart: always
     ports:

@@ -1,5 +1,5 @@
-# Build time: 2026-07-09 18:07:20
-# Image archive: genesis-all_20260709-180628.tar
+# Build time: 2026-08-02 13:27:39
+# Image archive: genesis-all_20260802-132739.tar
 services:
   postgres:
     image: postgres:15-alpine
@@ -38,7 +38,7 @@ services:
       retries: 5
 
   genesis-backend:
-    image: genesis-backend:${TAG:-20260709-180628}
+    image: genesis-backend:${TAG:-20260802-132739}
     container_name: genesis-backend
     build:
       context: ../backend
@@ -78,7 +78,7 @@ services:
       - genesis-net
 
   genesis-frontend:
-    image: genesis-frontend:${TAG:-20260709-180628}
+    image: genesis-frontend:${TAG:-20260802-132739}
     container_name: genesis-frontend
     build:
       context: ../frontend
