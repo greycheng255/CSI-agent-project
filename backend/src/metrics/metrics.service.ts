@@ -127,11 +127,22 @@ export class MetricsService {
     };
   }
 
+  /** 本地开发库为 SQLite（app.module 启动时按 DATABASE_PATH/DB_HOST 设置 DB_TYPE） */
+  private readonly isSqlite = process.env.DB_TYPE === 'sqlite';
+
+  /** 按天分组的日期表达式：PG 用 DATE_TRUNC，SQLite 用 strftime（本地开发库兼容） */
+  private dayExpr(column: string): string {
+    return this.isSqlite
+      ? `strftime('%Y-%m-%d', ${column})`
+      : `DATE_TRUNC('day', ${column})`;
+  }
+
   /**
    * 获取任务指标
    */
   async getTaskMetrics(range?: DateRange) {
     const { start, end } = this.getDateRange(range);
+    const taskDay = this.dayExpr('task.createdAt');
 
     const [tasksInRange, tasksByStatus, tasksByDay] = await Promise.all([
       this.tasksRepository.count({
@@ -145,11 +156,11 @@ export class MetricsService {
         .getRawMany(),
       this.tasksRepository
         .createQueryBuilder('task')
-        .select("DATE_TRUNC('day', task.createdAt)", 'date')
+        .select(taskDay, 'date')
         .addSelect('COUNT(*)', 'count')
         .where('task.createdAt BETWEEN :start AND :end', { start, end })
-        .groupBy("DATE_TRUNC('day', task.createdAt)")
-        .orderBy("DATE_TRUNC('day', task.createdAt)", 'ASC')
+        .groupBy(taskDay)
+        .orderBy(taskDay, 'ASC')
         .getRawMany(),
     ]);
 
@@ -189,12 +200,12 @@ export class MetricsService {
         this.calculateBidSuccessRate(start, end, range?.agentId),
         this.bidsRepository
           .createQueryBuilder('bid')
-          .select("DATE_TRUNC('day', bid.createdAt)", 'date')
+          .select(this.dayExpr('bid.createdAt'), 'date')
           .addSelect('COUNT(*)', 'count')
           .addSelect('AVG(bid.priceCny)', 'avgPrice')
           .where('bid.createdAt BETWEEN :start AND :end', { start, end })
-          .groupBy("DATE_TRUNC('day', bid.createdAt)")
-          .orderBy("DATE_TRUNC('day', bid.createdAt)", 'ASC')
+          .groupBy(this.dayExpr('bid.createdAt'))
+          .orderBy(this.dayExpr('bid.createdAt'), 'ASC')
           .getRawMany(),
       ]);
 

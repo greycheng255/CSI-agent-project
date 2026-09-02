@@ -4,6 +4,7 @@ import { LessThanOrEqual, Repository } from 'typeorm';
 import {
   MarketplaceDispute,
   DisputeResolution,
+  ZERO_SETTLEMENT_RESOLUTIONS,
 } from './dispute.entity';
 import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
 import {
@@ -53,10 +54,11 @@ export class DisputesService {
 
   /** C→M #40：Agent Owner 提交举证 */
   async submitEvidence(
+    orderId: string,
     disputeId: string,
     evidence: Record<string, unknown>,
   ): Promise<MarketplaceDispute> {
-    const dispute = await this.getOrThrow(disputeId);
+    const dispute = await this.getOrThrow(orderId, disputeId);
     if (dispute.status !== 'evidence_open' && dispute.status !== 'arbitrating') {
       throw new ContractError(
         422,
@@ -70,7 +72,7 @@ export class DisputesService {
 
   /** 平台受理 → 启动仲裁（≤7 天），M→C #41 投递 arbitration-started */
   async startArbitration(disputeId: string): Promise<MarketplaceDispute> {
-    const dispute = await this.getOrThrow(disputeId);
+    const dispute = await this.getOrThrowById(disputeId);
     if (dispute.status !== 'evidence_open') {
       throw new ContractError(
         422,
@@ -93,18 +95,28 @@ export class DisputesService {
     return saved;
   }
 
-  /** 仲裁结果（4 选项），M→C #42 投递 arbitration-result */
+  /** 仲裁结果（六值，TS §12.2），M→C #42 投递 arbitration-result */
   async resolve(
     disputeId: string,
     resolution: DisputeResolution,
     amountCny?: number | null,
   ): Promise<MarketplaceDispute> {
-    const dispute = await this.getOrThrow(disputeId);
+    const dispute = await this.getOrThrowById(disputeId);
     if (dispute.status !== 'arbitrating') {
       throw new ContractError(
         422,
         CONTRACT_ERROR_CODE.STATE_INVALID_TRANSITION,
         `dispute cannot be resolved (status=${dispute.status})`,
+      );
+    }
+    if (
+      ZERO_SETTLEMENT_RESOLUTIONS.includes(resolution) &&
+      (amountCny ?? null) !== null
+    ) {
+      throw new ContractError(
+        400,
+        CONTRACT_ERROR_CODE.VALIDATION_INVALID_PAYLOAD,
+        `resolution=${resolution} is a zero-settlement outcome (amount_cny must be null)`,
       );
     }
     dispute.status = 'resolved';
@@ -118,6 +130,7 @@ export class DisputesService {
         event_type: 'dispute.arbitration_result',
         dispute_id: disputeId,
         order_id: dispute.orderId,
+        outcome: resolution,
         resolution,
         amount_cny: amountCny ?? null,
       },
@@ -126,8 +139,11 @@ export class DisputesService {
   }
 
   /** C→M #43：Agent Owner 确认仲裁结果（终态；未获确认不得清重试上下文） */
-  async acknowledge(disputeId: string): Promise<MarketplaceDispute> {
-    const dispute = await this.getOrThrow(disputeId);
+  async acknowledge(
+    orderId: string,
+    disputeId: string,
+  ): Promise<MarketplaceDispute> {
+    const dispute = await this.getOrThrow(orderId, disputeId);
     if (dispute.status !== 'resolved') {
       throw new ContractError(
         422,
@@ -153,7 +169,22 @@ export class DisputesService {
     return due.length;
   }
 
-  private async getOrThrow(disputeId: string): Promise<MarketplaceDispute> {
+  private async getOrThrow(
+    orderId: string,
+    disputeId: string,
+  ): Promise<MarketplaceDispute> {
+    const dispute = await this.getOrThrowById(disputeId);
+    if (dispute.orderId !== orderId) {
+      throw new ContractError(
+        404,
+        CONTRACT_ERROR_CODE.NOT_FOUND_ORDER,
+        `dispute not found in order ${orderId}: ${disputeId}`,
+      );
+    }
+    return dispute;
+  }
+
+  private async getOrThrowById(disputeId: string): Promise<MarketplaceDispute> {
     const dispute = await this.disputeRepo.findOne({
       where: { id: disputeId },
     });

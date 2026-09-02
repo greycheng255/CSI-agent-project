@@ -1,5 +1,3 @@
-export const API_BASE = '';
-
 export const normalizeBaseUrl = (value: string | undefined) => {
   const normalized = value?.trim().replace(/\/+$/, '');
   return normalized || '';
@@ -9,6 +7,9 @@ const readEnv = (name: string) => {
   const value = import.meta.env[name];
   return typeof value === 'string' ? value.trim() : '';
 };
+
+/** API 基址：VITE_API_BASE 设置时直连该后端（如 http://122.51.51.177:30080），否则空串走 vite 代理 */
+export const API_BASE = normalizeBaseUrl(readEnv('VITE_API_BASE'));
 
 const normalizeAuthorization = (
   authorization: string,

@@ -12,6 +12,7 @@ import {
   ContractError,
 } from '../contract/errors';
 import { CONSOLE_WEBHOOK, consoleWebhookUrl } from '../contract/console-endpoints';
+import { computeSpecHash } from '../contract/spec-hash';
 
 const SPEC_CONFIRM_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // §3.2.6：Spec 7 天雇主未确认归 Marketplace
 const SPEC_REJECTION_LIMIT = 5; // §3.2.6：驳回 5 次触发协商取消
@@ -31,7 +32,9 @@ export interface SubmitSpecInput {
  * - C→M：收 employer-mentions / spec 提交（校验里程碑权重和=100%，启动 7 天计时）
  * - M→C：投递 employer-reply / spec.employer-action（confirmed/rejected/timeout）
  * - 7 天超时：发 spec.timeout → 订单取消 + 任务重开（bid_round+1、席位清零）
- * - spec_hash 只记录不重算（对接指南 §6 陷阱 16，口径待裁决，见执行方案 §7-2）
+ * - spec_hash：Console 显式提交时只记录不重算（对接指南 §6 陷阱 16）；
+ *   未提供时按平台默认口径补算（canonical JSON + SHA-256，见 contract/spec-hash.ts，
+ *   执行方案 §7-2 未决项 #1 处置）
  */
 @Injectable()
 export class SpecContractService {
@@ -68,7 +71,7 @@ export class SpecContractService {
     }
 
     order.specSnapshot = { content: input.specContent ?? null };
-    order.specHash = input.specHash ?? null; // 仅记录，不重算原始字节摘要
+    order.specHash = input.specHash ?? computeSpecHash(input.specContent ?? null);
     order.specVersion = 1;
     order.milestones = input.milestones ?? null;
     order.contractStatus = 'awaiting_confirmation';

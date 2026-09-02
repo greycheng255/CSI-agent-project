@@ -71,10 +71,10 @@
 
 | # | 项 | 影响 | 处置 |
 |---|---|---|---|
-| 1 | `spec_hash` 计算口径（canonical JSON vs 原始字节） | 场景四联调 | 与 Console 二选一写入契约 |
+| 1 | `spec_hash` 计算口径（canonical JSON vs 原始字节） | 场景四联调 | ✅ 平台侧默认口径已落码（2026-08-31，`contract/spec-hash.ts`：canonical JSON 键排序 + SHA-256，与 Console DB-canonical-JSONB 口径一致）；联调双方确认后写入契约正文 |
 | 2 | `workspace_id` 同步方式 | 阶段一~二数据面 | 与 Console 确认展示信息同步口径 |
 | 3 | 结算支付版块协议（结算单字段/回写） | 阶段五 | 与关联方对协议 |
-| 4 | cancel-requests/spec-changes 等路径确认 | 场景七/八联调 | 以 `employer-integration-api.md` 实际路径为准 |
+| 4 | cancel-requests/spec-changes 等路径确认 | 场景七/八联调 | ✅ 已对齐 `employer-integration-api.md` §2.2（2026-08-31）：场景六/七/八/九/十端点全部嵌套 `orders/{order_id}/` 路径，服务层补 order 归属校验（404），参数校验统一 400 `VALIDATION_INVALID_PAYLOAD` |
 | 5 | 状态枚举英文符号对齐 | 全局 | 与 Console 对齐一次写入契约 |
 | 6 | T14 Workspace 展示页前端 | 雇主信任面 | ✅ 已补全并通过 E2E（页面/API/落库链路验证） |
 

@@ -3,6 +3,7 @@ import { resolve } from 'path';
 
 const envPaths = [
   resolve(process.cwd(), '.env'),
+  resolve(process.cwd(), '../.env'),
   resolve(process.cwd(), '../frontend/.env'),
   resolve(process.cwd(), 'frontend/.env'),
 ];
@@ -54,6 +55,21 @@ import { MCPIntegrationsModule } from './mcp-integrations/mcp-integrations.modul
 import { MetricsModule } from './metrics/metrics.module';
 import { MCPModule } from './mcp/mcp.module';
 import { LongtaskModule } from './longtask/longtask.module';
+import { EntitlementModule } from './entitlement/entitlement.module';
+import { GatewayModule } from './gateway/gateway.module';
+import { LlmProxyModule } from './llm-proxy/llm-proxy.module';
+import {
+  EntitlementCreditHold,
+  EntitlementFreeGrant,
+  EntitlementPaymentOrder,
+  EntitlementQuotaPeriod,
+  EntitlementUsageRecord,
+  OrgSubscription,
+} from './entitlement/entitlement-entities';
+import {
+  EntitlementPlan,
+  EntitlementPlanModel,
+} from './entitlement/entitlement-plan.entity';
 import { Workspace } from './longtask/workspaces/workspace.entity';
 import { MarketplaceTask } from './longtask/marketplace-tasks/marketplace-task.entity';
 import { OpportunityDispatch } from './longtask/marketplace-tasks/opportunity-dispatch.entity';
@@ -68,6 +84,8 @@ import { MarketplaceDispute } from './longtask/disputes/dispute.entity';
 import { WebhookOutbox } from './longtask/contract/webhook-outbox.entity';
 import { WebhookInboundEvent } from './longtask/contract/webhook-inbound.entity';
 import { User } from './users/entities/user.entity';
+import { HmacNonce } from './longtask/contract/hmac-nonce.entity';
+import { UserLlmConfig } from './entitlement/user-llm-config.entity';
 import { Agent } from './agents/entities/agent.entity';
 import { Task } from './tasks/entities/task.entity';
 import { Bid } from './bids/entities/bid.entity';
@@ -156,6 +174,8 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
           }),
       entities: [
         User,
+        HmacNonce,
+        UserLlmConfig,
         Agent,
         Task,
         Bid,
@@ -212,6 +232,15 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
         MarketplaceDispute,
         WebhookOutbox,
         WebhookInboundEvent,
+        // AI 网关订阅权益计费（DR-12）
+        EntitlementPlan,
+        EntitlementPlanModel,
+        OrgSubscription,
+        EntitlementQuotaPeriod,
+        EntitlementFreeGrant,
+        EntitlementCreditHold,
+        EntitlementUsageRecord,
+        EntitlementPaymentOrder,
       ],
       synchronize: process.env.DB_SYNC === 'true',
     }),
@@ -233,6 +262,9 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
     MCPIntegrationsModule,
     MetricsModule, // 业务指标模块
     LongtaskModule, // 长任务域（阶段一：底座）
+    EntitlementModule, // AI 网关订阅权益计费（DR-12）
+    GatewayModule, // 网关 workspace key 签发/轮换/吊销（K1-K4）
+    LlmProxyModule, // AI 网关直连代理（BYOK 按用户配置转发并计量）
   ],
   controllers: [AppController],
   providers: [AppService, DatabaseWarmupService],

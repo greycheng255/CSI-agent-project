@@ -54,10 +54,11 @@ export class CancelSkeletonService {
 
   /** C→M #25：Owner 响应（T19b：counter_proposal 已放开，M5 完整链路） */
   async respond(
+    orderId: string,
     requestId: string,
     response: 'accept' | 'reject' | 'counter_proposal',
   ): Promise<MarketplaceCancelRequest> {
-    const request = await this.getOrThrow(requestId);
+    const request = await this.getOrThrow(orderId, requestId);
     if (response === 'counter_proposal') {
       request.ownerResponse = response;
       request.status = 'counter_proposed';
@@ -82,10 +83,11 @@ export class CancelSkeletonService {
 
   /** C→M #26：Console 3 天超时自动处理结果（执行中→同意取消+部分结算；待验收→拒绝） */
   async autoResolve(
+    orderId: string,
     requestId: string,
     outcome: 'accept_partial_settlement' | 'reject_cancel',
   ): Promise<MarketplaceCancelRequest> {
-    const request = await this.getOrThrow(requestId);
+    const request = await this.getOrThrow(orderId, requestId);
     request.ownerResponse = outcome;
     request.status =
       outcome === 'accept_partial_settlement' ? 'accepted' : 'rejected';
@@ -94,8 +96,11 @@ export class CancelSkeletonService {
   }
 
   /** C→M #28：最终确认取消结算 → 投递 cancel-resolution(auto_settled) */
-  async finalize(requestId: string): Promise<MarketplaceCancelRequest> {
-    const request = await this.getOrThrow(requestId);
+  async finalize(
+    orderId: string,
+    requestId: string,
+  ): Promise<MarketplaceCancelRequest> {
+    const request = await this.getOrThrow(orderId, requestId);
     request.status = 'finalized';
     request.resolution = 'auto_settled';
     const saved = await this.repo.save(request);
@@ -113,8 +118,11 @@ export class CancelSkeletonService {
   }
 
   /** C→M #30：转纠纷（无可结算里程碑）→ 投递 cancel-resolution(to_dispute) */
-  async toDispute(requestId: string): Promise<MarketplaceCancelRequest> {
-    const request = await this.getOrThrow(requestId);
+  async toDispute(
+    orderId: string,
+    requestId: string,
+  ): Promise<MarketplaceCancelRequest> {
+    const request = await this.getOrThrow(orderId, requestId);
     request.status = 'to_dispute';
     request.resolution = 'to_dispute';
     const saved = await this.repo.save(request);
@@ -132,14 +140,15 @@ export class CancelSkeletonService {
   }
 
   private async getOrThrow(
+    orderId: string,
     requestId: string,
   ): Promise<MarketplaceCancelRequest> {
     const request = await this.repo.findOne({ where: { id: requestId } });
-    if (!request) {
+    if (!request || request.orderId !== orderId) {
       throw new ContractError(
         404,
         CONTRACT_ERROR_CODE.NOT_FOUND_ORDER,
-        `cancel request not found: ${requestId}`,
+        `cancel request not found in order ${orderId}: ${requestId}`,
       );
     }
     return request;

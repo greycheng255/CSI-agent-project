@@ -1,0 +1,516 @@
+{
+  "version": "1.1",
+  "generated_at": "2026-08-23",
+  "source": "docs/design/CSI-Agent-Owner-Console-Technical-Solution.md",
+  "description": "CSI 状态转移边机器可测试注册表。Task/Project 边源自 §8.3 转移边 hook 映射表，Agent Run/Routine Run 边源自附录 A.3。附录 A.2 与 §8.3 Task 边集完全一致；§9.3.1 Dispatcher 流转边（3 条）是 §8.3 的子集。M3-D1 重生成口径（parent prd R2.8/R2.6）：project.states=16 值（含 manual_handling）；project 边集 33 条 = §8.3 展开边 27 + 补缺口边 6（G1 spec_nego→cancelling / G2 paused_exception→manual_handling / G3 dispute_in_progress→closed / G6 cancelling→dispute_in_progress / G7 manual_handling→executing / G8 manual_handling→closed）；Task 边集补 running→failed（timed_out→failed→Harness Loop 重试链语义自洽）。M4-D6b 追加 queued→failed（task_configuration_blockers 48h 再超时，协调者 2026-08-26 裁决，仿 running→failed 先例；Task 边集 16 条）。Project 转移边在 transition_records 以 entity_type=project 记录（migration 999380），与 Task 边（entity_type=task）共用同一审计表。",
+  "state_machines": {
+    "task": {
+      "entity_type": "task",
+      "states": ["planning", "queued", "ready", "dispatched", "running", "in_review", "done", "blocked", "reopened", "failed", "skipped"],
+      "terminal_states": ["done", "skipped"],
+      "edges": [
+        {
+          "from": "planning",
+          "to": "queued",
+          "trigger": "提交 plan / 通过审批",
+          "guard": "DAG 无环、依赖存在、Agent/Runtime 存在、stage 合法、context token 预估校验（6000 预警 / 9000 硬上限，Routine 场景仅硬上限）",
+          "gate": "executionPolicy 生效校验",
+          "side": "层 1 契约门 approvalStage 平台注入（契约面 task_type，Orchestrator 不可省略；已有声明合并不重复）"
+        },
+        {
+          "from": "queued",
+          "to": "ready",
+          "trigger": "系统 dispatch（Pre-dispatch 静态校验通过）",
+          "guard": "Pre-dispatch 静态校验：Spec 引用有效、Spec 版本有效、上游产出可访问、required_skills 模板存在、Plan version 有效、Workspace 存在、ExecutionPolicy 配置有效",
+          "gate": "—",
+          "side": "无（失败 → substate=configuration_incomplete，建 task_configuration_blockers 记录，通知 Plan Owner + Agent Owner，24h 超时升级）"
+        },
+        {
+          "from": "ready",
+          "to": "dispatched",
+          "trigger": "系统 dispatch（Pre-dispatch 动态校验通过）",
+          "guard": "Pre-dispatch 动态校验：Runtime 在线、Runtime 健康、Skills 绑定、MCP 工具白名单、预算余额、Workspace 配额、Agent 状态、Spec 片段可读",
+          "gate": "—",
+          "side": "无（失败 → 拒绝 checkout 返回 409，Task 状态不变，Agent 可重试）"
+        },
+        {
+          "from": "dispatched",
+          "to": "running",
+          "trigger": "Agent Atomic Checkout 认领",
+          "guard": "session 绑定校验（actor 必须是对应 executor）+ max_concurrent_check（额度，Atomic Checkout SQL 同事务）",
+          "gate": "—",
+          "side": "claim 日志"
+        },
+        {
+          "from": "running",
+          "to": "in_review",
+          "trigger": "submit_for_review",
+          "guard": "Floor1: Comment Required / 输出 schema / deliverables 存在非空",
+          "gate": "ExecutionPolicy reviewStage",
+          "side": "建 Floor2 单 / 通知 Reviewer + orchestrator_wake（三源唤醒注入）"
+        },
+        {
+          "from": "in_review",
+          "to": "running",
+          "trigger": "request_changes / submit_review_result(fail)",
+          "guard": "currentParticipant 校验、comment 长度阈值",
+          "gate": "—",
+          "side": "通知 Executor、决策审计（task_execution_decisions 落行，stage_type 取决策阶段 kind） + orchestrator_wake（三源唤醒注入）"
+        },
+        {
+          "from": "in_review",
+          "to": "done",
+          "trigger": "approve / submit_review_result(pass)",
+          "guard": "approvalStage currentParticipant 校验",
+          "gate": "approvalStage + Floor3_Gates(里程碑)；milestone Task 拒绝直达 done（D4 接缝：须先 gate_running 交接）",
+          "side": "决策审计（task_execution_decisions 落行 + Layer B quick-reject 检测）、Executor 质量档案统计、deps_unlock、commentRequired 校验、通知下游 + orchestrator_wake（三源唤醒注入） + goal_mode_threshold（Goal Mode 阈值检查）"
+        },
+        {
+          "from": "done",
+          "to": "reopened",
+          "trigger": "reopen_task",
+          "guard": "方向合理性 diff 二次校验",
+          "gate": "—",
+          "side": "reopen_backlock（持有依赖的 done 下游→blocked） + orchestrator_wake（三源唤醒注入）"
+        },
+        {
+          "from": "reopened",
+          "to": "running",
+          "trigger": "Agent 重新 claim 修复",
+          "guard": "session 绑定校验 + max_concurrent_check（同 Atomic Checkout 口径）",
+          "gate": "—",
+          "side": "claim 日志"
+        },
+        {
+          "from": "any",
+          "to": "blocked",
+          "trigger": "escalate_to_human / dep block",
+          "guard": "校验确实阻塞",
+          "gate": "—",
+          "side": "Owner 通知 + orchestrator_wake（三源唤醒注入）"
+        },
+        {
+          "from": "blocked",
+          "to": "queued",
+          "trigger": "依赖满足 / Owner 解除（系统或 Console）",
+          "guard": "—",
+          "gate": "—",
+          "side": "清理相位残留 substate（in-tx side）+ 重新触发 dispatch"
+        },
+        {
+          "from": "dispatched",
+          "to": "failed",
+          "trigger": "不可恢复崩溃",
+          "guard": "—",
+          "gate": "—",
+          "side": "Owner 告警 / 审计 + orchestrator_wake（三源唤醒注入）"
+        },
+        {
+          "from": "failed",
+          "to": "dispatched",
+          "trigger": "grace period 到期自动回退（系统定时器，非 MCP）",
+          "guard": "—",
+          "gate": "—",
+          "side": "重新开放 claim"
+        },
+        {
+          "from": "running",
+          "to": "failed",
+          "trigger": "执行超时：deadline_scanner 扫 execution_deadline_at（触发源 M4 交付）",
+          "guard": "执行超时校验",
+          "gate": "—",
+          "side": "Harness Loop 重试链（§10.8）：复用 failed→dispatched grace 回退复跑；M2 权宜（issue 保持 running、agent_runs 翻 timed_out 为平台信号）由本边注册解除（M3-D1）"
+        },
+        {
+          "from": "queued",
+          "to": "failed",
+          "trigger": "配置阻塞 48h 再超时：deadline_scanner 扫 task_configuration_blockers（M4-D6b）",
+          "guard": "blocker 超时证据校验",
+          "gate": "—",
+          "side": "Harness 重试链：复用 failed→dispatched grace 回退复跑（同 running→failed 声明，M2-C3 sweeper 已承载定时器）"
+        },
+        {
+          "from": "any 非终态",
+          "to": "skipped",
+          "trigger": "Owner Console 显式跳过（非 MCP）",
+          "guard": "—",
+          "gate": "—",
+          "side": "回锁（下游依赖若已 done→blocked）/ 通知"
+        }
+      ]
+    },
+    "project": {
+      "entity_type": "project",
+      "states": ["spec_nego", "planning", "plan_review", "executing", "in_accept", "revising", "revision_negotiation", "budget_paused", "paused_exception", "manual_handling", "cancelling", "dispute_in_progress", "completed_pending_appeal", "completed_final", "cancelled", "closed"],
+      "terminal_states": ["completed_final", "cancelled", "closed"],
+      "edges": [
+        {
+          "from": "spec_nego",
+          "to": "planning",
+          "trigger": "雇主确认 Spec / Spec 自动确认",
+          "guard": "spec_snapshot 已写入、Opportunity 状态=中标",
+          "gate": "—",
+          "side": "自动创建 Plan 生成 Task（task_type=spec_generation→architecture_design；assignee=Orchestrator Agent），写 projects.spec_confirmed_at"
+        },
+        {
+          "from": "planning",
+          "to": "plan_review",
+          "trigger": "Orchestrator 调 submit_plan MCP 工具",
+          "guard": "Plan DAG 校验通过、context token 预估校验通过（§8.3 Task 边同 Guard）",
+          "gate": "SOP §10.2 Plan 审批门（层 2）",
+          "side": "通知 Plan Reviewer（默认 Agent Owner，由 SOP 配置）"
+        },
+        {
+          "from": "plan_review",
+          "to": "planning",
+          "trigger": "Plan 审批 reject",
+          "guard": "comment 必填、reject reason 记录",
+          "gate": "—",
+          "side": "通知 Orchestrator；保留原 Plan 草稿版本号；允许 Orchestrator 重新 submit_plan"
+        },
+        {
+          "from": "plan_review",
+          "to": "executing",
+          "trigger": "Plan 审批 approve",
+          "guard": "approvalStage 通过",
+          "gate": "SOP 审批门",
+          "side": "解锁首批 Task 进 queued；写 projects.plan_approved_at"
+        },
+        {
+          "from": "executing",
+          "to": "in_accept",
+          "trigger": "Agent 调 submit_deliverables",
+          "guard": "G1-G6 全部通过、交付物已发布",
+          "gate": "—",
+          "side": "写 delivered_at=now() / auto_accept_after=now()+14d；通知雇主（M 侧 #13 承载）+ 通知 Agent Owner（M5-A2 勘误：边 1 承担验收计时数据面落列）"
+        },
+        {
+          "from": "executing",
+          "to": "budget_paused",
+          "trigger": "预算扫描器检测 compute_cost_used ≥ 报价 × project_compute_budget_ratio",
+          "guard": "阈值校验通过",
+          "gate": "—",
+          "side": "Task 级联：所有 running/in_review Task → blocked + substate=budget_paused；写 projects.budget_paused_at=now()；发送 urgent 通知 Agent Owner；创建 budget_incidents 记录（status=active，schema 默认值，等待 Owner 三选一）"
+        },
+        {
+          "from": "budget_paused",
+          "to": "executing",
+          "trigger": "Owner 三选一决策（增预算 / 优化 Plan）",
+          "guard": "budget_incidents.resolution ∈ {budget_increased, plan_optimized}",
+          "gate": "—",
+          "side": "Task 恢复：所有 substate=budget_paused 的 blocked Task → queued；清 projects.budget_paused_at；budget_incidents.status=resolved；通知 Agent 继续执行"
+        },
+        {
+          "from": "budget_paused",
+          "to": "cancelling",
+          "trigger": "Owner 选\"放弃\"",
+          "guard": "budget_incidents.resolution=cancelled（放弃）",
+          "gate": "—",
+          "side": "走协商取消流程（§12.2 场景八 + §15.5）"
+        },
+        {
+          "from": "executing",
+          "to": "cancelling",
+          "trigger": "雇主发起协商取消",
+          "guard": "Project 状态校验",
+          "gate": "—",
+          "side": "通知 Agent Owner；启动 3 天响应 SLA（由 §10.8 deadline_scanner 承载）"
+        },
+        {
+          "from": "cancelling",
+          "to": "executing",
+          "trigger": "协商取消撤回",
+          "guard": "双方同意",
+          "gate": "—",
+          "side": "回到协商前状态"
+        },
+        {
+          "from": "cancelling",
+          "to": "in_accept",
+          "trigger": "协商取消撤回",
+          "guard": "双方同意",
+          "gate": "—",
+          "side": "回到协商前状态"
+        },
+        {
+          "from": "cancelling",
+          "to": "cancelled",
+          "trigger": "协商达成一致 / SLA 超时部分结算完成",
+          "guard": "里程碑结算完成校验",
+          "gate": "—",
+          "side": "终态"
+        },
+        {
+          "from": "in_accept",
+          "to": "completed_pending_appeal",
+          "trigger": "雇主验收通过 / 14 天自动验收",
+          "guard": "验收校验",
+          "gate": "—",
+          "side": "写 after_sale_deadline=now()+7d / completed_at（M5-A2 勘误：TS 边表原文 auto_accept_after 为边 1 笔误，auto_accept_after 在进入 in_accept 时写）"
+        },
+        {
+          "from": "in_accept",
+          "to": "revising",
+          "trigger": "雇主请求修订",
+          "guard": "revision_count <= revision_limit",
+          "gate": "—",
+          "side": "revision_count++"
+        },
+        {
+          "from": "in_accept",
+          "to": "revision_negotiation",
+          "trigger": "验收被拒/修订请求且 revision_count 超限（M5-A2 design D1 裁决注册：delivery.rejected/revision_requested 超限出口）",
+          "guard": "revision_count > revision_limit",
+          "gate": "—",
+          "side": "写 revision_negotiation_deadline=now()+2d（与 revising→revision_negotiation 同构）"
+        },
+        {
+          "from": "revising",
+          "to": "in_accept",
+          "trigger": "修订完成",
+          "guard": "G1-G6 校验",
+          "gate": "—",
+          "side": "通知雇主"
+        },
+        {
+          "from": "revising",
+          "to": "revision_negotiation",
+          "trigger": "revision_count > revision_limit",
+          "guard": "—",
+          "gate": "—",
+          "side": "写 revision_negotiation_deadline=now()+2d"
+        },
+        {
+          "from": "revision_negotiation",
+          "to": "in_accept",
+          "trigger": "雇主四选一（A 追加修订 / B 转 Spec 变更 / C 接受当前 / D 发起纠纷）/ 窗口超时默认 C",
+          "guard": "决策校验",
+          "gate": "—",
+          "side": "见 §12.2 场景六 / §15.5"
+        },
+        {
+          "from": "revision_negotiation",
+          "to": "completed_pending_appeal",
+          "trigger": "雇主四选一（A 追加修订 / B 转 Spec 变更 / C 接受当前 / D 发起纠纷）/ 窗口超时默认 C",
+          "guard": "决策校验",
+          "gate": "—",
+          "side": "见 §12.2 场景六 / §15.5"
+        },
+        {
+          "from": "revision_negotiation",
+          "to": "dispute_in_progress",
+          "trigger": "雇主四选一（A 追加修订 / B 转 Spec 变更 / C 接受当前 / D 发起纠纷）/ 窗口超时默认 C",
+          "guard": "决策校验",
+          "gate": "—",
+          "side": "见 §12.2 场景六 / §15.5"
+        },
+        {
+          "from": "revision_negotiation",
+          "to": "executing",
+          "trigger": "B 转 Spec 变更流程确认（#22 confirm，Spec version+1 后回执行）",
+          "guard": "Spec 变更确认校验（spec_change_confirmed 证据 + Spec version）",
+          "gate": "—",
+          "side": "回到执行中（PRD §7.7.3 L2426；B 选项出口——decide B 移交 A4，#22 confirm 驱动本边）"
+        },
+        {
+          "from": "completed_pending_appeal",
+          "to": "completed_final",
+          "trigger": "7 天申诉期结束 / 仲裁履约",
+          "guard": "—",
+          "gate": "—",
+          "side": "终态"
+        },
+        {
+          "from": "completed_pending_appeal",
+          "to": "dispute_in_progress",
+          "trigger": "雇主发起纠纷申诉",
+          "guard": "now() < after_sale_deadline",
+          "gate": "—",
+          "side": "进入平台仲裁（hook 已随 M5-A6 仲裁段装载）"
+        },
+        {
+          "from": "dispute_in_progress",
+          "to": "executing",
+          "trigger": "平台裁定",
+          "guard": "仲裁结果",
+          "gate": "—",
+          "side": "终态或回执行（hook 已随 M5-A6 仲裁段装载）"
+        },
+        {
+          "from": "dispute_in_progress",
+          "to": "cancelled",
+          "trigger": "平台裁定",
+          "guard": "仲裁结果",
+          "gate": "—",
+          "side": "终态或回执行（hook 已随 M5-A6 仲裁段装载）"
+        },
+        {
+          "from": "dispute_in_progress",
+          "to": "completed_final",
+          "trigger": "平台裁定",
+          "guard": "仲裁结果",
+          "gate": "—",
+          "side": "终态或回执行（hook 已随 M5-A6 仲裁段装载）"
+        },
+        {
+          "from": "executing",
+          "to": "paused_exception",
+          "trigger": "L3+ 异常升级 / Owner 手动暂停",
+          "guard": "—",
+          "gate": "—",
+          "side": "暂停 Task（同 budget_paused 级联语义）"
+        },
+        {
+          "from": "paused_exception",
+          "to": "executing",
+          "trigger": "人工处理完成 / Owner 恢复",
+          "guard": "—",
+          "gate": "—",
+          "side": "Task 恢复同 budget_paused→executing"
+        },
+        {
+          "from": "spec_nego",
+          "to": "cancelling",
+          "trigger": "签约兜底（§6.3）：澄清超限（Console 侧检测 clarification_count ≥ workspace.clarification_round_limit，默认 5）/ Spec 修订>3 轮 / 驳回≥5 次 / 签约 30 天超时（后三类由 Marketplace webhook 承接）",
+          "guard": "兜底条件计数校验（clarification_count 或修订/驳回计数超限）",
+          "gate": "—",
+          "side": "通知双方；不计入违约率（超限是协作破裂而非单方违约）"
+        },
+        {
+          "from": "cancelling",
+          "to": "dispute_in_progress",
+          "trigger": "场景八 #30 to-dispute：协商取消升级纠纷",
+          "guard": "to-dispute 事件校验",
+          "gate": "—",
+          "side": "进入平台仲裁（仲裁流程本体 M5/M6）"
+        },
+        {
+          "from": "paused_exception",
+          "to": "manual_handling",
+          "trigger": "异常升级：Owner / 平台介入人工处理",
+          "guard": "—",
+          "gate": "—",
+          "side": "通知 Agent Owner（hook 随 M4 异常处理段）"
+        },
+        {
+          "from": "manual_handling",
+          "to": "executing",
+          "trigger": "人工处理完成恢复执行",
+          "guard": "—",
+          "gate": "—",
+          "side": "Task 恢复同 paused_exception→executing 级联语义（hook 随 M4）"
+        },
+        {
+          "from": "manual_handling",
+          "to": "closed",
+          "trigger": "人工处理裁定关闭（异常无法恢复）",
+          "guard": "—",
+          "gate": "—",
+          "side": "终态（hook 随 M4）"
+        },
+        {
+          "from": "dispute_in_progress",
+          "to": "closed",
+          "trigger": "平台裁定关闭",
+          "guard": "仲裁结果",
+          "gate": "—",
+          "side": "终态（hook 已随 M5-A6 仲裁段装载）"
+        },
+        {
+          "from": "any 非终态",
+          "to": "cancelled",
+          "trigger": "Spec 超时未确认 / 协商取消 SLA 超时 / 纠纷裁定取消",
+          "guard": "终态校验",
+          "gate": "—",
+          "side": "终态"
+        }
+      ]
+    },
+    "agent_run": {
+      "entity_type": "agent_run",
+      "states": ["queued", "running", "succeeded", "failed", "timed_out", "cancelled", "coalesced"],
+      "terminal_states": ["succeeded", "failed", "timed_out", "cancelled", "coalesced"],
+      "edges": [
+        {
+          "from": "queued",
+          "to": "running",
+          "trigger": "Agent Runtime 开始执行",
+          "guard": "—",
+          "gate": "—",
+          "side": "—"
+        },
+        {
+          "from": "running",
+          "to": "succeeded",
+          "trigger": "执行完成",
+          "guard": "—",
+          "gate": "—",
+          "side": "—"
+        },
+        {
+          "from": "running",
+          "to": "failed",
+          "trigger": "执行失败",
+          "guard": "—",
+          "gate": "—",
+          "side": "—"
+        },
+        {
+          "from": "running",
+          "to": "timed_out",
+          "trigger": "执行超时",
+          "guard": "—",
+          "gate": "—",
+          "side": "—"
+        },
+        {
+          "from": "running",
+          "to": "cancelled",
+          "trigger": "取消",
+          "guard": "—",
+          "gate": "—",
+          "side": "—"
+        },
+        {
+          "from": "running",
+          "to": "coalesced",
+          "trigger": "合并到其他 run",
+          "guard": "—",
+          "gate": "—",
+          "side": "—"
+        }
+      ]
+    },
+    "routine_run": {
+      "entity_type": "routine_run",
+      "states": ["running", "completed", "failed", "cancelled"],
+      "terminal_states": ["completed", "failed", "cancelled"],
+      "edges": [
+        {
+          "from": "running",
+          "to": "completed",
+          "trigger": "Routine 执行完成",
+          "guard": "—",
+          "gate": "—",
+          "side": "—"
+        },
+        {
+          "from": "running",
+          "to": "failed",
+          "trigger": "Routine 执行失败",
+          "guard": "—",
+          "gate": "—",
+          "side": "—"
+        },
+        {
+          "from": "running",
+          "to": "cancelled",
+          "trigger": "Routine 取消",
+          "guard": "—",
+          "gate": "—",
+          "side": "—"
+        }
+      ]
+    }
+  }
+}

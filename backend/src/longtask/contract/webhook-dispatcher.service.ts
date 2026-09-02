@@ -16,9 +16,17 @@ export interface SendWebhookResult {
   status: number;
 }
 
+export interface SendWebhookMeta {
+  /** outbox event_id（uuid-v7），同时作 Idempotency-Key 头（§3.1） */
+  eventId: string;
+  /** 本次投递为第几次尝试（1 起） */
+  attempt: number;
+}
+
 export type SendWebhookFn = (
   targetUrl: string,
   payload: Record<string, unknown>,
+  meta: SendWebhookMeta,
 ) => Promise<SendWebhookResult>;
 
 export interface ProcessDueResult {
@@ -94,7 +102,10 @@ export class WebhookDispatcherService {
 
       let status: number;
       try {
-        const res = await sendFn(item.targetUrl, item.payload);
+        const res = await sendFn(item.targetUrl, item.payload, {
+          eventId: item.eventId,
+          attempt: item.attempts + 1,
+        });
         status = res.status;
       } catch {
         status = -1; // 网络错误按 5xx 语义走重试

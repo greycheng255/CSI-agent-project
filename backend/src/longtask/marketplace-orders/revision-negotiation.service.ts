@@ -58,10 +58,11 @@ export class RevisionNegotiationService {
 
   /** 4 选项决策（#16 双向） */
   async decide(
+    orderId: string,
     negotiationId: string,
     decision: NegotiationDecision,
   ): Promise<MarketplaceRevisionNegotiation> {
-    const negotiation = await this.getOrThrow(negotiationId);
+    const negotiation = await this.getOrThrow(orderId, negotiationId);
     if (negotiation.status !== 'open') {
       throw new ContractError(
         422,
@@ -129,16 +130,17 @@ export class RevisionNegotiationService {
   }
 
   private async getOrThrow(
+    orderId: string,
     negotiationId: string,
   ): Promise<MarketplaceRevisionNegotiation> {
     const negotiation = await this.negotiationRepo.findOne({
       where: { id: negotiationId },
     });
-    if (!negotiation) {
+    if (!negotiation || negotiation.orderId !== orderId) {
       throw new ContractError(
         404,
         CONTRACT_ERROR_CODE.NOT_FOUND_ORDER,
-        `negotiation not found: ${negotiationId}`,
+        `negotiation not found in order ${orderId}: ${negotiationId}`,
       );
     }
     return negotiation;

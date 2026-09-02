@@ -45,23 +45,23 @@ describe('CancelSkeletonService（T16b：场景八骨架 + counter_proposal 422�
   });
 
   it('respond accept → accepted', async () => {
-    mockRepo.findOne.mockResolvedValueOnce({ id: 'cr-1', status: 'open' });
+    mockRepo.findOne.mockResolvedValueOnce({ id: 'cr-1', orderId: 'o1', status: 'open' });
     mockRepo.save.mockImplementation((v) => v);
-    const req = await service.respond('cr-1', 'accept');
+    const req = await service.respond('o1', 'cr-1', 'accept');
     expect(req.status).toBe('accepted');
   });
 
   it('respond reject → rejected', async () => {
-    mockRepo.findOne.mockResolvedValueOnce({ id: 'cr-1', status: 'open' });
+    mockRepo.findOne.mockResolvedValueOnce({ id: 'cr-1', orderId: 'o1', status: 'open' });
     mockRepo.save.mockImplementation((v) => v);
-    const req = await service.respond('cr-1', 'reject');
+    const req = await service.respond('o1', 'cr-1', 'reject');
     expect(req.status).toBe('rejected');
   });
 
   it('respond counter_proposal：反提案受理 + 投递 cancel-counter-response（T19b 放开）', async () => {
     mockRepo.findOne.mockResolvedValue({ id: 'cr-1', orderId: 'o1', status: 'open' });
     mockRepo.save.mockImplementation((v) => v);
-    const req = await service.respond('cr-1', 'counter_proposal');
+    const req = await service.respond('o1', 'cr-1', 'counter_proposal');
     expect(req.status).toBe('counter_proposed');
     expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
       'project.cancel_counter_response',
@@ -76,24 +76,24 @@ describe('CancelSkeletonService（T16b：场景八骨架 + counter_proposal 422�
   });
 
   it('auto-resolve：执行中→同意取消部分结算', async () => {
-    mockRepo.findOne.mockResolvedValueOnce({ id: 'cr-1', status: 'open' });
+    mockRepo.findOne.mockResolvedValueOnce({ id: 'cr-1', orderId: 'o1', status: 'open' });
     mockRepo.save.mockImplementation((v) => v);
-    const req = await service.autoResolve('cr-1', 'accept_partial_settlement');
+    const req = await service.autoResolve('o1', 'cr-1', 'accept_partial_settlement');
     expect(req.status).toBe('accepted');
     expect(req.resolution).toBe('auto_resolved');
   });
 
   it('auto-resolve：待验收→拒绝取消', async () => {
-    mockRepo.findOne.mockResolvedValueOnce({ id: 'cr-1', status: 'open' });
+    mockRepo.findOne.mockResolvedValueOnce({ id: 'cr-1', orderId: 'o1', status: 'open' });
     mockRepo.save.mockImplementation((v) => v);
-    const req = await service.autoResolve('cr-1', 'reject_cancel');
+    const req = await service.autoResolve('o1', 'cr-1', 'reject_cancel');
     expect(req.status).toBe('rejected');
   });
 
   it('finalize：投递 cancel-resolution(auto_settled)', async () => {
     mockRepo.findOne.mockResolvedValueOnce({ id: 'cr-1', orderId: 'o1', status: 'accepted' });
     mockRepo.save.mockImplementation((v) => v);
-    await service.finalize('cr-1');
+    await service.finalize('o1', 'cr-1');
     expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
       'project.cancel_resolution',
       expect.stringContaining('/v1/webhooks/project/cancel-resolution'),
@@ -104,7 +104,7 @@ describe('CancelSkeletonService（T16b：场景八骨架 + counter_proposal 422�
   it('to-dispute：投递 cancel-resolution(to_dispute)', async () => {
     mockRepo.findOne.mockResolvedValueOnce({ id: 'cr-1', orderId: 'o1', status: 'open' });
     mockRepo.save.mockImplementation((v) => v);
-    await service.toDispute('cr-1');
+    await service.toDispute('o1', 'cr-1');
     expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
       'project.cancel_resolution',
       expect.any(String),
@@ -114,7 +114,14 @@ describe('CancelSkeletonService（T16b：场景八骨架 + counter_proposal 422�
 
   it('请求不存在 → 404', async () => {
     mockRepo.findOne.mockResolvedValueOnce(null);
-    await expect(service.respond('missing', 'accept')).rejects.toMatchObject({
+    await expect(service.respond('o1', 'missing', 'accept')).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it('请求不属于该订单 → 404（归属校验）', async () => {
+    mockRepo.findOne.mockResolvedValueOnce({ id: 'cr-1', orderId: 'other', status: 'open' });
+    await expect(service.respond('o1', 'cr-1', 'accept')).rejects.toMatchObject({
       status: 404,
     });
   });

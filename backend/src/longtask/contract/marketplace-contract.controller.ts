@@ -8,6 +8,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { HmacGuard } from './hmac.guard';
+import {
+  CONTRACT_ERROR_CODE,
+  ContractError,
+} from './errors';
 import { MarketplaceBidsService } from '../marketplace-bids/marketplace-bids.service';
 import { CancelSkeletonService } from '../marketplace-orders/cancel-skeleton.service';
 import { DeliveryContractService } from '../marketplace-orders/delivery-contract.service';
@@ -20,10 +24,9 @@ import { DisputesService } from '../disputes/disputes.service';
 import { SettlementsService } from '../settlements/settlements.service';
 
 /**
- * C→M 契约控制器（Console 调 Marketplace，平台提供 26 个 API 的一部分）。
- * 全部端点统一 HMAC 验签（对接指南 §3.1）。
- * 阶段二：场景一/二/三 + 对账；阶段三：场景四 + 场景八骨架；
- * 阶段四：场景五（deliverables）六（修订协商）七（Spec 变更）。
+ * C→M 契约控制器（Console 调 Marketplace）。
+ * 路径与 employer-integration-api.md §2.2 一一对应（场景六/七/八/九/十
+ * 全部嵌套在 orders/{order_id} 下）；统一 HMAC 验签 + RFC 7807 错误渲染。
  */
 @Controller('v1/marketplace')
 @UseGuards(HmacGuard)
@@ -68,7 +71,7 @@ export class MarketplaceContractController {
   ) {
     const workspaceId = body.workspace_id;
     if (typeof workspaceId !== 'string' || !workspaceId) {
-      throw new Error('workspace_id is required');
+      throw validationError('workspace_id is required');
     }
     const priceCny = Number(body.price_cny);
     return this.bidsService.submit({
@@ -94,7 +97,7 @@ export class MarketplaceContractController {
   ) {
     const projectId = body.project_id;
     if (typeof projectId !== 'string' || !projectId) {
-      throw new Error('project_id is required');
+      throw validationError('project_id is required');
     }
     return this.ordersService.applyProjectId(id, projectId);
   }
@@ -141,37 +144,57 @@ export class MarketplaceContractController {
   }
 
   /** 场景八 #25：Owner 响应协商取消（counter_proposal M5 前 422） */
-  @Post('cancel-requests/:id/respond')
+  @Post('orders/:id/cancel-requests/:requestId/respond')
   cancelRespond(
-    @Param('id') id: string,
+    @Param('id') orderId: string,
+    @Param('requestId') requestId: string,
     @Body() body: { response?: unknown },
   ) {
     const response = body.response;
-    if (response !== 'accept' && response !== 'reject' && response !== 'counter_proposal') {
-      throw new Error('response must be accept/reject/counter_proposal');
+    if (
+      response !== 'accept' &&
+      response !== 'reject' &&
+      response !== 'counter_proposal'
+    ) {
+      throw validationError('response must be accept/reject/counter_proposal');
     }
-    return this.cancelService.respond(id, response);
+    return this.cancelService.respond(orderId, requestId, response);
   }
 
   /** 场景八 #26：Console 超时自动处理结果 */
-  @Post('cancel-requests/:id/auto-resolve')
-  cancelAutoResolve(@Param('id') id: string, @Body() body: { outcome?: unknown }) {
-    if (body.outcome !== 'accept_partial_settlement' && body.outcome !== 'reject_cancel') {
-      throw new Error('outcome must be accept_partial_settlement/reject_cancel');
+  @Post('orders/:id/cancel-requests/:requestId/auto-resolve')
+  cancelAutoResolve(
+    @Param('id') orderId: string,
+    @Param('requestId') requestId: string,
+    @Body() body: { outcome?: unknown },
+  ) {
+    if (
+      body.outcome !== 'accept_partial_settlement' &&
+      body.outcome !== 'reject_cancel'
+    ) {
+      throw validationError(
+        'outcome must be accept_partial_settlement/reject_cancel',
+      );
     }
-    return this.cancelService.autoResolve(id, body.outcome);
+    return this.cancelService.autoResolve(orderId, requestId, body.outcome);
   }
 
   /** 场景八 #28：最终确认取消结算 */
-  @Post('cancel-requests/:id/finalize')
-  cancelFinalize(@Param('id') id: string) {
-    return this.cancelService.finalize(id);
+  @Post('orders/:id/cancel-requests/:requestId/finalize')
+  cancelFinalize(
+    @Param('id') orderId: string,
+    @Param('requestId') requestId: string,
+  ) {
+    return this.cancelService.finalize(orderId, requestId);
   }
 
   /** 场景八 #30：转纠纷 */
-  @Post('cancel-requests/:id/to-dispute')
-  cancelToDispute(@Param('id') id: string) {
-    return this.cancelService.toDispute(id);
+  @Post('orders/:id/cancel-requests/:requestId/to-dispute')
+  cancelToDispute(
+    @Param('id') orderId: string,
+    @Param('requestId') requestId: string,
+  ) {
+    return this.cancelService.toDispute(orderId, requestId);
   }
 
   /** 场景五 #13：Console 提交交付物（启动 14 天验收计时） */
@@ -199,71 +222,86 @@ export class MarketplaceContractController {
   }
 
   /** 场景六 #15：启动修订协商窗口（2 天） */
-  @Post('revision-negotiation/start')
-  startNegotiation(@Body() body: { order_id?: unknown; reason?: unknown }) {
-    if (typeof body.order_id !== 'string' || !body.order_id) {
-      throw new Error('order_id is required');
-    }
+  @Post('orders/:id/revision-negotiation/start')
+  startNegotiation(
+    @Param('id') orderId: string,
+    @Body() body: { reason?: unknown },
+  ) {
     return this.negotiationService.start(
-      body.order_id,
+      orderId,
       typeof body.reason === 'string' ? body.reason : 'revision_exhausted',
     );
   }
 
   /** 场景六 #16：4 选项决策（A 追加修订 / B Spec 变更 / C 接受当前 / D 转纠纷） */
-  @Post('revision-negotiation/:id/decide')
-  decideNegotiation(@Param('id') id: string, @Body() body: { decision?: unknown }) {
-    if (body.decision !== 'A' && body.decision !== 'B' && body.decision !== 'C' && body.decision !== 'D') {
-      throw new Error('decision must be A/B/C/D');
+  @Post('orders/:id/revision-negotiation/:negotiationId/decide')
+  decideNegotiation(
+    @Param('id') orderId: string,
+    @Param('negotiationId') negotiationId: string,
+    @Body() body: { decision?: unknown },
+  ) {
+    if (
+      body.decision !== 'A' &&
+      body.decision !== 'B' &&
+      body.decision !== 'C' &&
+      body.decision !== 'D'
+    ) {
+      throw validationError('decision must be A/B/C/D');
     }
-    return this.negotiationService.decide(id, body.decision);
+    return this.negotiationService.decide(orderId, negotiationId, body.decision);
   }
 
   /** 场景七 #19：Console 判定修订/新增需求 */
-  @Post('revision-requests/:id/classify')
+  @Post('orders/:id/revision-requests/:requestId/classify')
   classifyRevision(
-    @Param('id') id: string,
+    @Param('id') orderId: string,
+    @Param('requestId') requestId: string,
     @Body() body: { classification?: unknown },
   ) {
-    if (body.classification !== 'revision' && body.classification !== 'new_requirement') {
-      throw new Error('classification must be revision/new_requirement');
+    if (
+      body.classification !== 'revision' &&
+      body.classification !== 'new_requirement'
+    ) {
+      throw validationError('classification must be revision/new_requirement');
     }
-    return this.specChangeService.classify(id, body.classification);
+    return this.specChangeService.classify(orderId, requestId, body.classification);
   }
 
   /** 场景七 #21：变更提案（3 天对方响应计时） */
-  @Post('spec-changes')
+  @Post('orders/:id/spec-changes')
   proposeSpecChange(
-    @Body() body: { order_id?: unknown; change_seq?: unknown; payload?: unknown },
+    @Param('id') orderId: string,
+    @Body() body: { change_seq?: unknown; payload?: unknown },
   ) {
-    if (typeof body.order_id !== 'string' || !body.order_id) {
-      throw new Error('order_id is required');
-    }
-    const changeSeq = typeof body.change_seq === 'number' ? body.change_seq : 1;
-    return this.specChangeService.propose(body.order_id, changeSeq, {
+    const changeSeq =
+      typeof body.change_seq === 'number' ? body.change_seq : 1;
+    return this.specChangeService.propose(orderId, changeSeq, {
       payload: body.payload ?? null,
     });
   }
 
   /** 场景七 #22：确认变更（Spec version+1） */
-  @Post('spec-changes/:id/confirm')
-  confirmSpecChange(@Param('id') id: string) {
-    return this.specChangeService.confirm(id);
+  @Post('orders/:id/spec-changes/:changeId/confirm')
+  confirmSpecChange(
+    @Param('id') orderId: string,
+    @Param('changeId') changeId: string,
+  ) {
+    return this.specChangeService.confirm(orderId, changeId);
   }
 
   /** 场景七 #23：拒绝变更 */
-  @Post('spec-changes/:id/reject')
-  rejectSpecChange(@Param('id') id: string) {
-    return this.specChangeService.reject(id);
+  @Post('orders/:id/spec-changes/:changeId/reject')
+  rejectSpecChange(
+    @Param('id') orderId: string,
+    @Param('changeId') changeId: string,
+  ) {
+    return this.specChangeService.reject(orderId, changeId);
   }
 
   /** 场景九 #31：触发结算（7 天托管期；平台备数据，划款交关联方） */
-  @Post('settlement/trigger')
-  triggerSettlement(@Body() body: { order_id?: unknown }) {
-    if (typeof body.order_id !== 'string' || !body.order_id) {
-      throw new Error('order_id is required');
-    }
-    return this.settlementsService.trigger(body.order_id);
+  @Post('orders/:id/settlement/trigger')
+  triggerSettlement(@Param('id') orderId: string) {
+    return this.settlementsService.trigger(orderId);
   }
 
   /** 对账 #35：查询结算状态 */
@@ -279,16 +317,32 @@ export class MarketplaceContractController {
   }
 
   /** 场景十 #40：Agent Owner 提交举证 */
-  @Post('disputes/:id/evidence')
-  disputeEvidence(@Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.disputesService.submitEvidence(id, body);
+  @Post('orders/:id/disputes/:disputeId/evidence')
+  disputeEvidence(
+    @Param('id') orderId: string,
+    @Param('disputeId') disputeId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    return this.disputesService.submitEvidence(orderId, disputeId, body);
   }
 
   /** 场景十 #43：确认仲裁结果（终态） */
-  @Post('disputes/:id/acknowledge')
-  disputeAcknowledge(@Param('id') id: string) {
-    return this.disputesService.acknowledge(id);
+  @Post('orders/:id/disputes/:disputeId/acknowledge')
+  disputeAcknowledge(
+    @Param('id') orderId: string,
+    @Param('disputeId') disputeId: string,
+  ) {
+    return this.disputesService.acknowledge(orderId, disputeId);
   }
+}
+
+/** 请求参数校验失败：契约要求 400 + VALIDATION_*（RFC 7807 渲染） */
+function validationError(message: string): ContractError {
+  return new ContractError(
+    400,
+    CONTRACT_ERROR_CODE.VALIDATION_INVALID_PAYLOAD,
+    message,
+  );
 }
 
 type SubmitSpecMilestone = {

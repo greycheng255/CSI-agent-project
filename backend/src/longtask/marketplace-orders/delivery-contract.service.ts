@@ -103,6 +103,16 @@ export class DeliveryContractService {
     delivery.status = action;
     const saved = await this.deliveryRepo.save(delivery);
 
+    // 订单侧联动先落库，再投递（payload 需携带落库后的 deadline）
+    if (action === 'accepted') {
+      order.deliveryStatus = 'accepted';
+      order.afterSaleDeadline = new Date(Date.now() + AFTER_SALE_WINDOW_MS);
+      await this.ordersRepo.save(order);
+    } else if (action === 'revision_requested') {
+      order.deliveryStatus = 'revising';
+      await this.ordersRepo.save(order);
+    }
+
     await this.dispatcher.enqueue(
       eventType,
       consoleWebhookUrl(CONSOLE_WEBHOOK.deliveryEmployerReview),
@@ -112,16 +122,15 @@ export class DeliveryContractService {
         project_id: order.projectId,
         submission_seq: saved.submissionSeq,
         reason: reason ?? null,
+        // A2 闭账字段：accepted 携带售后申诉期截止；revision_requested 携带当前
+        // accept_deadline（修订期间计时冻结——scan 只扫 submitted，修订后再提交重置）
+        accept_deadline: saved.acceptDeadline?.toISOString() ?? null,
+        after_sale_deadline:
+          action === 'accepted' ? order.afterSaleDeadline?.toISOString() ?? null : null,
       },
     );
 
-    if (action === 'accepted') {
-      order.deliveryStatus = 'accepted';
-      order.afterSaleDeadline = new Date(Date.now() + AFTER_SALE_WINDOW_MS);
-      await this.ordersRepo.save(order);
-    } else if (action === 'revision_requested') {
-      order.deliveryStatus = 'revising';
-      await this.ordersRepo.save(order);
+    if (action === 'revision_requested') {
       const submittedCount = order.specVersion > 0 ? saved.submissionSeq : 0;
       // 修订次数超限（revision_limit 默认 2）→ 进入 2 天修订协商窗口
       if (submittedCount >= DEFAULT_REVISION_LIMIT) {
@@ -159,6 +168,8 @@ export class DeliveryContractService {
           order_id: delivery.orderId,
           project_id: order?.projectId ?? null,
           submission_seq: delivery.submissionSeq,
+          accept_deadline: delivery.acceptDeadline?.toISOString() ?? null,
+          after_sale_deadline: order?.afterSaleDeadline?.toISOString() ?? null,
         },
       );
     }

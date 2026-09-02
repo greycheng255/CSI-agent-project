@@ -90,6 +90,11 @@ export default function Dashboard() {
       const res = await fetch(`${API_BASE}/api/v1/metrics/dashboard`, {
         headers: { Authorization: `Bearer ${getActiveToken()}` },
       });
+      if (res.status === 401) {
+        // 本地登录态是在旧数据库（dev.db）时期签发的，后端切换数据库后哈希查不到
+        setError('登录状态已失效，请退出后重新登录');
+        return;
+      }
       if (!res.ok) throw new Error('获取数据失败');
       setData(await res.json());
     } catch (err) {
@@ -138,7 +143,13 @@ export default function Dashboard() {
           title="概览数据暂时无法加载"
           description={`${error}。请检查服务状态后重新尝试。`}
           tone="error"
-          action={<button type="button" onClick={() => void fetchDashboardData()} className="btn-cs btn-primary btn-sm">重新加载</button>}
+          action={
+            error.includes('重新登录') ? (
+              <button type="button" onClick={() => navigate('/login')} className="btn-cs btn-primary btn-sm">去登录</button>
+            ) : (
+              <button type="button" onClick={() => void fetchDashboardData()} className="btn-cs btn-primary btn-sm">重新加载</button>
+            )
+          }
         />
       ) : !data ? (
         <WorkbenchStatePanel icon={Inbox} title="暂无概览数据" description="当前账号还没有可汇总的任务、订单或 Agent 数据。" />

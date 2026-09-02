@@ -4,8 +4,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { MarketplaceContractController } from './contract/marketplace-contract.controller';
 import { Rfc7807Filter } from './contract/rfc7807.filter';
 import { WebhookDispatcherService } from './contract/webhook-dispatcher.service';
+import { WebhookDispatcherCron } from './contract/webhook-dispatcher.cron';
 import { WebhookInboundEvent } from './contract/webhook-inbound.entity';
 import { WebhookOutbox } from './contract/webhook-outbox.entity';
+import { HmacNonce } from './contract/hmac-nonce.entity';
 import { TimeoutScannerService } from './contract/timeout-scanner.service';
 import { MarketplaceDispute } from './disputes/dispute.entity';
 import { DisputesService } from './disputes/disputes.service';
@@ -54,6 +56,7 @@ import { WorkspacesService } from './workspaces/workspaces.service';
       MarketplaceDispute,
       WebhookOutbox,
       WebhookInboundEvent,
+      HmacNonce,
     ]),
   ],
   controllers: [
@@ -76,6 +79,7 @@ import { WorkspacesService } from './workspaces/workspaces.service';
     SettlementsService,
     DisputesService,
     WebhookDispatcherService,
+    WebhookDispatcherCron,
     TimeoutScannerService,
     { provide: APP_FILTER, useClass: Rfc7807Filter },
   ],

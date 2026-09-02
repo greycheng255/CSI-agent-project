@@ -56,7 +56,7 @@ describe('RevisionNegotiationService（T18：2 天窗口 + 4 选项默认 C）',
     });
     mockOrdersRepo.save.mockImplementation((v) => v);
 
-    const saved = await service.decide('n1', 'C');
+    const saved = await service.decide('o1', 'n1', 'C');
     expect(saved.decision).toBe('C');
     const savedOrder = mockOrdersRepo.save.mock.calls[0][0] as MarketplaceOrder;
     expect(savedOrder.deliveryStatus).toBe('accepted');
@@ -71,9 +71,9 @@ describe('RevisionNegotiationService（T18：2 天窗口 + 4 选项默认 C）',
     }));
     mockNegotiationRepo.save.mockImplementation((v) => v);
 
-    await service.decide('n1', 'A');
+    await service.decide('o1', 'n1', 'A');
     expect(mockOrdersRepo.save).not.toHaveBeenCalled();
-    await service.decide('n1', 'D');
+    await service.decide('o1', 'n1', 'D');
   });
 
   it('已决窗口再决策 → 422', async () => {
@@ -82,8 +82,19 @@ describe('RevisionNegotiationService（T18：2 天窗口 + 4 选项默认 C）',
       orderId: 'o1',
       status: 'resolved',
     });
-    await expect(service.decide('n1', 'C')).rejects.toMatchObject({
+    await expect(service.decide('o1', 'n1', 'C')).rejects.toMatchObject({
       status: 422,
+    });
+  });
+
+  it('协商不属于该订单 → 404（归属校验）', async () => {
+    mockNegotiationRepo.findOne.mockResolvedValueOnce({
+      id: 'n1',
+      orderId: 'other',
+      status: 'open',
+    });
+    await expect(service.decide('o1', 'n1', 'C')).rejects.toMatchObject({
+      status: 404,
     });
   });
 

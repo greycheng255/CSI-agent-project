@@ -66,10 +66,11 @@ export class SpecChangeService {
 
   /** C→M #19：Console 判定修订/新增需求（24h 判定归 Console） */
   async classify(
+    orderId: string,
     changeId: string,
     classification: 'revision' | 'new_requirement',
   ): Promise<MarketplaceSpecChange> {
-    const change = await this.getOrThrowChange(changeId);
+    const change = await this.getOrThrowChange(orderId, changeId);
     change.classification = classification;
     change.status = 'classified';
     const saved = await this.changeRepo.save(change);
@@ -111,8 +112,11 @@ export class SpecChangeService {
   }
 
   /** C→M #22：确认 → Spec version+1（历史版本不可改） */
-  async confirm(changeId: string): Promise<MarketplaceSpecChange> {
-    const change = await this.getOrThrowChange(changeId);
+  async confirm(
+    orderId: string,
+    changeId: string,
+  ): Promise<MarketplaceSpecChange> {
+    const change = await this.getOrThrowChange(orderId, changeId);
     if (change.status === 'confirmed') return change; // 幂等
     change.status = 'confirmed';
     const saved = await this.changeRepo.save(change);
@@ -128,8 +132,11 @@ export class SpecChangeService {
   }
 
   /** C→M #23：拒绝 */
-  async reject(changeId: string): Promise<MarketplaceSpecChange> {
-    const change = await this.getOrThrowChange(changeId);
+  async reject(
+    orderId: string,
+    changeId: string,
+  ): Promise<MarketplaceSpecChange> {
+    const change = await this.getOrThrowChange(orderId, changeId);
     change.status = 'rejected';
     return this.changeRepo.save(change);
   }
@@ -142,14 +149,15 @@ export class SpecChangeService {
   }
 
   private async getOrThrowChange(
+    orderId: string,
     changeId: string,
   ): Promise<MarketplaceSpecChange> {
     const change = await this.changeRepo.findOne({ where: { id: changeId } });
-    if (!change) {
+    if (!change || change.orderId !== orderId) {
       throw new ContractError(
         404,
         CONTRACT_ERROR_CODE.NOT_FOUND_ORDER,
-        `spec change not found: ${changeId}`,
+        `spec change not found in order ${orderId}: ${changeId}`,
       );
     }
     return change;

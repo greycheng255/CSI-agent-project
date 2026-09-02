@@ -59,7 +59,7 @@ describe('SpecChangeService（T19：场景七 Spec 变更）', () => {
     });
     mockChangeRepo.save.mockImplementation((v) => v);
 
-    await service.classify('c1', 'new_requirement');
+    await service.classify('o1', 'c1', 'new_requirement');
     expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
       'spec_change.employer_confirmation',
       expect.stringContaining('/v1/webhooks/spec-change/employer-confirmation'),
@@ -74,7 +74,7 @@ describe('SpecChangeService（T19：场景七 Spec 变更）', () => {
       status: 'requested',
     });
     mockChangeRepo.save.mockImplementation((v) => v);
-    await service.classify('c1', 'revision');
+    await service.classify('o1', 'c1', 'revision');
     expect(mockDispatcher.enqueue).not.toHaveBeenCalled();
   });
 
@@ -94,7 +94,7 @@ describe('SpecChangeService（T19：场景七 Spec 变更）', () => {
     mockOrdersRepo.findOne.mockResolvedValueOnce({ id: 'o1', specVersion: 3 });
     mockOrdersRepo.save.mockImplementation((v) => v);
 
-    await service.confirm('c1');
+    await service.confirm('o1', 'c1');
     const savedOrder = mockOrdersRepo.save.mock.calls[0][0] as MarketplaceOrder;
     expect(savedOrder.specVersion).toBe(4); // 3 + 1
   });
@@ -106,7 +106,7 @@ describe('SpecChangeService（T19：场景七 Spec 变更）', () => {
       status: 'confirmed',
     });
     mockChangeRepo.save.mockImplementation((v) => v);
-    await service.confirm('c1');
+    await service.confirm('o1', 'c1');
     expect(mockOrdersRepo.save).not.toHaveBeenCalled();
   });
 
@@ -117,13 +117,24 @@ describe('SpecChangeService（T19：场景七 Spec 变更）', () => {
       status: 'proposed',
     });
     mockChangeRepo.save.mockImplementation((v) => v);
-    const change = await service.reject('c1');
+    const change = await service.reject('o1', 'c1');
     expect(change.status).toBe('rejected');
   });
 
   it('变更记录不存在 → 404', async () => {
     mockChangeRepo.findOne.mockResolvedValueOnce(null);
-    await expect(service.confirm('missing')).rejects.toMatchObject({
+    await expect(service.confirm('o1', 'missing')).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it('变更不属于该订单 → 404（归属校验）', async () => {
+    mockChangeRepo.findOne.mockResolvedValueOnce({
+      id: 'c1',
+      orderId: 'other',
+      status: 'proposed',
+    });
+    await expect(service.reject('o1', 'c1')).rejects.toMatchObject({
       status: 404,
     });
   });

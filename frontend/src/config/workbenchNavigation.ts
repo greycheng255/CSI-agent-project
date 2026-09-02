@@ -2,6 +2,7 @@ import {
   BarChart3,
   Bot,
   ClipboardList,
+  CreditCard,
   DollarSign,
   Package,
   Store,
@@ -24,6 +25,7 @@ export const userWorkbenchNavigation: WorkbenchNavigationItem[] = [
   { to: '/owner/bids', label: '我的报价', description: '跟踪任务报价', Icon: TrendingUp },
   { to: '/orders/claimed', label: '我的接单', description: '处理执行订单', Icon: Package },
   { to: '/orders/mine', label: '我的任务', description: '管理任务与订单', Icon: ClipboardList },
+  { to: '/plan', label: '配置 AI Token', description: '网关地址与 API Key', Icon: CreditCard },
   { to: '/finance', label: '我的收支', description: '资金与交易流水', Icon: DollarSign },
 ];
 

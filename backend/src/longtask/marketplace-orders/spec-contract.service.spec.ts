@@ -6,6 +6,7 @@ import { CancelSkeletonService } from './cancel-skeleton.service';
 import { MarketplaceTasksService } from '../marketplace-tasks/marketplace-tasks.service';
 import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
 import { TimeoutScannerService } from '../contract/timeout-scanner.service';
+import { computeSpecHash } from '../contract/spec-hash';
 
 describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
   let service: SpecContractService;
@@ -68,6 +69,16 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
       expect.any(Number),
       { orderId: 'o1' },
     );
+  });
+
+  it('submitSpec：未传 spec_hash → 平台默认口径补算（canonical JSON + SHA-256）', async () => {
+    mockOrdersRepo.findOne.mockResolvedValueOnce(order());
+    mockOrdersRepo.save.mockImplementation((v) => v);
+
+    const saved = await service.submitSpec('o1', {
+      specContent: { b: 1, a: 2 },
+    });
+    expect(saved.specHash).toBe(computeSpecHash({ b: 1, a: 2 }));
   });
 
   it('submitSpec：权重和≠100% → 400', async () => {

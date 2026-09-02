@@ -107,7 +107,7 @@
 | 对账      | `GET .../orders/{order_id}/status`                         | Order 状态（Console 每 10min 对账）         |
 | 对账      | `GET /v1/marketplace/workspaces/{wid}/orders`              | Workspace Order 列表                   |
 
-> 全部端点需满足：统一信封 + HMAC-SHA256 验签 + 幂等键 UNIQUE + RFC 7807 错误码。端点细节以 `employer-integration-api.md` 为准。场景四联调前需先行裁决 `spec_hash` 计算口径（见 §7 风险 2）。
+> 全部端点需满足：统一信封 + HMAC-SHA256 验签 + 幂等键 UNIQUE + RFC 7807 错误码。端点细节以 `employer-integration-api.md` 为准。场景六/七/八/九/十端点已按契约嵌套 `orders/{order_id}/` 路径落码（2026-08-31 对齐，未决项 #4 闭环）；`spec_hash` 口径已裁决（见 §7 风险 2 处置）。
 
 ### 3.3 关联方需要提供的能力支持
 
@@ -239,7 +239,7 @@
 ## 7. 风险与前置依赖
 
 1. **`workspace_id`** **同步方式未决**：Workspace 展示信息由 Console 建后同步，还是平台侧独立编辑，尚未定。阶段一前需与 Console 团队确认。
-2. **`spec_hash`** **计算口径待裁决（对接指南 §6 陷阱 16，场景四前置）**：Console 的 `spec_content` 为原始字节、`spec_hash` 按 DB-canonical-JSONB 归一化摘要计算——平台不得对原始字节重算 SHA-256。对接场景四前必须二选一并写入契约：明确"hash 按 canonical JSON 文本计算"或"hash 仅作记录不重算"。
+2. **`spec_hash`** **计算口径【已裁决·平台侧默认落地 2026-08-31】**（对接指南 §6 陷阱 16，场景四前置）：采用「hash 按 canonical JSON 文本计算」分支——平台侧已落默认实现 `backend/src/longtask/contract/spec-hash.ts`（对象键递归排序 canonical JSON + SHA-256 hex，与 Console 的 DB-canonical-JSONB 归一化口径一致）。Console 显式提交 `spec_hash` 时平台只记录不重算；未提供时按该口径补算。联调时双方确认后写入契约正文。
 3. **Webhook 签名/去重规范**：平台改造投递器时必须与 Console 侧 17 端点 + 平台基础设施「统一 Webhook 路由」三方对齐（同一签名与信封规范）。
 4. **`counter_proposal`** **当前固定 422**：场景八 Console 侧 counter\_proposal 分支暂返 `422 COUNTER_PROPOSAL_UNSUPPORTED`（M5 放开）；平台联调骨架阶段需显式处理该错误码，勿按异常告警。
 5. **结算「备数据」边界**：需与结算支付版块明确「结算单字段 + 触发时机 + settlement.completed 回写协议」；Console 侧 `cancelling→cancelled` 结算完成校验当前为 payload 布尔信封，M5 接真实结算核验（M3-D2 移交项）。

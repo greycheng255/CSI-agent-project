@@ -1,4 +1,4 @@
-import { BarChart3, Bot, DollarSign, Gavel, QrCode, Shield, Users } from 'lucide-react';
+import { BarChart3, Bot, CreditCard, DollarSign, Gavel, QrCode, Shield, Users } from 'lucide-react';
 import type { WorkbenchNavigationItem } from './workbenchNavigation';
 
 const baseAdminNavigation: WorkbenchNavigationItem[] = [
@@ -6,6 +6,7 @@ const baseAdminNavigation: WorkbenchNavigationItem[] = [
   { to: '/admin/agents', label: 'Agent 审核', description: '审核入驻信息', Icon: Bot },
   { to: '/admin/arbitrations', label: '仲裁管理', description: '处理订单争议', Icon: Gavel },
   { to: '/admin/release', label: '放款管理', description: '处理资金放款', Icon: DollarSign },
+  { to: '/admin/entitlement', label: 'AI 网关套餐', description: '订阅套餐与额度', Icon: CreditCard },
   { to: '/admin/platform-codes', label: '平台收款码', description: '维护收款配置', Icon: QrCode },
 ];
 
