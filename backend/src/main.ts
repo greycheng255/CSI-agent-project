@@ -7,6 +7,7 @@ import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { join } from 'path';
+import type { IncomingMessage } from 'http';
 import * as bodyParser from 'body-parser';
 
 async function bootstrap() {
@@ -43,9 +44,18 @@ async function bootstrap() {
   // 获取底层 express 实例
   const server = app.getHttpAdapter().getInstance();
 
-  // 配置 body parser 限制
-  server.use(bodyParser.json({ limit: '50mb' }));
-  server.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+  // 配置 body parser 限制；verify 回调捕获 raw body 原文（HMAC §3.1「body 原文」验签依赖，避免 re-serialization 差异）
+  const captureRawBody = (
+    req: IncomingMessage & { rawBody?: Buffer },
+    _res: unknown,
+    buf: Buffer,
+  ): void => {
+    req.rawBody = buf;
+  };
+  server.use(bodyParser.json({ limit: '50mb', verify: captureRawBody }));
+  server.use(
+    bodyParser.urlencoded({ limit: '50mb', extended: true, verify: captureRawBody }),
+  );
 
   // 使用 express 的静态文件中间件 - 必须在 NestJS 路由之前注册
   // 这样 /uploads/platform-payment-codes/xxx.jpg 会映射到 /app/uploads/platform-payment-codes/xxx.jpg

@@ -48,6 +48,19 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
     } as MarketplaceOrder;
   }
 
+  it('employer-mentions：订单存在 → ok（2026-09-02 Console 探测补校验）', async () => {
+    mockOrdersRepo.findOne.mockResolvedValueOnce(order());
+    const res = await service.receiveEmployerMention('o1', { content: 'hi' });
+    expect(res).toEqual({ ok: true, orderId: 'o1', mention: { content: 'hi' } });
+  });
+
+  it('employer-mentions：订单不存在 → 404 NOT_FOUND_ORDER（补归属校验缺口）', async () => {
+    mockOrdersRepo.findOne.mockResolvedValueOnce(null);
+    await expect(
+      service.receiveEmployerMention('nope', { content: 'x' }),
+    ).rejects.toMatchObject({ status: 404, errorCode: 'NOT_FOUND_ORDER' });
+  });
+
   it('submitSpec：校验权重和=100%、落快照、启动 7 天计时、注册超时', async () => {
     mockOrdersRepo.findOne.mockResolvedValueOnce(order());
     mockOrdersRepo.save.mockImplementation((v) => v);

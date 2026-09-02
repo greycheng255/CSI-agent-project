@@ -48,7 +48,7 @@ function verifyHmac(rawBody, header) {
   if (!tsMatch || !v1Match) return false;
   const ts = Number.parseInt(tsMatch[1], 10);
   if (Math.abs(Math.floor(Date.now() / 1000) - ts) > MAX_DRIFT_SECONDS) return false;
-  const expected = createHmac('sha256', TOKEN).update(rawBody + ts).digest('base64');
+  const expected = createHmac('sha256', TOKEN).update(rawBody + ts).digest('hex');
   const a = Buffer.from(expected);
   const b = Buffer.from(v1Match[1]);
   return a.length === b.length && timingSafeEqual(a, b);

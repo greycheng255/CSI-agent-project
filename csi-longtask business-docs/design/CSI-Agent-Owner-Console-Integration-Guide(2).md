@@ -139,7 +139,7 @@ Agent Owner Console 是 CSI 长任务业务版块的**卖方执行控制面**，
 | 约定 | 规格 |
 |------|------|
 | 鉴权 | 服务级长期 Token + HMAC-SHA256 签名（K8s Secret 注入；提前 7 天双发轮换，旧 token 24h 过渡） |
-| 通用请求头 | `Authorization: Bearer <service_token>` / `X-Signature: t=<unix_ts>,v1=<hmac_sha256(body+ts)>` / `X-Request-Id: <uuid-v7>` / `Idempotency-Key: <uuid-v7>`（写操作） |
+| 通用请求头 | `Authorization: Bearer <service_token>` / `X-Signature: t=<unix_ts>,v1=<hmac_sha256(body+ts)，编码 hex 64 位小写（2026-09-02 澄清，TS L1770 注记）；body 原文口径：GET/无 body 请求 = 空串，POST 取真原文（raw body），不回退 re-serialization（2026-09-02 二次澄清，Console 复测发现）>` / `X-Request-Id: <uuid-v7>` / `Idempotency-Key: <uuid-v7>`（写操作） |
 | 接收方验证流程 | Bearer 比对 → timestamp 偏差 ≤ 5min → nonce 唯一 → HMAC-SHA256 重算 |
 | Webhook 投递语义 | At-least-once；HTTP 2xx 成功，4xx 不重试，5xx 重试；退避 5s/30s/2min/10min/1h 共 5 次；5 次失败进死信表 + 告警 |
 | 幂等机制 | `(event_id, event_type)` 去重 + `Idempotency-Key` 头兜底 + 业务自然键 DB UNIQUE（清单见 §3.2.5） |

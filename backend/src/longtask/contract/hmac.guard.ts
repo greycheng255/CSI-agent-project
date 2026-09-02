@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, LessThan } from 'typeorm';
-import { isTimestampFresh, parseSignature, verifySignature } from './hmac-sign';
+import { deriveRawPayload, isTimestampFresh, parseSignature, verifySignature } from './hmac-sign';
 import { HmacNonce } from './hmac-nonce.entity';
 
 const MAX_DRIFT_SECONDS = 300;
@@ -16,7 +16,8 @@ const NONCE_TTL_MS = 10 * 60 * 1000;
 /**
  * HMAC-SHA256 服务级签名守卫（对接指南 §3.1）。
  * 校验顺序：Bearer 比对 → timestamp 偏差 ≤ 5min → nonce 唯一 → HMAC-SHA256(body 原文 + ts) 重算。
- * 注意：body 原文优先取 req.rawBody（需上层 raw-body 捕获），否则退化用 JSON 序列化。
+ * 注意：payload 派生见 deriveRawPayload——rawBody 真原文优先（main.ts verify 捕获），
+ * 无 body 请求（GET/DELETE）= 空串；仅当无 rawBody 且解析出的 JSON body 非空时才回退 re-serialization。
  * nonce 取通用请求头 X-Request-Id（§3.1），落 hmac_nonces 去重表防窗口内重放。
  */
 @Injectable()
@@ -59,10 +60,7 @@ export class HmacGuard implements CanActivate {
     }
     await this.claimNonce(nonce);
 
-    const raw =
-      typeof req.rawBody === 'string'
-        ? req.rawBody
-        : JSON.stringify(req.body ?? {});
+    const raw = deriveRawPayload({ rawBody: req.rawBody, body: req.body });
     if (!verifySignature(raw, sig.ts, sig.v1, secret)) {
       throw new UnauthorizedException('AUTH_HMAC_SIGNATURE_MISMATCH');
     }

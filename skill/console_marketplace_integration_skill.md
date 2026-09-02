@@ -92,7 +92,7 @@ node scripts/mock-console.mjs 8800       # 16 webhook 路径 + 四步验签 + no
 
 | 约定 | 规格 |
 |------|------|
-| 通用请求头 | `Authorization: Bearer <service_token>`、`X-Signature: t=<unix_ts>,v1=<hmac_sha256(body原文+ts)>`、`X-Request-Id: <uuid-v7>`、`Idempotency-Key: <uuid-v7>`（写操作） |
+| 通用请求头 | `Authorization: Bearer <service_token>`、`X-Signature: t=<unix_ts>,v1=<hmac_sha256(body原文+ts)，编码 **hex**（64 位小写，TS L1770 2026-09-02 澄清；GitHub/Stripe 惯例）。**body 原文口径：GET/无 body 请求 = 空串**（非 `'{}'`），POST 取真原文 raw body（2026-09-02 二次澄清，Console 复测发现）>`、`X-Request-Id: <uuid-v7>`、`Idempotency-Key: <uuid-v7>`（写操作） |
 | 接收方验证流程（四步） | Bearer 比对 → timestamp 偏差 ≤ 5min → **nonce 唯一**（X-Request-Id，去重表防重放）→ HMAC-SHA256 重算。**每次请求必须带 X-Request-Id，缺头即 401** |
 | Webhook 投递 | at-least-once；2xx 成功；4xx 不重试；5xx 重试 5 次（5s/30s/2min/10min/1h）后进死信表 + 告警 |
 | 幂等 | 入站按 `(event_id, event_type)` 去重 + `Idempotency-Key` 兜底 + 业务自然键 DB UNIQUE（§1.6 清单） |

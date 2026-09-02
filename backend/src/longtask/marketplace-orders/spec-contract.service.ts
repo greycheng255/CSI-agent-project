@@ -87,10 +87,12 @@ export class SpecContractService {
   }
 
   /** C→M #9：Console 推 Mention 给雇主（站内通知位，通知渠道接口预留） */
-  receiveEmployerMention(
+  async receiveEmployerMention(
     orderId: string,
     mention: Record<string, unknown>,
-  ): { ok: boolean; orderId: string; mention: Record<string, unknown> } {
+  ): Promise<{ ok: boolean; orderId: string; mention: Record<string, unknown> }> {
+    // 订单存在性/归属校验（2026-09-02 Console 联调探测：不存在订单此前误返 201）
+    await this.getOrThrow(orderId);
     return { ok: true, orderId, mention };
   }
 

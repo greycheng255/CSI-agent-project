@@ -170,7 +170,7 @@ Marketplace Task (1)                          Workspace (1)
 
 ```
 Authorization: Bearer <service_token>
-X-Signature: t=<unix_ts>,v1=<hmac_sha256(body + ts)>
+X-Signature: t=<unix_ts>,v1=<hmac_sha256(body + ts)，编码 hex 64 位小写（2026-09-02 澄清，TS L1770 注记）；body 原文口径：GET/无 body 请求 = 空串（非 "{}"），POST 取真原文 raw body（2026-09-02 二次澄清，Console 复测发现）>
 X-Request-Id: <uuid-v7>
 User-Agent: csi-console/1.0 (go-chi) | csi-marketplace/1.0
 Content-Type: application/json

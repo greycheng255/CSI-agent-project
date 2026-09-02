@@ -33,13 +33,13 @@ describe('WebhookDispatcherCron', () => {
     expect(init.headers['Idempotency-Key']).toBe('evt-0001');
 
     const sig = init.headers['X-Signature'] as string;
-    expect(sig).toMatch(/^t=\d{10},v1=[A-Za-z0-9+/=]+$/);
-    // 签名可用同口径复算验证
+    expect(sig).toMatch(/^t=\d{10},v1=[0-9a-f]{64}$/);
+    // 签名可用同口径复算验证（编码 hex，TS L1770 澄清）
     const { createHmac } = jest.requireActual('crypto');
     const ts = Number(sig.match(/t=(\d+)/)![1]);
     const expected = createHmac('sha256', 'st-123')
       .update(JSON.stringify(payload) + ts)
-      .digest('base64');
+      .digest('hex');
     expect(sig).toContain(`v1=${expected}`);
   });
 

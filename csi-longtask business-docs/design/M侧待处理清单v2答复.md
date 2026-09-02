@@ -86,3 +86,57 @@
 4. `cancel-request.entity.ts`：补 `cancel_proposal_seq` + UNIQUE（云库 DDL 已执行）
 5. `hmac.guard.ts` / `webhook-dispatcher.cron.ts` / `gateway-keys.service.ts`：HMAC 密钥按方向分离（INBOUND/OUTBOUND，向后兼容回落）
 6. `skill/console_marketplace_integration_skill.md`：B4 三处勘误 + A2 精确语义回写
+
+---
+
+## 联调实测发现：HMAC 签名编码差异（阻断第一批双向验证，需贵方一行修复）
+
+双向验证进展到 HMAC 门被阻断。根因已在贵方 122 主机源码直读后钉死，**输入公式双方完全一致（`hmac_sha256(body 原文 + ts)`），纯输出编码差异**：
+
+| 证据 | 结论 |
+|------|------|
+| Bearer 门 | ✅ 通过（c2m 密钥贵方已正确配置） |
+| HMAC 门 | ❌ `AUTH_HMAC_SIGNATURE_MISMATCH` |
+| 贵方源码（122 主机 `hmac-sign.ts`） | `.digest('base64')` |
+| 我方全链（契约 signer/verifier/替身/E2E） | hex 编码（GitHub/Stripe webhook 行业惯例） |
+| 契约原文（TS L1770） | 公式一致但编码未显式规定——即本次歧义点 |
+
+**裁决依据**：按既定口径"我方按契约实现、偏离方对齐"，且我方已在 TS L1770 补编码澄清注记（**hex，64 位小写**，2026-09-02）。
+
+**贵方修复（一行）**：
+
+```diff
+- return createHmac('sha256', secret).update(payload + ts).digest('base64');
++ return createHmac('sha256', secret).update(payload + ts).digest('hex');
+```
+
+同步修改验证侧重算编码即可（若贵方 verifier 复用同一函数则无需额外改动）。
+
+**修复后我方立即复测双向**：① 出向（M→C 投递，贵方 hex 验签）；② 入向（C→M 调用，我方 HmacGuard hex 验签）。通过即闭账第一批启动条件。
+
+**复测注意事项**：`entitlement_usage_records` 的 `workspace_id` / `agent_run_id` 为 **uuid 列**，测试 payload 请传合法 UUID，否则会在验签通过后的业务层报 PG `22P02`（500），勿误判为签名问题。
+
+**我方状态**：hex 口径全链自测已通过（契约单测 11/11、入向有效签名 `201 recorded:1`、篡改签名 `401`、出向投递经替身 hex 验签接收成功），随时可复测。
+
+---
+
+## HMAC 复测闭环（2026-09-02 第二轮：Console 复测反馈 → 我方修复完成）
+
+Console 复测确认 **hex 修复已生效**（源码 `digest('hex')` + POST 写路径验签通过）。反馈剩余两处差异均属我方（M 侧）实现，已全部修复并复测：
+
+### ① GET 空 body 派生（一行修复 + 一处加固，已完成）
+
+- **根因**：我方守卫对无 body 请求派生 `JSON.stringify({})='{}'`，契约语义为 body 原文（GET = 空串）→ Console 的 GET pull 按空串签名被 401。
+- **修复**：抽出 `deriveRawPayload()`——rawBody 真原文优先（Buffer/string）；无 body（GET/DELETE）= 空串；仅无 rawBody 且解析出的 JSON body 非空时才回退 re-serialization。
+- **加固**：`main.ts` body-parser 增加 `verify` 回调捕获 raw body Buffer——此前 POST 全靠 re-serialization 碰巧一致，Go 侧 JSON HTML 转义（`\u003c`）一旦出现即 mismatch，现改用真原文彻底消除。
+- **复测（4001 现网实例）**：GET 空串签名 → 过门进业务态；GET `'{}'` 签名 → `401 AUTH_HMAC_SIGNATURE_MISMATCH`（旧口径已拒）；POST 真原文 → `201 recorded:1`。
+- **文档**：TS 注记 + 集成指南 + skill + employer-integration-api 四处已补「GET/无 body = 空串，POST 取真原文」澄清（与 Console 侧提交 `50991903c` 同口径）。
+
+### ② `employer-mentions` orderId 归属校验缺口（已完成）
+
+- **修复**：`receiveEmployerMention` 接入 `getOrThrow`——订单不存在返回 `404 NOT_FOUND_ORDER`（RFC 7807），不再对任意 id 误返 201。复测确认。
+- **探测数据说明**：我方该端点本就不落库（仅回执 echo），贵方探测记录（order `00000000-…`、"joint-debug probe"）未写入我方库（`marketplace_orders` 无该订单），请贵方在自己侧清理。
+
+### 当前状态
+
+第一批启动条件全部就绪：hex 编码 ✅、GET 空 body 派生 ✅、POST 真原文 ✅、方向密钥 ✅。Console 侧 5min 定时 pull 无需我方任何配合即自动恢复；如仍被拦请贵方确认 pull 进程按新口径（空串）签名。全量回归 42 套件 / 232 用例通过。
