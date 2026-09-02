@@ -45,7 +45,7 @@ export default function MusicPlugin(props: AgentPanelProps) {
           { value: 'instrumental', label: '纯音乐模式' },
         ]}
       />
-      <div className={instrumental ? '' : 'grid gap-3 md:grid-cols-2'}>
+      <div className={instrumental ? '' : 'grid gap-3'}>
         {!instrumental && (
           <div>
             <PanelTextarea

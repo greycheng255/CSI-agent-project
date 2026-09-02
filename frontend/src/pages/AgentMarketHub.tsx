@@ -22,6 +22,11 @@ import {
 } from '../api/agentMarketApi';
 import { OPENNOTEBOOK_AGENT_PROVIDER } from '../config/api';
 import { AGENT_CATALOG, AGENT_STYLE, type AgentCatalogItem } from '../data/agentMarketCatalog';
+import {
+  openNotebookAuthorization,
+  readOpenNotebookApiKey,
+} from '../features/agent-market/openNotebookCredentials';
+import { useAuthStore } from '../store/authStore';
 
 const INITIAL_TAG_LIMIT = 10;
 
@@ -131,6 +136,18 @@ function AgentMarketCard({
 }
 
 export default function AgentMarketHub() {
+  const accountId = useAuthStore(
+    (state) => state.user?.id || state.admin?.id || 'anonymous',
+  );
+  const provider = useMemo(() => {
+    const authorization = openNotebookAuthorization(
+      readOpenNotebookApiKey(accountId),
+    );
+    return {
+      ...OPENNOTEBOOK_AGENT_PROVIDER,
+      ...(authorization ? { authorization } : {}),
+    };
+  }, [accountId]);
   const [directory, setDirectory] = useState<AgentDirectory | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -143,7 +160,7 @@ export default function AgentMarketHub() {
   useEffect(() => {
     let cancelled = false;
 
-    loadAgentDirectory(OPENNOTEBOOK_AGENT_PROVIDER)
+    loadAgentDirectory(provider)
       .then((data) => {
         if (cancelled) return;
         setDirectory(data);
@@ -161,7 +178,7 @@ export default function AgentMarketHub() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [provider]);
 
   const tagOptions = useMemo(() => {
     const counts = new Map<string, number>();

@@ -18,7 +18,7 @@ export default function PodcastPlugin(props: AgentPanelProps) {
         placeholder="粘贴文档、访谈提纲、文章或讨论主题..."
         rows={9}
       />
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3">
         <ChoicePills
           label="节目风格"
           value={props.formValues.style || '访谈'}
@@ -40,7 +40,7 @@ export default function PodcastPlugin(props: AgentPanelProps) {
           }))}
         />
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3">
         <ChoicePills
           label="主持人"
           value={props.formValues.host_voice || 'Cherry'}

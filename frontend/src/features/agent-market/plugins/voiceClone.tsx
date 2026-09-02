@@ -23,7 +23,7 @@ export default function VoiceClonePlugin(props: AgentPanelProps) {
           </div>
         </div>
       </div>
-      <div className="grid gap-2 md:grid-cols-3">
+      <div className="grid gap-2">
         {[
           ['音色名称', '公开 API 待提供'],
           ['复刻音频', '必填，10 秒至 5 分钟'],

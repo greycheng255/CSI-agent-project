@@ -1,6 +1,6 @@
 # 智能体集市 OpenNotebook Agent Runs API 接入与验证报告
 
-更新时间：2026-08-29
+更新时间：2026-09-02
 
 ## 1. 接入结论
 
@@ -9,6 +9,7 @@
 - 目录：`GET /api/v1/agents`
 - 提交：`POST /api/v1/agent-runs`
 - 状态：`GET /api/v1/agent-runs/{record_id}`
+- 历史：`GET /api/v1/agent-runs?workspace_id=<workspace-id>`
 - 鉴权：`Authorization: Bearer <OpenNotebook API Key>`
 - 幂等：每次提交发送唯一的 `Idempotency-Key`
 
@@ -81,6 +82,7 @@
 - 提交体转换为 `agent / agent_version / workspace_id / input / model`。
 - 每次提交自动生成 `Idempotency-Key`。
 - 轮询改为 `GET /api/v1/agent-runs/{record_id}`。
+- 历史记录通过 `GET /api/v1/agent-runs` 加载，并按当前工作区和智能体类型筛选。
 - 兼容解析 `id`、`record_id`、`run_id` 以及 `output` 等响应字段。
 - 移除租户 ID、用户 ID 和相关请求头。
 
@@ -94,9 +96,12 @@
 调整内容：
 
 - 集市目录请求统一携带 OpenNotebook API Key。
-- 运行设置仅保留工作区 ID。
+- 运行页使用 API Key 调用 `GET /api/v1/workspaces`，由用户选择可访问工作区。
+- 工作区 ID 不再由前端环境变量预置，仅在浏览器本地保存最近选择。
 - 页面不再显示或缓存租户 ID、用户 ID。
 - 状态轮询和结果展示适配 Agent Runs 记录。
+- 所有 `/agent-market/:id` 运行页统一为双栏工作台：左侧为 API Key、工作区、模型及智能体参数，右侧为当前执行、进度、结果和运行历史。
+- 点击历史任务可以恢复对应任务的状态与执行结果；运行中的历史任务会继续轮询。
 
 ### 4.3 模块能力映射
 
@@ -119,16 +124,14 @@
 配置示例：
 
 ```dotenv
-VITE_AGENT_API_BASE=https://api.opennotebook.chat
-VITE_AGENT_REST_BASE=https://api.opennotebook.chat/api/v1
-VITE_AGENT_OPENNOTEBOOK_REST_BASE=https://api.opennotebook.chat/api/v1
-VITE_AGENT_OPENNOTEBOOK_WORKSPACE_ID=<workspace-id>
-VITE_AGENT_OPENNOTEBOOK_API_KEY=<onb-api-key>
+VITE_AGENT_API_BASE=http://localhost:3001
 ```
 
-实际 API Key 已写入本机被 Git 忽略的 `frontend/.env`，没有写入源码或本报告。
+OpenNotebook API Key 不再写入环境变量。每个 CSI 用户在智能体运行页面填写自己的 Key；Key 按 CSI 用户 ID 隔离并保存在当前浏览器的 `localStorage`，不会提交给 CSI 后端，也不会进入 Vite 构建产物。
 
-注意：`VITE_*` 变量会被 Vite 打包进浏览器资源。当前实现符合“浏览器直接调用 OpenNotebook”的现有架构，但生产环境若不能公开此 Key，应改为由 CSI 后端代理请求，并把 Key 放在服务端环境变量中。
+API Key 需要包含 `agents:read`、`agent_runs:create`、`agent_runs:read` 和 `workspaces:read` 权限。租户、用户和工作区归属均由服务端根据 Key 决定。
+
+页面仅在浏览器直连 OpenNotebook 时把该用户的 Key 放入 `Authorization: Bearer` 请求头。用户可以随时更换或清除本机保存的 Key；在共享设备上使用后应主动清除。
 
 ## 6. 远端验证
 
@@ -137,20 +140,17 @@ VITE_AGENT_OPENNOTEBOOK_API_KEY=<onb-api-key>
 - 使用 API Key 请求 `GET /api/v1/agents` 成功。
 - 返回 9 个可用 workflow agents：`llm_chat`、`mindmap`、`flashcard`、`podcast`、`invoice`、`video_shot_analysis`、`digihuman`、`videoagent`、`speech_synth`。
 - 返回 5 个媒体模型：`midjourney`、`gpt-image-2`、`kling-v1`、`suno-v3`、`framedirector-v1`。
-- 使用 API Key 请求 `GET /api/v1/agent-runs` 成功，当前列表为空。
+- 使用 API Key 请求 `GET /api/v1/workspaces` 成功，页面可以让用户选择该 Key 可访问的工作区。
+- 使用 `gpt-image-2` 提交真实文生图任务成功：`POST /api/v1/agent-runs` 返回 `202`，Worker 消费任务后最终状态为 `succeeded`、进度为 `100`，并返回图片地址和 storage object ID。
+- 页面能够识别 `succeeded` 完成态，并根据结果数据中的 `image_url`、`video_url` 或 `audio_url` 显示对应媒体。
+- API Key 输入、更新、清除及按 CSI 用户隔离的浏览器保存逻辑已完成。
 - 前端 `npm run build` 通过。
 
-### 6.2 当前阻塞
-
-最小 `mindmap` 提交已到达 OpenNotebook 业务层，但返回：
-
-```text
-PRICING_UNAVAILABLE: No active pricing contract is available
-```
-
-这表明 API Key 鉴权和 Agent Runs 请求格式已被服务端接受，但当前环境没有有效计价合同，暂时无法创建实际运行记录。需要在 OpenNotebook 中为该 Key 所属账户/工作区启用有效计价合同后，再逐项做完成态验证。
+### 6.2 当前限制
 
 声音克隆仍是服务端能力缺口：公共目录未返回对应 agent/model，不能通过 `/api/v1/agent-runs` 合法提交。需要 OpenNotebook 后端先将声音克隆注册为公共 agent，前端才能接通。
+
+本地运行异步 Agent 时，除 Uvicorn API 服务外还必须同时运行 `python -m app.workers.agent_api_worker`，否则任务会停留在 `queued`。
 
 ## 7. 验证命令
 

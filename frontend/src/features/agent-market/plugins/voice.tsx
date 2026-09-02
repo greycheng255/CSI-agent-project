@@ -48,7 +48,7 @@ export default function VoicePlugin(props: AgentPanelProps) {
         }}
         options={GEMINI_VOICE_OPTIONS}
       />
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3">
         <PanelInput
           label="音量（0-100）"
           value={props.formValues.volume || '50'}

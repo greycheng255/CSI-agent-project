@@ -58,7 +58,7 @@ export default function InvoicePlugin(props: AgentPanelProps) {
         />
       )}
       {mode === 'pdf' && (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3">
           <AttachmentUpload
             label="发票 PDF"
             value={props.formValues.pdf_url || ''}

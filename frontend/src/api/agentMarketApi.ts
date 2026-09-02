@@ -48,6 +48,13 @@ export type AgentDirectory = {
   error?: string;
 };
 
+export type AgentWorkspace = {
+  id: string;
+  name: string;
+  description?: string;
+  status?: string;
+};
+
 export type GenerateAgentPayload = {
   workspaceId: string;
   type?: string;
@@ -74,6 +81,14 @@ export type AgentTaskStatus = {
   result_type?: string;
   cost?: number;
   error?: string;
+};
+
+export type AgentRunHistoryItem = AgentTaskStatus & {
+  agent: string;
+  workspace_id: string;
+  input?: unknown;
+  created_at?: string;
+  completed_at?: string;
 };
 
 const FALLBACK_AGENTS: ApiAgentDefinition[] = [
@@ -278,10 +293,14 @@ async function requestJson(path: string, init?: RequestInit, provider?: AgentReq
   if (!res.ok) {
     const record = asRecord(payload);
     const nestedError = asRecord(record.error);
+    const nestedMessage = asRecord(record.message);
+    const nestedDetail = asRecord(record.detail);
     const message =
       (isString(record.message) && record.message) ||
       (isString(record.detail) && record.detail) ||
       (isString(record.error) && record.error) ||
+      (isString(nestedMessage.message) && nestedMessage.message) ||
+      (isString(nestedDetail.message) && nestedDetail.message) ||
       (isString(nestedError.message) && nestedError.message) ||
       (isString(payload) && payload) ||
       `请求失败 (${res.status})`;
@@ -328,6 +347,36 @@ export async function loadAgentDirectory(provider?: AgentRequestProvider): Promi
     usingFallback: agents.length === 0 || models.length === 0,
     error: failure || undefined,
   };
+}
+
+export async function loadAgentWorkspaces(
+  provider?: AgentRequestProvider,
+): Promise<AgentWorkspace[]> {
+  const payload = await requestJson(
+    '/workspaces?limit=500',
+    { headers: buildHeaders(provider) },
+    provider,
+  );
+  const root = asRecord(payload);
+  const rows = Array.isArray(payload)
+    ? payload
+    : Array.isArray(root.data)
+      ? root.data
+      : Array.isArray(root.workspaces)
+        ? root.workspaces
+        : [];
+
+  return rows.flatMap((row) => {
+    const workspace = asRecord(row);
+    const id = firstString(workspace.id, workspace.workspace_id);
+    if (!id) return [];
+    return [{
+      id,
+      name: firstString(workspace.name, workspace.title) || id,
+      description: firstString(workspace.description),
+      status: firstString(workspace.status),
+    }];
+  });
 }
 
 export function findWorkflowDefinition(directory: AgentDirectory, workflowType: string) {
@@ -411,14 +460,24 @@ export async function getAgentTaskStatus(
   const root = asRecord(response);
   const data = asRecord(root.data);
   const source = Object.keys(data).length > 0 ? data : root;
+  return normalizeAgentTaskStatus(source, taskId);
+}
+
+function normalizeAgentTaskStatus(
+  sourceValue: unknown,
+  fallbackTaskId: string,
+): AgentTaskStatus {
+  const source = asRecord(sourceValue);
   const output = source.output ?? source.result_data ?? source.result ?? null;
   const outputRecord = asRecord(output);
   const status = firstString(source.status) || 'running';
   const normalizedStatus = status.toLowerCase();
   const errorRecord = asRecord(source.error);
+  const usageRecord = asRecord(source.usage);
 
   return {
-    task_id: firstString(source.id, source.record_id, source.run_id, source.task_id) || taskId,
+    task_id:
+      firstString(source.id, source.record_id, source.run_id, source.task_id) || fallbackTaskId,
     status,
     is_final:
       typeof source.is_final === 'boolean'
@@ -444,6 +503,10 @@ export async function getAgentTaskStatus(
         ? source.cost
         : typeof source.actual_credits === 'number'
           ? source.actual_credits
+          : typeof usageRecord.actual_credits === 'number'
+            ? usageRecord.actual_credits
+            : typeof usageRecord.estimated_credits === 'number'
+              ? usageRecord.estimated_credits
           : undefined,
     error: firstString(
       source.error_message,
@@ -453,6 +516,38 @@ export async function getAgentTaskStatus(
       source.error_code,
     ),
   };
+}
+
+export async function loadAgentRunHistory(
+  workspaceId: string,
+  provider?: AgentRequestProvider,
+  limit = 50,
+): Promise<AgentRunHistoryItem[]> {
+  const params = new URLSearchParams({
+    workspace_id: workspaceId,
+    limit: String(Math.max(1, Math.min(100, limit))),
+  });
+  const payload = await requestJson(
+    `/agent-runs?${params.toString()}`,
+    { headers: buildHeaders(provider) },
+    provider,
+  );
+  const root = asRecord(payload);
+  const rows = Array.isArray(root.data) ? root.data : [];
+
+  return rows.flatMap((row) => {
+    const source = asRecord(row);
+    const taskId = firstString(source.id, source.record_id, source.run_id, source.task_id);
+    if (!taskId) return [];
+    return [{
+      ...normalizeAgentTaskStatus(source, taskId),
+      agent: firstString(source.agent, source.agent_type) || '',
+      workspace_id: firstString(source.workspace_id) || workspaceId,
+      input: source.input ?? source.input_params,
+      created_at: firstString(source.created_at),
+      completed_at: firstString(source.completed_at),
+    }];
+  });
 }
 
 export function getRunnableCatalogItems(directory: AgentDirectory) {
