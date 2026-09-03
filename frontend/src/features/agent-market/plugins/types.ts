@@ -12,6 +12,7 @@ export type AgentPluginProviderConfig = {
   name: string;
   restBase: string;
   authorization?: string;
+  getAuthorization?: () => Promise<string>;
   headers?: Record<string, string>;
 };
 

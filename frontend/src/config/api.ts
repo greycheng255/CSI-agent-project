@@ -16,6 +16,12 @@ export const AGENT_API_BASE =
 
 export const AGENT_REST_BASE = `${AGENT_API_BASE}/api/v1`;
 
+export const OPENNOTEBOOK_OAUTH_CLIENT_ID = readEnv(
+  'VITE_AGENT_OPENNOTEBOOK_OAUTH_CLIENT_ID',
+);
+
+export const OPENNOTEBOOK_OAUTH_REDIRECT_PATH = '/oauth/opennotebook/callback';
+
 export const OPENNOTEBOOK_AGENT_PROVIDER = {
   id: 'opennotebook-agent',
   name: 'OpenNotebook Agent',

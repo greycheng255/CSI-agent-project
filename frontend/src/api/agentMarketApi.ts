@@ -67,6 +67,7 @@ export type GenerateAgentPayload = {
 export type AgentRequestProvider = {
   restBase?: string;
   authorization?: string;
+  getAuthorization?: () => Promise<string>;
   headers?: Record<string, string>;
 };
 
@@ -279,7 +280,15 @@ function buildHeaders(provider?: AgentRequestProvider, headers?: Record<string, 
 }
 
 async function requestJson(path: string, init?: RequestInit, provider?: AgentRequestProvider) {
-  const res = await fetch(apiUrl(path, provider), init);
+  const headers = new Headers(init?.headers);
+  Object.entries(provider?.headers || {}).forEach(([name, value]) => {
+    if (!headers.has(name)) headers.set(name, value);
+  });
+  const authorization =
+    provider?.authorization || (await provider?.getAuthorization?.()) || '';
+  if (authorization) headers.set('Authorization', authorization);
+
+  const res = await fetch(apiUrl(path, provider), { ...init, headers });
   const text = await res.text();
   let payload: unknown = null;
   if (text) {

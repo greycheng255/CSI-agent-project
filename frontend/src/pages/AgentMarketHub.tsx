@@ -22,10 +22,7 @@ import {
 } from '../api/agentMarketApi';
 import { OPENNOTEBOOK_AGENT_PROVIDER } from '../config/api';
 import { AGENT_CATALOG, AGENT_STYLE, type AgentCatalogItem } from '../data/agentMarketCatalog';
-import {
-  openNotebookAuthorization,
-  readOpenNotebookApiKey,
-} from '../features/agent-market/openNotebookCredentials';
+import { getOpenNotebookOAuthAuthorization } from '../features/agent-market/openNotebookOAuth';
 import { useAuthStore } from '../store/authStore';
 
 const INITIAL_TAG_LIMIT = 10;
@@ -140,12 +137,9 @@ export default function AgentMarketHub() {
     (state) => state.user?.id || state.admin?.id || 'anonymous',
   );
   const provider = useMemo(() => {
-    const authorization = openNotebookAuthorization(
-      readOpenNotebookApiKey(accountId),
-    );
     return {
       ...OPENNOTEBOOK_AGENT_PROVIDER,
-      ...(authorization ? { authorization } : {}),
+      getAuthorization: () => getOpenNotebookOAuthAuthorization(accountId),
     };
   }, [accountId]);
   const [directory, setDirectory] = useState<AgentDirectory | null>(null);

@@ -7,13 +7,14 @@ import {
   Copy,
   Download,
   Eye,
-  EyeOff,
   ExternalLink,
   FolderOpen,
   History as HistoryIcon,
   KeyRound,
   Loader2,
+  LogOut,
   RefreshCw,
+  ShieldCheck,
   SlidersHorizontal,
   Star,
   Zap,
@@ -43,13 +44,14 @@ import {
 import { FlashcardStudyView } from '../features/agent-market/FlashcardStudyView';
 import { MindMapVisualization } from '../features/agent-market/MindMapVisualization';
 import {
-  clearOpenNotebookApiKey,
-  maskedOpenNotebookApiKey,
-  normalizeOpenNotebookApiKey,
-  openNotebookAuthorization,
-  readOpenNotebookApiKey,
-  saveOpenNotebookApiKey,
-} from '../features/agent-market/openNotebookCredentials';
+  beginOpenNotebookAuthorization,
+  clearLegacyOpenNotebookApiKey,
+  disconnectOpenNotebookOAuth,
+  getOpenNotebookOAuthAuthorization,
+  getValidOpenNotebookOAuthSession,
+  readOpenNotebookOAuthSession,
+  type OpenNotebookOAuthSession,
+} from '../features/agent-market/openNotebookOAuth';
 import { useAuthStore } from '../store/authStore';
 
 const CONTEXT_KEY = 'genesis-agent-market-context';
@@ -597,7 +599,7 @@ function HistoryPanel({
       <div className="flex items-center justify-between gap-3 border-b border-[color:var(--border)] pb-4">
         <div>
           <h3 className="text-base font-bold text-[var(--text-900)]">运行历史</h3>
-          <p className="mt-1 text-xs text-[var(--text-500)]">当前 Key、工作区和智能体的最近任务</p>
+          <p className="mt-1 text-xs text-[var(--text-500)]">当前授权账号、工作区和智能体的最近任务</p>
         </div>
         <button
           type="button"
@@ -760,19 +762,19 @@ export default function AgentRun() {
     return agent ? resolveAgentMarketPlugin({ agentId: agent.id, agent }) : null;
   }, [agent]);
   const bootstrapProvider = bootstrapPlugin?.manifest.provider;
-  const apiKeyStorageValue = readOpenNotebookApiKey(accountId);
-  const [apiKey, setApiKey] = useState(apiKeyStorageValue);
-  const [apiKeyDraft, setApiKeyDraft] = useState(apiKeyStorageValue);
-  const [apiKeyVisible, setApiKeyVisible] = useState(false);
-  const [apiKeyMessage, setApiKeyMessage] = useState('');
+  const [oauthSession, setOAuthSession] = useState<OpenNotebookOAuthSession | null>(() =>
+    readOpenNotebookOAuthSession(accountId),
+  );
+  const [oauthBusy, setOAuthBusy] = useState(false);
+  const [oauthMessage, setOAuthMessage] = useState('');
+  const oauthConnected = Boolean(oauthSession);
   const bootstrapRequestProvider = useMemo(() => {
     if (!bootstrapProvider) return undefined;
-    const authorization = openNotebookAuthorization(apiKey);
     return {
       ...bootstrapProvider,
-      ...(authorization ? { authorization } : {}),
+      getAuthorization: () => getOpenNotebookOAuthAuthorization(accountId),
     };
-  }, [apiKey, bootstrapProvider]);
+  }, [accountId, bootstrapProvider]);
   const contextStorageKey = contextKeyFor(bootstrapProvider?.id, accountId);
   const [directory, setDirectory] = useState<AgentDirectory | null>(null);
   const [loading, setLoading] = useState(true);
@@ -800,10 +802,27 @@ export default function AgentRun() {
   const taskRunning = Boolean(taskId && !status?.is_final);
 
   useEffect(() => {
-    const storedApiKey = readOpenNotebookApiKey(accountId);
-    setApiKey(storedApiKey);
-    setApiKeyDraft(storedApiKey);
-    setApiKeyMessage('');
+    let cancelled = false;
+    clearLegacyOpenNotebookApiKey(accountId);
+    setOAuthMessage('');
+    const storedSession = readOpenNotebookOAuthSession(accountId);
+    setOAuthSession(storedSession);
+    if (!storedSession) return () => {
+      cancelled = true;
+    };
+
+    getValidOpenNotebookOAuthSession(accountId)
+      .then((session) => {
+        if (!cancelled) setOAuthSession(session);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setOAuthMessage(error instanceof Error ? error.message : '刷新 OpenNotebook 授权失败。');
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [accountId]);
 
   useEffect(() => {
@@ -817,7 +836,7 @@ export default function AgentRun() {
       };
     }
 
-    if (!apiKey) {
+    if (!oauthConnected) {
       setDirectory(null);
       setLoadError('');
       setLoading(false);
@@ -844,7 +863,7 @@ export default function AgentRun() {
     return () => {
       cancelled = true;
     };
-  }, [agent, apiKey, bootstrapRequestProvider]);
+  }, [agent, bootstrapRequestProvider, oauthConnected]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || hydratedContextKey !== contextStorageKey) return;
@@ -858,7 +877,7 @@ export default function AgentRun() {
 
   useEffect(() => {
     let cancelled = false;
-    if (!apiKey) {
+    if (!oauthConnected) {
       setWorkspaces([]);
       setContext({ workspaceId: '' });
       setWorkspaceError('');
@@ -896,7 +915,7 @@ export default function AgentRun() {
     return () => {
       cancelled = true;
     };
-  }, [apiKey, bootstrapRequestProvider]);
+  }, [bootstrapRequestProvider, oauthConnected]);
 
   const compatibleModels = useMemo(() => {
     if (!agent || !directory || agent.capability.kind !== 'media') return [];
@@ -940,16 +959,15 @@ export default function AgentRun() {
   const activeProviderBase = activePlugin?.manifest.provider || bootstrapProvider;
   const activeProvider = useMemo(() => {
     if (!activeProviderBase) return undefined;
-    const authorization = openNotebookAuthorization(apiKey);
     return {
       ...activeProviderBase,
-      ...(authorization ? { authorization } : {}),
+      getAuthorization: () => getOpenNotebookOAuthAuthorization(accountId),
     };
-  }, [activeProviderBase, apiKey]);
+  }, [accountId, activeProviderBase]);
 
   const refreshHistory = useCallback(async () => {
     const workspaceId = context.workspaceId.trim();
-    if (!apiKey || !workspaceId || !activeProvider || !historyAgentType) {
+    if (!oauthConnected || !workspaceId || !activeProvider || !historyAgentType) {
       setHistoryItems([]);
       setHistoryError('');
       setHistoryLoading(false);
@@ -966,7 +984,7 @@ export default function AgentRun() {
     } finally {
       setHistoryLoading(false);
     }
-  }, [activeProvider, apiKey, context.workspaceId, historyAgentType]);
+  }, [activeProvider, context.workspaceId, historyAgentType, oauthConnected]);
 
   useEffect(() => {
     void refreshHistory();
@@ -991,35 +1009,38 @@ export default function AgentRun() {
     setFormValues((current) => ({ ...current, [name]: value }));
   }, []);
 
-  const handleSaveApiKey = () => {
-    const normalized = normalizeOpenNotebookApiKey(apiKeyDraft);
-    if (!normalized) {
-      setApiKeyMessage('请输入 OpenNotebook API Key。');
-      return;
+  const handleConnectOpenNotebook = async () => {
+    if (oauthBusy || taskRunning || submitting) return;
+    setOAuthBusy(true);
+    setOAuthMessage('');
+    try {
+      await beginOpenNotebookAuthorization(
+        accountId,
+        `${window.location.pathname}${window.location.search}`,
+      );
+    } catch (error) {
+      setOAuthMessage(error instanceof Error ? error.message : '启动 OpenNotebook 授权失败。');
+      setOAuthBusy(false);
     }
-    if (!normalized.startsWith('onb_live_')) {
-      setApiKeyMessage('API Key 格式不正确，应以 onb_live_ 开头。');
-      return;
-    }
-
-    saveOpenNotebookApiKey(accountId, normalized);
-    setApiKey(normalized);
-    setApiKeyDraft(normalized);
-    setApiKeyMessage('API Key 已保存，正在读取工作区。');
-    setTaskId('');
-    setStatus(null);
-    setRunError('');
   };
 
-  const handleClearApiKey = () => {
-    clearOpenNotebookApiKey(accountId);
-    setApiKey('');
-    setApiKeyDraft('');
-    setApiKeyMessage('API Key 已从当前浏览器清除。');
-    setTaskId('');
-    setStatus(null);
-    setHistoryItems([]);
-    setRunError('');
+  const handleDisconnectOpenNotebook = async () => {
+    if (oauthBusy || taskRunning || submitting) return;
+    setOAuthBusy(true);
+    setOAuthMessage('');
+    try {
+      await disconnectOpenNotebookOAuth(accountId);
+      setOAuthSession(null);
+      setOAuthMessage('OpenNotebook 授权已撤销。');
+      setTaskId('');
+      setStatus(null);
+      setHistoryItems([]);
+      setRunError('');
+    } catch (error) {
+      setOAuthMessage(error instanceof Error ? error.message : '撤销 OpenNotebook 授权失败。');
+    } finally {
+      setOAuthBusy(false);
+    }
   };
 
   const handleWorkspaceChange = (workspaceId: string) => {
@@ -1039,8 +1060,8 @@ export default function AgentRun() {
   const handleSubmit = async () => {
     if (!agent || !directory || !runnable || submitting || taskRunning) return;
 
-    if (!apiKey) {
-      setRunError('请先填写并连接你的 OpenNotebook API Key。');
+    if (!oauthConnected) {
+      setRunError('请先授权连接你的 OpenNotebook 账号。');
       return;
     }
 
@@ -1232,68 +1253,58 @@ export default function AgentRun() {
             </div>
 
             <div className="mt-5 space-y-4">
-              <div>
-                <label htmlFor="agent-run-api-key" className="mb-2 block text-[13px] font-semibold text-[var(--text-600)]">
-                  你的 OpenNotebook API Key *
-                </label>
-                <div className="relative">
-                  <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-400)]" />
-                  <input
-                    id="agent-run-api-key"
-                    type={apiKeyVisible ? 'text' : 'password'}
-                    value={apiKeyDraft}
-                    onChange={(event) => {
-                      setApiKeyDraft(event.target.value);
-                      setApiKeyMessage('');
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') handleSaveApiKey();
-                    }}
-                    placeholder="onb_live_..."
-                    autoComplete="off"
-                    spellCheck={false}
-                    disabled={submitting || taskRunning}
-                    className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white py-3 pl-10 pr-11 font-mono text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setApiKeyVisible((current) => !current)}
-                    className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-[var(--text-400)] hover:bg-[var(--background-100)] hover:text-[var(--text-700)]"
-                    aria-label={apiKeyVisible ? '隐藏 API Key' : '显示 API Key'}
-                  >
-                    {apiKeyVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+              <div className="rounded-xl border border-[color:var(--border)] bg-[var(--background-50)] p-4">
+                <div className="flex items-start gap-3">
+                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${oauthConnected ? 'bg-[var(--state-success-surface)] text-[var(--state-success-text)]' : 'bg-[var(--brand-50)] text-[var(--brand-600)]'}`}>
+                    {oauthConnected ? <ShieldCheck className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-sm font-bold text-[var(--text-800)]">OpenNotebook 账号授权</h3>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${oauthConnected ? 'bg-[var(--state-success-surface)] text-[var(--state-success-text)]' : 'bg-[var(--background-200)] text-[var(--text-500)]'}`}>
+                        {oauthConnected ? '已连接' : '未连接'}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-[var(--text-500)]">
+                      {oauthConnected
+                        ? '已通过 OAuth 2.1 + PKCE 授权，可读取该账号可访问的工作区。'
+                        : '跳转到 OpenNotebook 完成授权，无需复制或粘贴 API Key。'}
+                    </p>
+                    {oauthConnected && oauthSession?.scope && (
+                      <p className="mt-1 text-[11px] text-[var(--text-400)]">授权范围：{oauthSession.scope}</p>
+                    )}
+                  </div>
                 </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
+
+                <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={handleSaveApiKey}
-                    disabled={!apiKeyDraft.trim() || submitting || taskRunning}
-                    className="rounded-lg bg-[var(--brand-600)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--brand-700)] disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => void handleConnectOpenNotebook()}
+                    disabled={oauthBusy || submitting || taskRunning}
+                    className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-[var(--brand-600)] px-3 py-2 text-xs font-semibold text-white hover:bg-[var(--brand-700)] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {apiKey ? '更新并重新连接' : '保存并连接'}
+                    {oauthBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
+                    {oauthConnected ? '重新授权' : '授权连接 OpenNotebook'}
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleClearApiKey}
-                    disabled={!apiKey || submitting || taskRunning}
-                    className="rounded-lg border border-[color:var(--border)] bg-white px-3 py-2 text-xs font-semibold text-[var(--text-600)] hover:bg-[var(--background-100)] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    清除
-                  </button>
-                  {apiKey && (
-                    <span className="font-mono text-[11px] text-[var(--state-success-text)]">
-                      已连接 {maskedOpenNotebookApiKey(apiKey)}
-                    </span>
+                  {oauthConnected && (
+                    <button
+                      type="button"
+                      onClick={() => void handleDisconnectOpenNotebook()}
+                      disabled={oauthBusy || submitting || taskRunning}
+                      className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-[color:var(--border)] bg-white px-3 py-2 text-xs font-semibold text-[var(--text-600)] hover:bg-[var(--background-100)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <LogOut className="h-3.5 w-3.5" />
+                      断开连接
+                    </button>
                   )}
                 </div>
-                {apiKeyMessage && (
-                  <p className={`mt-2 text-xs leading-5 ${apiKeyMessage.startsWith('API Key 已') ? 'text-[var(--state-success-text)]' : 'text-[var(--state-error)]'}`}>
-                    {apiKeyMessage}
+                {oauthMessage && (
+                  <p className={`mt-2 text-xs leading-5 ${oauthMessage.includes('已撤销') ? 'text-[var(--state-success-text)]' : 'text-[var(--state-error)]'}`}>
+                    {oauthMessage}
                   </p>
                 )}
-                <p className="mt-2 text-xs leading-5 text-[var(--text-500)]">
-                  按当前 CSI 账号保存在此浏览器，仅用于直连 OpenNotebook，不会发送到 CSI 后端。
+                <p className="mt-2 text-[11px] leading-5 text-[var(--text-400)]">
+                  OAuth Token 仅保存在当前浏览器会话中，不会发送到 CSI 后端。
                 </p>
               </div>
 
@@ -1303,12 +1314,12 @@ export default function AgentRun() {
                   id="agent-run-workspace"
                   value={context.workspaceId}
                   onChange={(event) => handleWorkspaceChange(event.target.value)}
-                  disabled={!apiKey || workspacesLoading || workspaces.length === 0}
+                  disabled={!oauthConnected || workspacesLoading || workspaces.length === 0}
                   className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {!apiKey && <option value="">请先连接 API Key</option>}
-                  {apiKey && workspacesLoading && <option value="">正在读取工作区...</option>}
-                  {apiKey && !workspacesLoading && workspaces.length === 0 && <option value="">没有可用工作区</option>}
+                  {!oauthConnected && <option value="">请先授权 OpenNotebook</option>}
+                  {oauthConnected && workspacesLoading && <option value="">正在读取工作区...</option>}
+                  {oauthConnected && !workspacesLoading && workspaces.length === 0 && <option value="">没有可用工作区</option>}
                   {workspaces.map((workspace) => (
                     <option key={workspace.id} value={workspace.id}>
                       {workspace.name}
@@ -1318,12 +1329,12 @@ export default function AgentRun() {
                 {context.workspaceId && (
                   <p className="mt-2 break-all font-mono text-[11px] text-[var(--text-400)]">{context.workspaceId}</p>
                 )}
-                {apiKey && workspaceError ? (
+                {oauthConnected && workspaceError ? (
                   <p className="mt-2 text-xs leading-5 text-[var(--state-error)]">
-                    {workspaceError}。请确认 API Key 包含 workspaces:read 权限。
+                    {workspaceError}。请重新授权或确认该账号可以访问工作区。
                   </p>
-                ) : apiKey ? (
-                  <p className="mt-2 text-xs leading-5 text-[var(--text-500)]">工作区由当前 API Key 自动读取。</p>
+                ) : oauthConnected ? (
+                  <p className="mt-2 text-xs leading-5 text-[var(--text-500)]">工作区由当前 OpenNotebook 授权账号自动读取。</p>
                 ) : null}
               </div>
             </div>
@@ -1332,10 +1343,10 @@ export default function AgentRun() {
               <div className="mt-5 break-all rounded-xl bg-[var(--background-100)] p-3 text-xs leading-5 text-[var(--text-500)]">
                 <div className="font-semibold text-[var(--text-700)]">{activeProvider.name}</div>
                 <div className="mt-1">{activeProvider.restBase}</div>
-                {activeProvider.authorization ? (
-                  <div className="mt-1 text-[var(--state-success-text)]">使用当前用户填写的 API Key</div>
+                {oauthConnected ? (
+                  <div className="mt-1 text-[var(--state-success-text)]">OAuth 2.1 + PKCE 已授权</div>
                 ) : (
-                  <div className="mt-1 text-[var(--state-warning)]">等待用户填写 API Key</div>
+                  <div className="mt-1 text-[var(--state-warning)]">等待用户授权 OpenNotebook</div>
                 )}
               </div>
             )}
@@ -1365,18 +1376,18 @@ export default function AgentRun() {
 
             {!loading && !runnable && agent.capability.kind !== 'unavailable' && (
               <div className="rounded-xl bg-[var(--background-100)] p-8 text-center">
-                {apiKey ? (
+                {oauthConnected ? (
                   <AlertTriangle className="mx-auto h-8 w-8 text-[var(--state-warning)]" />
                 ) : (
                   <KeyRound className="mx-auto h-8 w-8 text-[var(--brand-500)]" />
                 )}
                 <h3 className="mt-4 text-lg font-bold text-[var(--text-900)]">
-                  {apiKey ? '该智能体暂未开放使用' : '请先连接 OpenNotebook API Key'}
+                  {oauthConnected ? '该智能体暂未开放使用' : '请先授权 OpenNotebook 账号'}
                 </h3>
                 <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[var(--text-500)]">
-                  {apiKey
-                    ? '请检查 API Key 权限或 OpenNotebook 是否已开放该能力。'
-                    : '在左侧运行设置中填写你自己的 Key，页面将自动读取可用智能体、模型和工作区。'}
+                  {oauthConnected
+                    ? '请确认当前账号有权使用该能力，或 OpenNotebook 已开放对应智能体。'
+                    : '在左侧运行设置中点击授权，页面会自动读取可用智能体、模型和工作区。'}
                 </p>
               </div>
             )}
@@ -1477,11 +1488,11 @@ export default function AgentRun() {
                 </span>
                 <h3 className="mt-5 text-xl font-bold text-[var(--text-900)]">{agent.name} 已准备就绪</h3>
                 <p className="mt-2 max-w-lg text-sm leading-6 text-[var(--text-500)]">
-                  在左侧连接 API Key、选择工作区并配置参数，任务进度和生成结果会在这里实时显示。
+                  在左侧授权 OpenNotebook、选择工作区并配置参数，任务进度和生成结果会在这里实时显示。
                 </p>
                 <div className="mt-8 grid w-full max-w-2xl gap-3 text-left sm:grid-cols-3">
                   {[
-                    ['01', '连接账号', '填写 Key 并选择工作区'],
+                    ['01', '连接账号', '授权 OpenNotebook 并选择工作区'],
                     ['02', '调整参数', '设置内容、模型与生成选项'],
                     ['03', '查看结果', '跟踪进度并浏览历史产物'],
                   ].map(([step, title, description]) => (
