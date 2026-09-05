@@ -66,8 +66,17 @@ describe('OpportunityPushService（T8：Push 模式 + 投递幂等）', () => {
       mockDispatcher.enqueue.mock.calls[0];
     expect(eventType).toBe('opportunity.pushed');
     expect(url).toContain('/v1/webhooks/opportunity/pushed');
-    expect(payload.workspace_id).toBe('ws-1');
-    expect(eventId).toBe('log-ws-1'); // 投递日志行 id 作为稳定 event_id
+    // 契约 §9.1 信封结构
+    expect(payload.event_id).toBe('log-ws-1');
+    expect(payload.event_type).toBe('opportunity.pushed');
+    expect(payload.event_version).toBe(1);
+    expect(payload.source).toBe('marketplace');
+    expect(payload.data.workspace_id).toBe('ws-1');
+    expect(payload.data.opportunity_id).toBe('log-ws-1');
+    expect(payload.data.source_type).toBe('platform_push');
+    expect(payload.data.task_brief.title).toBe('企业官网');
+    expect(payload.data.task_brief.budget_range).toEqual({ min: 0, max: 10000 });
+    expect(eventId).toBe('log-ws-1'); // 投递日志行 id 作为稳定 event_id（payload.event_id 同值）
   });
 
   it('同轮已投过的 Workspace 跳过（幂等）', async () => {

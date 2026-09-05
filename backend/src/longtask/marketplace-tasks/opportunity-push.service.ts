@@ -89,21 +89,51 @@ export class OpportunityPushService {
         }),
       );
 
+      // 契约 §9.1：信封结构（event_version/occurred_at/sent_at/source + data.task_brief）
+      const now = new Date();
       await this.dispatcher.enqueue(
         'opportunity.pushed',
         consoleWebhookUrl(CONSOLE_WEBHOOK.opportunityPushed),
         {
+          event_id: log.id,
           event_type: 'opportunity.pushed',
-          marketplace_task_id: taskId,
-          workspace_id: ws.id,
-          bid_round: task.bidRound,
-          title: task.title,
-          category_id: task.categoryId,
-          budget_min_cny: task.budgetMinCny,
-          budget_max_cny: task.budgetMaxCny,
-          expires_at: task.expiresAt ? task.expiresAt.toISOString() : null,
+          event_version: 1,
+          occurred_at: now.toISOString(),
+          sent_at: now.toISOString(),
+          source: 'marketplace',
+          data: {
+            opportunity_id: log.id,
+            workspace_id: ws.id,
+            marketplace_task_id: taskId,
+            source_type: 'platform_push',
+            match_score: 100,
+            task_brief: {
+              title: task.title,
+              description: task.description ?? '',
+              category: task.categoryId,
+              budget_range: {
+                min: task.budgetMinCny ?? 0,
+                max: task.budgetMaxCny ?? 0,
+              },
+              expected_delivery_date: task.expectedDeliveryAt
+                ? task.expectedDeliveryAt.toISOString()
+                : null,
+              seat_limit: task.seatLimit,
+              bid_round: task.bidRound,
+              attachments: (task.attachmentUrls ?? []).map((url, i) => ({
+                name: `attachment-${i + 1}`,
+                url,
+                type: 'file',
+              })),
+              published_at: task.createdAt
+                ? task.createdAt.toISOString()
+                : now.toISOString(),
+              expires_at: task.expiresAt ? task.expiresAt.toISOString() : null,
+            },
+            pushed_at: now.toISOString(),
+          },
         },
-        log.id, // 投递日志行 id 作为稳定 event_id，重投不变
+        log.id, // 投递日志行 id 作为稳定 event_id，重投不变（payload.event_id 同值）
       );
       pushed += 1;
     }

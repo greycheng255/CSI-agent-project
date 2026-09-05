@@ -61,7 +61,11 @@ export class HmacGuard implements CanActivate {
     await this.claimNonce(nonce);
 
     const raw = deriveRawPayload({ rawBody: req.rawBody, body: req.body });
-    if (!verifySignature(raw, sig.ts, sig.v1, secret)) {
+    // 联调对齐（2026-09-04 代理抓包）：Console 服务级调用 Bearer 与 HMAC 使用不同密钥
+    // （Bearer=CSI_SERVICE_TOKEN，HMAC=CSI_WEBHOOK_SECRET）。设置 LONGTASK_INBOUND_HMAC_SECRET
+    // 时 HMAC 重算优先用该密钥，回落 INBOUND 保持原单密钥口径（向后兼容）。
+    const hmacSecret = process.env.LONGTASK_INBOUND_HMAC_SECRET || secret;
+    if (!verifySignature(raw, sig.ts, sig.v1, hmacSecret)) {
       throw new UnauthorizedException('AUTH_HMAC_SIGNATURE_MISMATCH');
     }
 

@@ -14,6 +14,7 @@ const NewTask = lazy(() => import('./pages/NewTask'));
 const TaskDetail = lazy(() => import('./pages/TaskDetail'));
 const OrderDetail = lazy(() => import('./pages/OrderDetail'));
 const UnifiedLogin = lazy(() => import('./pages/UnifiedLogin'));
+const SsoAuthorize = lazy(() => import('./pages/SsoAuthorize'));
 const Register = lazy(() => import('./pages/Register'));
 const AgentManagement = lazy(() => import('./pages/AgentManagement'));
 const AgentDetail = lazy(() => import('./pages/AgentDetail'));
@@ -31,10 +32,13 @@ const MyBids = lazy(() => import('./pages/MyBids'));
 const MyPlan = lazy(() => import('./pages/MyPlan'));
 const Profile = lazy(() => import('./pages/Profile'));
 const AdminAccounts = lazy(() => import('./pages/AdminAccounts'));
+const AdminSsoClients = lazy(() => import('./pages/AdminSsoClients'));
 const FinanceManagement = lazy(() => import('./pages/FinanceManagement'));
 const WorkspaceShowcase = lazy(() => import('./pages/WorkspaceShowcase'));
 const OwnerWorkspaceEntry = lazy(() => import('./pages/OwnerWorkspaceEntry'));
 const MyWorkspace = lazy(() => import('./pages/MyWorkspace'));
+const LongTaskSeats = lazy(() => import('./pages/LongTaskSeats'));
+const WorkspaceGallery = lazy(() => import('./pages/WorkspaceGallery'));
 
 function PageFallback() {
   return (
@@ -66,6 +70,7 @@ function App() {
           <Route path="orders/:id" element={<OrderDetail />} />
           <Route path="orders/:orderId/pay" element={<OrderPayment />} />
           <Route path="login" element={<UnifiedLogin />} />
+          <Route path="sso/authorize" element={<SsoAuthorize />} />
           <Route path="register" element={<Register />} />
           <Route path="api-docs" element={<ApiDocs />} />
 
@@ -74,6 +79,10 @@ function App() {
           <Route path="longtask/workspaces/mine" element={<Navigate to="/workspace" replace />} />
           <Route path="longtask/workspaces/by-owner/:ownerId" element={<OwnerWorkspaceEntry />} />
           <Route path="longtask/workspaces/:slug" element={<WorkspaceShowcase />} />
+          {/* 长任务竞标席位页（PRD §5.6.1，席位快照展示——答复文档六.3） */}
+          <Route path="longtask/tasks/:id/seats" element={<LongTaskSeats />} />
+          {/* 已入驻工作室画廊（生命周期投影展示——答复文档六.2） */}
+          <Route path="longtask/workspaces" element={<WorkspaceGallery />} />
 
           {/* 工作台：顶部主导航保持不变，子菜单在内容区左侧展示 */}
           <Route element={<WorkbenchLayout />}>
@@ -98,6 +107,7 @@ function App() {
             <Route path="admin/entitlement" element={<AdminEntitlement />} />
             <Route path="admin/release" element={<AdminRelease />} />
             <Route path="admin/accounts" element={<AdminAccounts />} />
+            <Route path="admin/sso-clients" element={<AdminSsoClients />} />
             <Route path="admin/agents" element={<AdminAgents />} />
           </Route>
         </Route>

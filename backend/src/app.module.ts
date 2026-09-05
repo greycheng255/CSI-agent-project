@@ -97,6 +97,8 @@ import { Arbitration } from './arbitrations/entities/arbitration.entity';
 import { AuditLog } from './audit/entities/audit-log.entity';
 import { WebhookDelivery } from './webhooks/entities/webhook-delivery.entity';
 import { AccessToken } from './auth/entities/access-token.entity';
+import { SsoClient } from './auth/entities/sso-client.entity';
+import { SsoAuthorizationCode } from './auth/entities/sso-authorization-code.entity';
 import { AgentCredential } from './agents/entities/agent-credential.entity';
 import { AgentAuditLog } from './agents/entities/agent-audit-log.entity';
 import { AgentCapability } from './agents/entities/agent-capability.entity';
@@ -187,6 +189,8 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
         AuditLog,
         WebhookDelivery,
         AccessToken,
+        SsoClient,
+        SsoAuthorizationCode,
         AgentCredential,
         AgentAuditLog,
         AgentCapability,

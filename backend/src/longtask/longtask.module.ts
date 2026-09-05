@@ -35,6 +35,8 @@ import { OpportunityPushService } from './marketplace-tasks/opportunity-push.ser
 import { Workspace } from './workspaces/workspace.entity';
 import { WorkspacesController } from './workspaces/workspaces.controller';
 import { WorkspacesService } from './workspaces/workspaces.service';
+import { WorkspaceSyncService } from './workspaces/workspace-sync.service';
+import { WorkspaceWebhookController } from './workspaces/workspace-webhook.controller';
 
 /**
  * 长任务域模块（阶段一 + 阶段二）。
@@ -61,11 +63,13 @@ import { WorkspacesService } from './workspaces/workspaces.service';
   ],
   controllers: [
     WorkspacesController,
+    WorkspaceWebhookController,
     MarketplaceTasksController,
     MarketplaceContractController,
   ],
   providers: [
     WorkspacesService,
+    WorkspaceSyncService,
     MarketplaceTasksService,
     OpportunityPushService,
     MarketplaceBidsService,

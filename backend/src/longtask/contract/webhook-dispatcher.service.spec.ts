@@ -141,4 +141,23 @@ describe('WebhookDispatcherService（投递器契约 §3.1/§4.1）', () => {
       }),
     );
   });
+
+  it('enqueue 注入 body event_id（§8.3 信封；显式携带时不覆盖）', async () => {
+    mockOutboxRepo.create.mockImplementation((v) => v);
+
+    // 缺省：自动生成并注入
+    await service.enqueue('bid.won', 'http://x', { a: 1 });
+    const first = mockOutboxRepo.create.mock.calls[0][0];
+    expect(first.payload.event_id).toBe(first.eventId);
+
+    // 显式 eventId：复用同一 id
+    await service.enqueue('bid.won', 'http://x', { a: 1 }, 'fixed-id');
+    const second = mockOutboxRepo.create.mock.calls[1][0];
+    expect(second.payload.event_id).toBe('fixed-id');
+
+    // payload 已带 event_id：不覆盖
+    await service.enqueue('bid.won', 'http://x', { event_id: 'caller-id' });
+    const third = mockOutboxRepo.create.mock.calls[2][0];
+    expect(third.payload.event_id).toBe('caller-id');
+  });
 });

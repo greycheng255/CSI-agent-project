@@ -37,6 +37,24 @@ HEARTBEAT_INTERVAL=30000
 LOG_LEVEL=info
 ```
 
+### 使用 PAT（个人访问令牌）接入
+
+推荐使用 Marketplace 统一用户体系颁发的 PAT 作为 `OWNER_TOKEN`：
+
+1. 登录 Marketplace，进入 **个人中心 → 安全设置 → 个人访问令牌**，创建令牌（可设置有效期），复制保存（仅显示一次）；
+2. 将令牌配置为环境变量（三者任选其一，`OWNER_TOKEN` 优先）：
+
+```env
+# 方式一：直接作为 OWNER_TOKEN
+OWNER_TOKEN=<your-pat>
+
+# 方式二/三：使用别名
+MARKETPLACE_PAT=<your-pat>
+PAT=<your-pat>
+```
+
+3. PAT 权限与 Marketplace 账号一致，可随时在个人中心撤销，立即失效。
+
 ### 运行
 
 开发模式:

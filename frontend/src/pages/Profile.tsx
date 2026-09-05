@@ -1,9 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { UserCircle, Phone, Shield, LogOut, Key, Clock, Globe, ChevronDown, ChevronUp, Loader2, CheckCircle, XCircle, Edit3, Mail, WalletCards } from 'lucide-react';
+import { UserCircle, Phone, Shield, LogOut, Key, Clock, Globe, ChevronDown, ChevronUp, Loader2, CheckCircle, XCircle, Edit3, Mail, WalletCards, Copy, KeyRound, Trash2 } from 'lucide-react';
 import { API_BASE } from '../config/api';
 import { WorkbenchPageHeader } from '../components/workbench/WorkbenchPrimitives';
+
+/** 个人访问令牌（PAT）元数据 */
+interface PatItem {
+  id: string;
+  name: string | null;
+  createdAt: string;
+  expiresAt: string | null;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+}
 
 export default function Profile() {
   const { user, logout } = useAuthStore();
@@ -11,6 +21,25 @@ export default function Profile() {
 
   const handleLogout = () => {
     if (!window.confirm('确定要退出登录吗？')) return;
+    logout();
+    navigate('/');
+  };
+
+  // SSO 全局登出：撤销所有设备/应用的登录与 SSO 令牌（PAT 保留），再清除本地状态
+  const handleLogoutAll = async () => {
+    if (!window.confirm('确定要退出所有设备的登录吗？所有网页与应用会话将立即失效（个人访问令牌保留）。')) return;
+    try {
+      await fetch(`${API_BASE}/api/v1/sso/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${useAuthStore.getState().token}`,
+        },
+        body: JSON.stringify({}),
+      });
+    } catch {
+      // 网络异常时仍清除本地登录状态
+    }
     logout();
     navigate('/');
   };
@@ -42,6 +71,107 @@ export default function Profile() {
   const [balance, setBalance] = useState<{ availableCny: number; frozenCny: number; totalIncomeCny: number } | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [balanceError, setBalanceError] = useState(false);
+
+  // ==================== PAT（个人访问令牌）====================
+  const [pats, setPats] = useState<PatItem[]>([]);
+  const [patLoading, setPatLoading] = useState(false);
+  const [patError, setPatError] = useState('');
+  const [showPatCreate, setShowPatCreate] = useState(false);
+  const [patName, setPatName] = useState('');
+  const [patExpiryDays, setPatExpiryDays] = useState('');
+  const [patCreating, setPatCreating] = useState(false);
+  const [newPatToken, setNewPatToken] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const patHeaders = () => ({
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${useAuthStore.getState().token}`,
+  });
+
+  const loadPats = useCallback(() => {
+    setPatLoading(true);
+    setPatError('');
+    fetch(`${API_BASE}/api/v1/users/pat`, { headers: patHeaders() })
+      .then((response) => {
+        if (!response.ok) throw new Error('pat-request-failed');
+        return response.json();
+      })
+      .then((data) => setPats(data.pats || []))
+      .catch(() => setPatError('令牌列表加载失败，请稍后重试'))
+      .finally(() => setPatLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    loadPats();
+  }, [user, loadPats]);
+
+  const handleCreatePat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPatError('');
+    const name = patName.trim();
+    if (!name) {
+      setPatError('请输入令牌名称');
+      return;
+    }
+    const expiry = patExpiryDays.trim();
+    const expiresInDays = expiry ? Number(expiry) : undefined;
+    if (expiresInDays !== undefined && (!Number.isInteger(expiresInDays) || expiresInDays <= 0)) {
+      setPatError('有效期必须为正整数天数');
+      return;
+    }
+    setPatCreating(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/users/pat`, {
+        method: 'POST',
+        headers: patHeaders(),
+        body: JSON.stringify({ name, expiresInDays }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPatError(data.message || '创建失败');
+        return;
+      }
+      setNewPatToken(data.token);
+      setPatName('');
+      setPatExpiryDays('');
+      setShowPatCreate(false);
+      loadPats();
+    } catch {
+      setPatError('网络错误');
+    } finally {
+      setPatCreating(false);
+    }
+  };
+
+  const handleRevokePat = async (id: string, name: string | null) => {
+    if (!window.confirm(`确定要撤销令牌「${name || id}」吗？使用该令牌的客户端将立即失去访问权限。`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/users/pat/${id}`, {
+        method: 'DELETE',
+        headers: patHeaders(),
+      });
+      if (res.ok) {
+        loadPats();
+      } else {
+        const data = await res.json();
+        setPatError(data.message || '撤销失败');
+      }
+    } catch {
+      setPatError('网络错误');
+    }
+  };
+
+  const handleCopyToken = async () => {
+    if (!newPatToken) return;
+    try {
+      await navigator.clipboard.writeText(newPatToken);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // 剪贴板不可用时静默降级，用户可手动选择复制
+    }
+  };
 
   useEffect(() => {
     if (!admin || !adminToken) return;
@@ -318,9 +448,14 @@ export default function Profile() {
         title="账户与安全"
         description="维护个人资料、查看资金状态并管理登录安全。账户信息将用于任务协作与交易通知。"
         actions={(
-          <button onClick={handleLogout} className="btn-cs btn-sm border border-[#ffc6c1] bg-[var(--state-error-surface)] text-[var(--state-error)] hover:bg-[#ffe1de]">
-            <LogOut className="h-4 w-4" />退出登录
-          </button>
+          <>
+            <button onClick={handleLogoutAll} className="btn-cs btn-sm border border-[color:var(--border)] bg-white text-[var(--text-700)] hover:bg-[var(--background-100)]">
+              退出所有设备
+            </button>
+            <button onClick={handleLogout} className="btn-cs btn-sm border border-[#ffc6c1] bg-[var(--state-error-surface)] text-[var(--state-error)] hover:bg-[#ffe1de]">
+              <LogOut className="h-4 w-4" />退出登录
+            </button>
+          </>
         )}
       />
 
@@ -456,13 +591,116 @@ export default function Profile() {
 
           {showUserPwd && (
             <form onSubmit={handleUserChangePwd} className="space-y-4 border-t border-[color:var(--border)] px-5 py-5">
-              <div><label htmlFor="user-current-password" className="mb-1.5 block text-sm font-medium text-[var(--text-600)]">当前密码</label><input id="user-current-password" type="password" value={userOldPwd} onChange={(event) => setUserOldPwd(event.target.value)} placeholder="输入当前密码" autoComplete="current-password" className="field-input" /></div>
-              <div><label htmlFor="user-new-password" className="mb-1.5 block text-sm font-medium text-[var(--text-600)]">新密码</label><input id="user-new-password" type="password" value={userNewPwd} onChange={(event) => setUserNewPwd(event.target.value)} placeholder="至少 6 位" autoComplete="new-password" className="field-input" /></div>
+              <div><label htmlFor="user-current-password" className="mb-1.5 block text-sm font-medium text-[var(--text-600)]">当前密码</label><input id="user-current-password" type="password" value={userOldPwd} onChange={(e) => setUserOldPwd(e.target.value)} placeholder="输入当前密码" autoComplete="current-password" className="field-input" /></div>
+              <div><label htmlFor="user-new-password" className="mb-1.5 block text-sm font-medium text-[var(--text-600)]">新密码</label><input id="user-new-password" type="password" value={userNewPwd} onChange={(e) => setUserNewPwd(e.target.value)} placeholder="至少 6 位" autoComplete="new-password" className="field-input" /></div>
               <button type="submit" disabled={userPwdLoading} className="btn-cs btn-primary btn-sm w-full disabled:opacity-50">
                 {userPwdLoading && <Loader2 className="h-4 w-4 animate-spin" />}{userPwdLoading ? '修改中...' : '确认修改'}
               </button>
             </form>
           )}
+
+          {/* ==================== 个人访问令牌（PAT）=================== */}
+          <div className="border-t border-[color:var(--border)]">
+            <div className="flex items-center justify-between gap-3 px-5 py-5">
+              <div>
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--text-800)]">
+                  <KeyRound className="h-4 w-4 text-[var(--brand-600)]" />个人访问令牌
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-[var(--text-500)]">供 CLI、Agent 等无人值守场景调用 API，权限与本人账号一致。</p>
+              </div>
+              {!showPatCreate && !newPatToken && (
+                <button type="button" onClick={() => { setShowPatCreate(true); setPatError(''); }} className="btn-cs btn-ghost-dark btn-sm shrink-0">新建令牌</button>
+              )}
+            </div>
+
+            {patError && (
+              <div className="mx-5 mb-4 flex items-center gap-2 rounded-xl border border-[#ffc6c1] bg-[var(--state-error-surface)] p-3 text-sm text-[var(--state-error)]">
+                <XCircle className="h-4 w-4 shrink-0" />{patError}
+              </div>
+            )}
+
+            {newPatToken && (
+              <div className="mx-5 mb-4 space-y-3 rounded-xl border border-[#bde9c9] bg-[var(--state-success-surface)] p-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-[var(--state-success-text)]">
+                  <CheckCircle className="h-4 w-4 shrink-0" />令牌已创建，仅显示一次，请立即复制保存
+                </div>
+                <div className="flex items-stretch gap-2">
+                  <code className="min-w-0 flex-1 break-all rounded-lg bg-white/70 px-3 py-2 font-mono text-xs text-[var(--text-800)]">{newPatToken}</code>
+                  <button type="button" onClick={handleCopyToken} className="btn-cs btn-secondary btn-sm shrink-0">
+                    {copied ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied ? '已复制' : '复制'}
+                  </button>
+                </div>
+                <p className="text-xs text-[var(--text-500)]">使用方式：作为请求头 <code className="font-mono">Authorization: Bearer &lt;令牌&gt;</code> 传给平台 API。</p>
+                <button type="button" onClick={() => setNewPatToken(null)} className="btn-cs btn-ghost-dark btn-sm w-full">我已保存，关闭</button>
+              </div>
+            )}
+
+            {showPatCreate && (
+              <form onSubmit={handleCreatePat} className="space-y-4 border-t border-[color:var(--border)] px-5 py-5">
+                <div>
+                  <label htmlFor="pat-name" className="mb-1.5 block text-sm font-medium text-[var(--text-600)]">令牌名称</label>
+                  <input id="pat-name" value={patName} onChange={(e) => setPatName(e.target.value)} placeholder="例如：genesis-agent 生产环境" maxLength={64} className="field-input" />
+                </div>
+                <div>
+                  <label htmlFor="pat-expiry" className="mb-1.5 block text-sm font-medium text-[var(--text-600)]">有效期（天，留空表示永久）</label>
+                  <input id="pat-expiry" type="number" min={1} value={patExpiryDays} onChange={(e) => setPatExpiryDays(e.target.value.replace(/\D/g, ''))} placeholder="例如：90" className="field-input" />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={() => setShowPatCreate(false)} className="btn-cs btn-ghost-dark btn-sm">取消</button>
+                  <button type="submit" disabled={patCreating} className="btn-cs btn-primary btn-sm disabled:opacity-50">
+                    {patCreating && <Loader2 className="h-4 w-4 animate-spin" />}{patCreating ? '创建中...' : '创建令牌'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            <div className="border-t border-[color:var(--border)]">
+              {patLoading ? (
+                <div className="px-5 py-4" aria-label="正在加载令牌列表">
+                  <div className="h-10 animate-pulse rounded-lg bg-[var(--background-100)]" />
+                </div>
+              ) : pats.length === 0 ? (
+                <p className="px-5 py-4 text-sm text-[var(--text-500)]">暂无访问令牌。</p>
+              ) : (
+                <ul className="divide-y divide-[color:var(--border)]">
+                  {pats.map((pat) => {
+                    const expired = pat.expiresAt && new Date(pat.expiresAt).getTime() <= Date.now();
+                    const inactive = !!pat.revokedAt || expired;
+                    return (
+                      <li key={pat.id} className="flex items-center justify-between gap-3 px-5 py-3.5">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="truncate text-sm font-medium text-[var(--text-800)]">{pat.name || '未命名令牌'}</span>
+                            {pat.revokedAt ? (
+                              <span className="rounded-full bg-[var(--state-error-surface)] px-2 py-0.5 text-xs font-medium text-[var(--state-error)]">已撤销</span>
+                            ) : expired ? (
+                              <span className="rounded-full bg-[var(--background-100)] px-2 py-0.5 text-xs font-medium text-[var(--text-500)]">已过期</span>
+                            ) : (
+                              <span className="rounded-full bg-[var(--state-success-surface)] px-2 py-0.5 text-xs font-medium text-[var(--state-success-text)]">有效</span>
+                            )}
+                          </div>
+                          <p className="mt-1 text-xs text-[var(--text-400)]">
+                            创建于 {new Date(pat.createdAt).toLocaleDateString('zh-CN')}
+                            {pat.expiresAt && ` · ${expired ? '已于' : '过期于'} ${new Date(pat.expiresAt).toLocaleDateString('zh-CN')}`}
+                            {pat.lastUsedAt && !inactive && ` · 最近使用 ${new Date(pat.lastUsedAt).toLocaleString('zh-CN')}`}
+                          </p>
+                        </div>
+                        {!inactive && (
+                          <button
+                            type="button"
+                            onClick={() => handleRevokePat(pat.id, pat.name)}
+                            className="flex shrink-0 items-center gap-1 rounded-lg border border-[#ffc6c1] px-2.5 py-1.5 text-xs font-medium text-[var(--state-error)] transition-colors hover:bg-[var(--state-error-surface)]"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />撤销
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
         </section>
       </div>
     </div>

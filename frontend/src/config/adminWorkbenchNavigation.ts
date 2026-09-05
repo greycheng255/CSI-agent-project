@@ -1,4 +1,4 @@
-import { BarChart3, Bot, CreditCard, DollarSign, Gavel, QrCode, Shield, Users } from 'lucide-react';
+import { BarChart3, Bot, CreditCard, DollarSign, Gavel, KeyRound, QrCode, Shield, Users } from 'lucide-react';
 import type { WorkbenchNavigationItem } from './workbenchNavigation';
 
 const baseAdminNavigation: WorkbenchNavigationItem[] = [
@@ -10,15 +10,23 @@ const baseAdminNavigation: WorkbenchNavigationItem[] = [
   { to: '/admin/platform-codes', label: '平台收款码', description: '维护收款配置', Icon: QrCode },
 ];
 
-const superAdminNavigation: WorkbenchNavigationItem = {
-  to: '/admin/accounts',
-  label: '管理员账号',
-  description: '账号、权限与日志',
-  Icon: Users,
-};
+const superAdminNavigation: WorkbenchNavigationItem[] = [
+  {
+    to: '/admin/accounts',
+    label: '管理员账号',
+    description: '账号、权限与日志',
+    Icon: Users,
+  },
+  {
+    to: '/admin/sso-clients',
+    label: 'SSO 接入方',
+    description: '统一认证接入管理',
+    Icon: KeyRound,
+  },
+];
 
 export const getAdminWorkbenchNavigation = (level?: string) =>
-  level === 'SUPER' ? [...baseAdminNavigation, superAdminNavigation] : baseAdminNavigation;
+  level === 'SUPER' ? [...baseAdminNavigation, ...superAdminNavigation] : baseAdminNavigation;
 
 export const adminWorkbenchAccountNavigation: WorkbenchNavigationItem[] = [
   { to: '/admin/profile', label: '管理员中心', description: '身份、权限与安全', Icon: Shield },

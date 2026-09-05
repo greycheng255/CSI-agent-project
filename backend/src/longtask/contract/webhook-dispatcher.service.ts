@@ -62,18 +62,24 @@ export class WebhookDispatcherService {
     return true;
   }
 
-  /** 出站入队（event_id 缺省生成 uuid-v7 语义的 uuid；重投复用同一 id） */
+  /**
+   * 出站入队（event_id 缺省生成 uuid-v7 语义的 uuid；重投复用同一 id）。
+   * 契约 §8.3 统一信封：接收方按 body 内 event_id 去重（§4.1），
+   * 故将 event_id 注入 payload（与 outbox event_id、Idempotency-Key 头三者一致）；
+   * payload 已显式携带 event_id 时不覆盖。
+   */
   enqueue(
     eventType: string,
     targetUrl: string,
     payload: Record<string, unknown>,
     eventId?: string,
   ): Promise<WebhookOutbox> {
+    const id = eventId ?? randomUUID();
     const row = this.outboxRepo.create({
-      eventId: eventId ?? randomUUID(),
+      eventId: id,
       eventType,
       targetUrl,
-      payload,
+      payload: { ...payload, event_id: payload.event_id ?? id },
       status: 'pending',
       attempts: 0,
       nextAttemptAt: new Date(),

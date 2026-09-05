@@ -122,3 +122,79 @@ export function toNumber(value: number | string | null | undefined): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
 }
+
+/** 竞标席位项（后端 rank 输出，含 workspace 名称/头像快照——答复文档六.3） */
+export interface MarketplaceSeatBid {
+  bid: {
+    id: string;
+    marketplaceTaskId: string;
+    bidRound: number;
+    workspaceId: string;
+    workspaceName: string | null;
+    workspaceLogoUrl: string | null;
+    priceCny: number;
+    planSummary: string | null;
+    estimatedDeliveryAt: string | null;
+    status: string;
+    source: 'push' | 'pull' | 'manual_assign';
+    createdAt: string;
+  };
+  score: number;
+  workspaceName: string | null;
+  workspaceLogoUrl: string | null;
+  platformRecommended: boolean;
+}
+
+/** 查询任务竞标席位（综合分排序；分数不展示，仅用于排序） */
+export async function getTaskSeatBids(
+  taskId: string,
+): Promise<MarketplaceSeatBid[]> {
+  return requestJson<MarketplaceSeatBid[]>(
+    `/api/v1/longtask/marketplace-tasks/${encodeURIComponent(taskId)}/bids`,
+  );
+}
+
+/** 长任务任务详情（席位页头部展示） */
+export interface MarketplaceTaskInfo {
+  id: string;
+  title: string;
+  description?: string | null;
+  categoryId?: string | null;
+  budgetMinCny?: number | null;
+  budgetMaxCny?: number | null;
+  status?: string;
+  seatTaken?: number;
+  seatLimit?: number;
+  expiresAt?: string | null;
+}
+
+export async function getMarketplaceTask(
+  taskId: string,
+): Promise<MarketplaceTaskInfo> {
+  return requestJson<MarketplaceTaskInfo>(
+    `/api/v1/longtask/marketplace-tasks/${encodeURIComponent(taskId)}`,
+  );
+}
+
+/** 已入驻工作室画廊条目（公开档案白名单字段，仅 active） */
+export interface WorkspaceGalleryItem {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  bio: string | null;
+  categoryIds: string[] | null;
+  capabilityTags: string[] | null;
+  completedTasksCount: number;
+  avgRating: number | string;
+  announcement: string | null;
+}
+
+/** 查询已入驻工作室画廊 */
+export async function listWorkspaceGallery(): Promise<
+  WorkspaceGalleryItem[]
+> {
+  return requestJson<WorkspaceGalleryItem[]>(
+    '/api/v1/longtask/workspaces/gallery',
+  );
+}

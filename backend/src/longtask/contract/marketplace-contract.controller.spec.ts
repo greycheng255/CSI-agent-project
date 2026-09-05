@@ -18,7 +18,11 @@ import { SettlementsService } from '../settlements/settlements.service';
 describe('MarketplaceContractController（场景一~十端点）', () => {
   let controller: MarketplaceContractController;
 
-  const tasks = { findOpen: jest.fn(), findById: jest.fn() };
+  const tasks = {
+    findOpen: jest.fn(),
+    findById: jest.fn(),
+    pullTasks: jest.fn(),
+  };
   const bids = { submit: jest.fn() };
   const orders = {
     applyProjectId: jest.fn(),
@@ -59,9 +63,10 @@ describe('MarketplaceContractController（场景一~十端点）', () => {
     );
   });
 
-  it('GET /tasks 委托 findOpen', () => {
-    controller.listTasks();
-    expect(tasks.findOpen).toHaveBeenCalled();
+  it('GET /tasks 委托 pullTasks（契约 §9.2 包装响应）', () => {
+    const query = { category: 'web', status: 'open', limit: '50' };
+    controller.listTasks(query);
+    expect(tasks.pullTasks).toHaveBeenCalledWith(query);
   });
 
   it('POST /tasks/:id/bids 转换 snake_case → service 入参', () => {

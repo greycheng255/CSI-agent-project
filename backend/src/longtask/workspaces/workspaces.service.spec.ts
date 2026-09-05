@@ -3,9 +3,11 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { WorkspacesService } from './workspaces.service';
 import { Workspace } from './workspace.entity';
 import { ContractError } from '../contract/errors';
+import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
 
 describe('WorkspacesService（T1：展示页/投递/竞标主体投影）', () => {
   let service: WorkspacesService;
+  const dispatcherMock = { recordInbound: jest.fn() };
 
   const mockRepo = {
     findOne: jest.fn(),
@@ -17,10 +19,15 @@ describe('WorkspacesService（T1：展示页/投递/竞标主体投影）', () =
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    dispatcherMock.recordInbound.mockResolvedValue(true);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WorkspacesService,
         { provide: getRepositoryToken(Workspace), useValue: mockRepo },
+        {
+          provide: WebhookDispatcherService,
+          useValue: dispatcherMock,
+        },
       ],
     }).compile();
     service = module.get(WorkspacesService);
@@ -118,5 +125,61 @@ describe('WorkspacesService（T1：展示页/投递/竞标主体投影）', () =
     await expect(
       service.updateShowcase('missing', { announcement: 'x' }),
     ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('生命周期：created 事件按 §21.2 字段映射 upsert 新投影', async () => {
+    mockRepo.findOne.mockResolvedValueOnce(null);
+    mockRepo.create.mockImplementation((v) => v);
+    mockRepo.save.mockImplementation((v) => v);
+    const { duplicate, workspace } = await service.applyLifecycle(
+      'evt-1',
+      'workspace.created',
+      {
+        workspace_id: 'ws-c1',
+        name: 'C 侧工作室',
+        slug: 'c-studio',
+        avatar_url: 'https://a/x.png',
+        description: '全栈交付',
+        capability_tags: ['web-dev'],
+        service_commitments: { response_time: '2h' },
+        budget_cny: 999,
+      },
+    );
+    expect(duplicate).toBe(false);
+    expect(workspace?.name).toBe('C 侧工作室');
+    expect(workspace?.slug).toBe('c-studio');
+    expect(workspace?.logoUrl).toBe('https://a/x.png');
+    expect(workspace?.bio).toBe('全栈交付');
+    expect(workspace?.capabilityTags).toEqual(['web-dev']);
+    expect(workspace?.serviceCommitments).toEqual({ response_time: '2h' });
+    // 白名单外字段（业务配置/预算）不落投影
+    expect((workspace as unknown as Record<string, unknown>).budget_cny).toBeUndefined();
+  });
+
+  it('生命周期：deleted → displayStatus=frozen（停止展示与投递）', async () => {
+    mockRepo.findOne.mockResolvedValueOnce({
+      id: 'ws-c1',
+      name: 'C 侧工作室',
+      displayStatus: 'active',
+    });
+    mockRepo.save.mockImplementation((v) => v);
+    const { workspace } = await service.applyLifecycle(
+      'evt-2',
+      'workspace.deleted',
+      { workspace_id: 'ws-c1', deleted_at: '2026-09-04T08:00:00Z' },
+    );
+    expect(workspace?.displayStatus).toBe('frozen');
+  });
+
+  it('生命周期：重复 event_id → duplicate=true，不重复落库', async () => {
+    dispatcherMock.recordInbound.mockResolvedValueOnce(false);
+    mockRepo.findOne.mockResolvedValueOnce({ id: 'ws-c1', name: 'x' });
+    const { duplicate } = await service.applyLifecycle(
+      'evt-1',
+      'workspace.updated',
+      { workspace_id: 'ws-c1' },
+    );
+    expect(duplicate).toBe(true);
+    expect(mockRepo.save).not.toHaveBeenCalled();
   });
 });

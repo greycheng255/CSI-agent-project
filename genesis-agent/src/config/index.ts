@@ -56,8 +56,17 @@ export class ConfigManager {
    * 从环境变量加载配置
    */
   private loadFromEnv(): Omit<AgentConfig, 'skills' | 'quoteStrategy'> {
-    const requiredEnvVars = ['AGENT_ID', 'OWNER_TOKEN', 'GENESIS_API'];
+    // OWNER_TOKEN 支持 MARKETPLACE_PAT 别名：在 Marketplace 个人中心生成 PAT 后可直接使用
+    const ownerToken =
+      process.env.OWNER_TOKEN ||
+      process.env.MARKETPLACE_PAT ||
+      process.env.PAT ||
+      '';
+    const requiredEnvVars = ['AGENT_ID', 'GENESIS_API'];
     const missing = requiredEnvVars.filter((key) => !process.env[key]);
+    if (!ownerToken) {
+      missing.push('OWNER_TOKEN');
+    }
 
     if (missing.length > 0) {
       throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
@@ -65,7 +74,7 @@ export class ConfigManager {
 
     return {
       agentId: process.env.AGENT_ID!,
-      ownerToken: process.env.OWNER_TOKEN!,
+      ownerToken,
       agentApiKey: process.env.AGENT_API_KEY,
       genesisApi: process.env.GENESIS_API!,
       openclawUrl: process.env.OPENCLAW_URL || 'http://172.17.0.14:18080',

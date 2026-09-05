@@ -6,6 +6,14 @@ import {
   CONTRACT_ERROR_CODE,
   ContractError,
 } from '../contract/errors';
+import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
+
+export const WORKSPACE_LIFECYCLE_EVENTS = [
+  'workspace.created',
+  'workspace.updated',
+  'workspace.deleted',
+] as const;
+export type WorkspaceLifecycleEvent = (typeof WORKSPACE_LIFECYCLE_EVENTS)[number];
 
 const MAX_CAPABILITY_TAGS = 5;
 const MAX_SHOWCASE_CASES = 6;
@@ -36,6 +44,7 @@ export class WorkspacesService {
   constructor(
     @InjectRepository(Workspace)
     private readonly repo: Repository<Workspace>,
+    private readonly dispatcher: WebhookDispatcherService,
   ) {}
 
   /** 创建 Workspace；slug 唯一（前置校验 + DB 唯一约束兜底） */
@@ -83,6 +92,31 @@ export class WorkspacesService {
   /** 按归属 Agent Owner（既有用户）查询其 AI 工作室 */
   findByOwner(ownerUserId: string): Promise<Workspace | null> {
     return this.repo.findOne({ where: { ownerUserId } });
+  }
+
+  /**
+   * 已入驻工作室画廊（答复文档六：任务大厅/画廊消费投影）。
+   * 仅返回 active 工作室，且只映射公开档案白名单字段（不含业务配置/预算/归属信息）。
+   */
+  async listGallery(): Promise<
+    Array<Pick<Workspace, 'id' | 'name' | 'slug' | 'logoUrl' | 'bio' | 'categoryIds' | 'capabilityTags' | 'completedTasksCount' | 'avgRating' | 'announcement'>>
+  > {
+    const rows = await this.repo.find({
+      where: { displayStatus: 'active' },
+      order: { createdAt: 'DESC' },
+    });
+    return rows.map((ws) => ({
+      id: ws.id,
+      name: ws.name,
+      slug: ws.slug,
+      logoUrl: ws.logoUrl,
+      bio: ws.bio,
+      categoryIds: ws.categoryIds,
+      capabilityTags: ws.capabilityTags,
+      completedTasksCount: ws.completedTasksCount,
+      avgRating: ws.avgRating,
+      announcement: ws.announcement,
+    }));
   }
 
   /** 展示页数据更新（案例 ≤6，信用字段只能平台计算写入） */
@@ -137,6 +171,74 @@ export class WorkspacesService {
         { cat: `%${categoryId}%` },
       )
       .getMany();
+  }
+
+  /**
+   * Console → M workspace 生命周期事件（契约 §21.3：created/updated/deleted，无 suspended）：
+   * event_id 去重 → payload 为 PublicWorkspaceProfile 全量快照（幂等 upsert）。
+   * 字段映射：workspace_id→id、avatar_url→logoUrl、description→bio、slug 直取；
+   * workspace.deleted → displayStatus=frozen（停止展示与投递；active 排除在画廊与 matchForPush 之外）。
+   * 返回 duplicate=true 时调用方直接 ACK 丢弃。
+   */
+  async applyLifecycle(
+    eventId: string,
+    eventType: WorkspaceLifecycleEvent,
+    payload: Record<string, unknown>,
+  ): Promise<{ duplicate: boolean; workspace: Workspace | null }> {
+    const first = await this.dispatcher.recordInbound(eventId, eventType);
+    if (!first) {
+      const wsId = payload.workspace_id ?? payload.id;
+      const existing = await this.repo.findOne({
+        where: { id: String(wsId ?? '') },
+      });
+      return { duplicate: true, workspace: existing ?? null };
+    }
+
+    const wsId = payload.workspace_id ?? payload.id;
+    if (typeof wsId !== 'string' || !wsId) {
+      throw new ContractError(
+        400,
+        CONTRACT_ERROR_CODE.VALIDATION_INVALID_PAYLOAD,
+        'workspace_id is required',
+      );
+    }
+    let ws = await this.repo.findOne({ where: { id: wsId } });
+
+    // deleted：仅标识（无档案），终止态 → frozen（停止展示与投递）
+    if (eventType === 'workspace.deleted') {
+      if (!ws) return { duplicate: false, workspace: null };
+      ws.displayStatus = 'frozen';
+      return { duplicate: false, workspace: await this.repo.save(ws) };
+    }
+
+    if (!ws) {
+      ws = this.repo.create({
+        id: wsId,
+        name: '',
+        slug: typeof payload.slug === 'string' && payload.slug ? payload.slug : `c-${wsId}`,
+      });
+    }
+
+    // 公开档案白名单映射（§21.2：不含任何业务配置/预算数据）
+    if (typeof payload.name === 'string' && payload.name) ws.name = payload.name;
+    if (typeof payload.slug === 'string' && payload.slug) ws.slug = payload.slug;
+    if (typeof payload.avatar_url === 'string') ws.logoUrl = payload.avatar_url;
+    if (typeof payload.description === 'string') ws.bio = payload.description;
+    if (Array.isArray(payload.capability_tags)) {
+      ws.capabilityTags = payload.capability_tags as string[];
+    }
+    if (
+      payload.service_commitments &&
+      typeof payload.service_commitments === 'object' &&
+      !Array.isArray(payload.service_commitments)
+    ) {
+      ws.serviceCommitments = payload.service_commitments as Record<string, unknown>;
+    }
+    // Console 权威快照表明 workspace 存在——自愈本地终止态
+    if (ws.displayStatus === 'frozen') ws.displayStatus = 'active';
+
+    const workspace = await this.repo.save(ws);
+    return { duplicate: false, workspace };
   }
 }
 

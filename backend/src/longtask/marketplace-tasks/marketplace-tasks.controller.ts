@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { MarketplaceTasksService } from './marketplace-tasks.service';
+import { MarketplaceBidsService } from '../marketplace-bids/marketplace-bids.service';
 import type { CreateMarketplaceTaskInput } from './marketplace-tasks.service';
 
 /**
@@ -10,6 +11,7 @@ import type { CreateMarketplaceTaskInput } from './marketplace-tasks.service';
 export class MarketplaceTasksController {
   constructor(
     private readonly marketplaceTasksService: MarketplaceTasksService,
+    private readonly bidsService: MarketplaceBidsService,
   ) {}
 
   @Post()
@@ -40,5 +42,11 @@ export class MarketplaceTasksController {
   @Get(':id')
   findById(@Param('id') id: string) {
     return this.marketplaceTasksService.findById(id);
+  }
+
+  /** 竞标席位列表（综合分排序，含 workspace 名称/头像快照——答复文档六.3） */
+  @Get(':id/bids')
+  listBids(@Param('id') id: string) {
+    return this.bidsService.rank(id);
   }
 }

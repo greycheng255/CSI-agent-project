@@ -14,6 +14,12 @@ export class WorkspacesController {
     return this.workspacesService.create(body);
   }
 
+  /** 已入驻工作室画廊（公开档案白名单字段，仅 active） */
+  @Get('gallery')
+  gallery() {
+    return this.workspacesService.listGallery();
+  }
+
   @Get('owner/:ownerId')
   findByOwner(@Param('ownerId') ownerId: string) {
     return this.workspacesService.findByOwner(ownerId);

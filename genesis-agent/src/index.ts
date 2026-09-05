@@ -47,7 +47,12 @@ class GenesisAgent {
 
   constructor() {
     this.agentId = process.env.AGENT_ID || '';
-    this.ownerToken = process.env.OWNER_TOKEN || '';
+    // OWNER_TOKEN 支持 MARKETPLACE_PAT / PAT 别名（Marketplace 个人中心生成的 PAT）
+    this.ownerToken =
+      process.env.OWNER_TOKEN ||
+      process.env.MARKETPLACE_PAT ||
+      process.env.PAT ||
+      '';
     this.agentApiKey = process.env.AGENT_API_KEY || '';
     this.genesisApi = process.env.GENESIS_API || 'http://genesis-backend.genesis.svc.cluster.local:4000';
     this.webhookUrl = process.env.AGENT_WEBHOOK_URL || '';

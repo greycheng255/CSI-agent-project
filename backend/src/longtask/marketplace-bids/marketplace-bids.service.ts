@@ -24,6 +24,9 @@ export interface SubmitBidInput {
   planSummary?: string | null;
   estimatedDeliveryAt?: Date | string | null;
   source?: 'push' | 'pull' | 'manual_assign';
+  /** §21.4 W3：投标时点快照（Console 传入优先，缺省回退本地投影） */
+  workspaceName?: string;
+  workspaceAvatarUrl?: string;
 }
 
 export interface SubmitBidResult {
@@ -38,6 +41,7 @@ export interface RankedBid {
   bid: MarketplaceBid;
   score: number;
   workspaceName: string | null;
+  workspaceLogoUrl: string | null;
   platformRecommended: boolean;
 }
 
@@ -115,10 +119,19 @@ export class MarketplaceBidsService {
     }
     await this.tasksRepo.save(task);
 
+    // 席位快照（§21.4 W3）：Console 传入的投标时点档案优先，缺省回退本地投影
+    const ws = input.workspaceName || input.workspaceAvatarUrl
+      ? null
+      : await this.workspacesRepo.findOne({
+          where: { id: input.workspaceId },
+        });
+
     const bid = this.bidsRepo.create({
       marketplaceTaskId: task.id,
       bidRound: round,
       workspaceId: input.workspaceId,
+      workspaceName: input.workspaceName ?? ws?.name ?? null,
+      workspaceLogoUrl: input.workspaceAvatarUrl ?? ws?.logoUrl ?? null,
       priceCny: input.priceCny,
       planSummary: input.planSummary ?? null,
       estimatedDeliveryAt: input.estimatedDeliveryAt
@@ -186,7 +199,8 @@ export class MarketplaceBidsService {
       return {
         bid,
         score: compositeScore(input),
-        workspaceName: ws?.name ?? null,
+        workspaceName: bid.workspaceName ?? ws?.name ?? null,
+        workspaceLogoUrl: bid.workspaceLogoUrl ?? ws?.logoUrl ?? null,
         platformRecommended:
           bid.source === 'push' && ws?.displayStatus === 'active',
       };

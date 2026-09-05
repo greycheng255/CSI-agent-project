@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { HmacGuard } from './hmac.guard';
@@ -44,10 +45,20 @@ export class MarketplaceContractController {
     private readonly disputesService: DisputesService,
   ) {}
 
-  /** 场景一 #2：商机 Pull（Console 每 5min 定时器 + 手动） */
+  /** 场景一 #2：商机 Pull（Console 每 5min 定时器 + 手动）——契约 §9.2 包装响应 */
   @Get('tasks')
-  listTasks() {
-    return this.tasksService.findOpen();
+  listTasks(
+    @Query()
+    query: {
+      category?: string;
+      status?: string;
+      bid_round?: string;
+      since?: string;
+      limit?: string;
+      cursor?: string;
+    },
+  ) {
+    return this.tasksService.pullTasks(query ?? {});
   }
 
   /** 场景一 #3：任务详情 */
@@ -56,7 +67,7 @@ export class MarketplaceContractController {
     return this.tasksService.findById(id);
   }
 
-  /** 场景二 #4：提交竞标方案并占席位（席位满 409 CONFLICT_SEAT_FULL） */
+  /** 场景二 #4：提交竞标方案并占席位（席位满 409 CONFLICT_SEAT_FULL）；§21.4 W3 快照字段 */
   @Post('tasks/:id/bids')
   submitBid(
     @Param('id') id: string,
@@ -67,6 +78,8 @@ export class MarketplaceContractController {
       plan_summary?: unknown;
       estimated_delivery_at?: unknown;
       source?: unknown;
+      workspace_name?: unknown;
+      workspace_avatar_url?: unknown;
     },
   ) {
     const workspaceId = body.workspace_id;
@@ -86,6 +99,15 @@ export class MarketplaceContractController {
       source: body.source === 'push' || body.source === 'manual_assign'
         ? body.source
         : 'pull',
+      // §21.4 W3：投标时点快照（Console 传入；可省略，缺省回退本地投影）
+      workspaceName:
+        typeof body.workspace_name === 'string' && body.workspace_name
+          ? body.workspace_name
+          : undefined,
+      workspaceAvatarUrl:
+        typeof body.workspace_avatar_url === 'string'
+          ? body.workspace_avatar_url
+          : undefined,
     });
   }
 

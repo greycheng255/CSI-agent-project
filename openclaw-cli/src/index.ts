@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import chalk from 'chalk';
 import { AgentCommands } from './commands/agent';
 import { TaskCommands } from './commands/task';
 import { ConfigCommands } from './commands/config';
 import { StatusCommands } from './commands/status';
-import { getConfig, loadConfig } from './utils/config';
+import { AuthCommands } from './commands/auth';
+import { loadConfig } from './utils/config';
 
 const program = new Command();
 
@@ -26,6 +26,21 @@ program
     if (opts.url) process.env.GENESIS_API = opts.url;
     if (opts.token) process.env.OWNER_TOKEN = opts.token;
     if (opts.agentId) process.env.AGENT_ID = opts.agentId;
+  });
+
+// 认证命令（SSO）
+program
+  .command('login')
+  .description('通过 Marketplace SSO 登录（浏览器授权 + 本地回调）')
+  .action(async () => {
+    await AuthCommands.login();
+  });
+
+program
+  .command('logout')
+  .description('撤销服务端令牌并清除本地登录凭证')
+  .action(async () => {
+    await AuthCommands.logout();
   });
 
 // Agent 管理命令

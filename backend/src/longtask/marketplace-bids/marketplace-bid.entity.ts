@@ -39,6 +39,13 @@ export class MarketplaceBid {
   @Column({ name: 'workspace_id', type: isSqlite ? 'varchar' : 'uuid' })
   workspaceId: string;
 
+  /** 竞标席位快照（提交时从 workspace 档案取，席位页免逐条查询） */
+  @Column({ name: 'workspace_name', type: 'varchar', length: 255, nullable: true })
+  workspaceName: string | null;
+
+  @Column({ name: 'workspace_logo_url', type: 'text', nullable: true })
+  workspaceLogoUrl: string | null;
+
   @Column({ name: 'price_cny', type: 'int' })
   priceCny: number;
 

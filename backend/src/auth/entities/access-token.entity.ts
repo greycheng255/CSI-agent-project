@@ -22,6 +22,14 @@ export class AccessToken {
   @Column({ name: 'token_hash', type: 'text', unique: true })
   tokenHash: string;
 
+  /** 令牌名称（PAT 场景），普通登录令牌为空 */
+  @Column({ type: 'text', nullable: true })
+  name: string | null;
+
+  /** 签发来源：SSO client_id / 'pat' / 空（普通登录） */
+  @Column({ name: 'client_id', type: 'text', nullable: true })
+  clientId: string | null;
+
   @Column({
     name: 'expires_at',
     type: isSqlite ? 'datetime' : 'timestamp with time zone',

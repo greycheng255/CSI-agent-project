@@ -159,6 +159,62 @@ export class MarketplaceTasksService {
     return this.repo.find({ where: { status: 'open' as MarketplaceTaskStatus } });
   }
 
+  /**
+   * C→M Pull（契约 §9.2）：响应为包装对象 { tasks, next_cursor, has_more }，
+   * task 字段按契约 snake_case 命名（task_id/budget_range/current_seats 等）。
+   * Console 侧 Go 严格反序列化 listTasksResponse——裸数组会直接解析失败。
+   * cursor 分页联调期未启用：next_cursor 恒 null、has_more 恒 false（字段按契约恒出现）。
+   */
+  async pullTasks(query: {
+    category?: string;
+    status?: string;
+    bid_round?: string;
+    since?: string;
+    limit?: string;
+    cursor?: string;
+  }): Promise<{
+    tasks: Array<Record<string, unknown>>;
+    next_cursor: string | null;
+    has_more: boolean;
+  }> {
+    const where: { status: MarketplaceTaskStatus } = {
+      status: (query.status ?? 'open') as MarketplaceTaskStatus,
+    };
+    const categories = query.category
+      ? query.category.split(',').map((c) => c.trim()).filter(Boolean)
+      : null;
+
+    const rows = await this.repo.find({ where });
+    const sinceMs = query.since ? Date.parse(query.since) : NaN;
+    const limit = Math.min(Math.max(Number(query.limit) || 50, 1), 200);
+
+    const mapped = rows
+      .filter((t) => !categories || categories.includes(t.categoryId ?? ''))
+      .filter(
+        (t) =>
+          Number.isNaN(sinceMs) ||
+          t.updatedAt.getTime() > sinceMs ||
+          t.createdAt.getTime() > sinceMs,
+      )
+      .slice(0, limit)
+      .map((t) => ({
+        task_id: t.id,
+        title: t.title,
+        description: t.description,
+        category: t.categoryId,
+        budget_range: { min: t.budgetMinCny, max: t.budgetMaxCny },
+        expected_delivery_date: t.expectedDeliveryAt,
+        seat_limit: t.seatLimit,
+        current_seats: t.seatTaken,
+        bid_round: t.bidRound,
+        attachments: (t.attachmentUrls ?? []).map((url) => ({ url })),
+        published_at: t.createdAt,
+        expires_at: t.expiresAt,
+      }));
+
+    return { tasks: mapped, next_cursor: null, has_more: false };
+  }
+
   private async getOrThrow(id: string): Promise<MarketplaceTask> {
     const task = await this.repo.findOne({ where: { id } });
     if (!task) {

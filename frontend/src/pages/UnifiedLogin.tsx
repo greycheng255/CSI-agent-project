@@ -6,6 +6,7 @@ import {
   loginWithSms,
   sendSmsCode,
 } from '../services/auth.service';
+import { useAuthStore } from '../store/authStore';
 
 type LoginMode = 'password' | 'sms';
 
@@ -28,6 +29,15 @@ export default function UnifiedLogin() {
     const timer = window.setTimeout(() => setCountdown((value) => value - 1), 1000);
     return () => window.clearTimeout(timer);
   }, [countdown]);
+
+  // SSO 单点：已登录状态下携带 ?redirect= 进入登录页时，直接续跳（无需重复登录）
+  useEffect(() => {
+    const requested = searchParams.get('redirect');
+    const safe = requested?.startsWith('/') && !requested.startsWith('//') ? requested : null;
+    if (safe && useAuthStore.getState().isLoggedIn()) {
+      navigate(safe, { replace: true });
+    }
+  }, [searchParams, navigate]);
 
   const validatePhone = (phone: string) => /^1[3-9]\d{9}$/.test(phone);
 
