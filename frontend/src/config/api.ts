@@ -11,40 +11,19 @@ const readEnv = (name: string) => {
 /** API 基址：VITE_API_BASE 设置时直连该后端（如 http://122.51.51.177:30080），否则空串走 vite 代理 */
 export const API_BASE = normalizeBaseUrl(readEnv('VITE_API_BASE'));
 
-const normalizeAuthorization = (
-  authorization: string,
-  apiKey: string,
-  accessToken: string,
-) => {
-  const value = authorization.trim();
-  if (value.toLowerCase().startsWith('authorization:')) {
-    return value.slice(value.indexOf(':') + 1).trim();
-  }
-  if (value) return value;
-  const credential = apiKey.trim() || accessToken.trim();
-  return credential ? `Bearer ${credential}` : '';
-};
-
 export const AGENT_API_BASE =
   normalizeBaseUrl(import.meta.env.VITE_AGENT_API_BASE) || 'https://api.opennotebook.chat';
 
-export const AGENT_REST_BASE =
-  normalizeBaseUrl(readEnv('VITE_AGENT_REST_BASE')) || `${AGENT_API_BASE}/api/v1`;
+export const AGENT_REST_BASE = `${AGENT_API_BASE}/api/v1`;
+
+export const OPENNOTEBOOK_OAUTH_CLIENT_ID = readEnv(
+  'VITE_AGENT_OPENNOTEBOOK_OAUTH_CLIENT_ID',
+);
+
+export const OPENNOTEBOOK_OAUTH_REDIRECT_PATH = '/oauth/opennotebook/callback';
 
 export const OPENNOTEBOOK_AGENT_PROVIDER = {
   id: 'opennotebook-agent',
   name: 'OpenNotebook Agent',
-  restBase: normalizeBaseUrl(readEnv('VITE_AGENT_OPENNOTEBOOK_REST_BASE')) || AGENT_REST_BASE,
-  mcpEndpoint:
-    normalizeBaseUrl(readEnv('VITE_AGENT_OPENNOTEBOOK_MCP_ENDPOINT')) ||
-    `${AGENT_API_BASE}/api/v1/agent/mcp`,
-  defaultWorkspaceId:
-    readEnv('VITE_AGENT_OPENNOTEBOOK_WORKSPACE_ID') ||
-    readEnv('VITE_DEFAULT_WORKSPACE_ID') ||
-    '64f444f0-0814-45e9-97fe-5570f78c0cac',
-  authorization: normalizeAuthorization(
-    readEnv('VITE_AGENT_OPENNOTEBOOK_AUTHORIZATION'),
-    readEnv('VITE_AGENT_OPENNOTEBOOK_API_KEY'),
-    readEnv('VITE_AGENT_OPENNOTEBOOK_ACCESS_TOKEN'),
-  ),
+  restBase: AGENT_REST_BASE,
 };

@@ -9,6 +9,7 @@ const Market = lazy(() => import('./pages/Market'));
 const AgentMarket = lazy(() => import('./pages/AgentMarket'));
 const AgentMarketHub = lazy(() => import('./pages/AgentMarketHub'));
 const AgentRun = lazy(() => import('./pages/AgentRun'));
+const OpenNotebookOAuthCallback = lazy(() => import('./pages/OpenNotebookOAuthCallback'));
 const NewTask = lazy(() => import('./pages/NewTask'));
 const TaskDetail = lazy(() => import('./pages/TaskDetail'));
 const OrderDetail = lazy(() => import('./pages/OrderDetail'));
@@ -50,6 +51,8 @@ function App() {
       <Suspense fallback={<PageFallback />}>
       <Routes>
         {/* 统一登录页 - 已移除独立的 /admin/login */}
+
+        <Route path="/oauth/opennotebook/callback" element={<OpenNotebookOAuthCallback />} />
 
         <Route path="/" element={<MainLayout />}>
           <Route index element={<Home />} />

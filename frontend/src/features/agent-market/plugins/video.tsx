@@ -53,7 +53,7 @@ export default function VideoPlugin(props: AgentPanelProps) {
         rows={7}
       />
       {videoType === 'i2v' && (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4">
           <AttachmentUpload
             label="首帧图片"
             value={props.formValues.first_frame_url || ''}
@@ -78,7 +78,7 @@ export default function VideoPlugin(props: AgentPanelProps) {
           maxFiles={9}
         />
       )}
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-3">
         <PanelSelect
           label="时长"
           value={props.formValues.duration || '5'}

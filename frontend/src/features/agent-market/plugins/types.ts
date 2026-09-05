@@ -11,9 +11,8 @@ export type AgentPluginProviderConfig = {
   id: string;
   name: string;
   restBase: string;
-  mcpEndpoint?: string;
-  defaultWorkspaceId?: string;
   authorization?: string;
+  getAuthorization?: () => Promise<string>;
   headers?: Record<string, string>;
 };
 
