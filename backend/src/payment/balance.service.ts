@@ -111,6 +111,69 @@ export class BalanceService {
   }
 
   /**
+   * 余额充值入账（支付宝充值回调成功后调用）
+   * 与 addIncome 骨架一致，但 changeType=DEPOSIT，关联 paymentId
+   */
+  async recharge(params: {
+    userId: string;
+    amountCny: number;
+    paymentId: string;
+    description?: string;
+  }): Promise<UserBalance> {
+    const { userId, amountCny, paymentId, description } = params;
+
+    if (amountCny <= 0) {
+      throw new BadRequestException('Amount must be positive');
+    }
+
+    // 幂等：同一 paymentId 只入账一次（支付宝回调 at-least-once 重投保护）
+    const existing = await this.balanceRecordRepository.findOne({
+      where: { paymentId },
+    });
+    if (existing) {
+      return this.getOrCreateBalance(userId);
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      let balance = await manager.findOne(UserBalance, {
+        where: { userId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!balance) {
+        balance = manager.create(UserBalance, {
+          userId,
+          availableCny: 0,
+          frozenCny: 0,
+          totalIncomeCny: 0,
+          totalWithdrawalCny: 0,
+        });
+        await manager.save(balance);
+      }
+
+      const beforeBalance = balance.availableCny;
+      balance.availableCny += amountCny;
+      balance.totalIncomeCny += amountCny;
+
+      await manager.save(balance);
+
+      await manager.save(
+        this.balanceRecordRepository.create({
+          userId,
+          amountCny,
+          beforeBalanceCny: beforeBalance,
+          afterBalanceCny: balance.availableCny,
+          changeType: BalanceChangeType.DEPOSIT,
+          paymentId,
+          description: description || `余额充值: ${amountCny}元`,
+        }),
+      );
+
+      return balance;
+    });
+  }
+
+  /**
    * 扣除平台服务费
    */
   async deductPlatformFee(params: {

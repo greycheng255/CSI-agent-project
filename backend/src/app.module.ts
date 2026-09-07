@@ -26,11 +26,8 @@ for (const envPath of new Set(envPaths)) {
 
 process.env.TZ ??= process.env.APP_TIME_ZONE || 'Asia/Shanghai';
 
-// 首先设置 DB_TYPE 环境变量，确保实体文件能正确检测数据库类型
-const isSqliteEnv = process.env.DATABASE_PATH || !process.env.DB_HOST;
-if (isSqliteEnv) {
-  process.env.DB_TYPE = 'sqlite';
-}
+// 纯 PostgreSQL：实体文件用 process.env.DB_TYPE === 'sqlite' 判断列类型，
+// 不设 DB_TYPE 时全部走 PG 分支（simple-enum→enum, simple-json→jsonb）。
 
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -136,8 +133,6 @@ import {
 } from './mcp-integrations/entities';
 import { DatabaseWarmupService } from './database-warmup.service';
 
-// 根据环境变量选择数据库类型
-const isSqlite = process.env.DATABASE_PATH || !process.env.DB_HOST;
 const parsePoolSetting = (value: string | undefined, fallback: number) => {
   const parsed = Number.parseInt(value || '', 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
@@ -147,33 +142,27 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
   imports: [
     ScheduleModule.forRoot(),
     TypeOrmModule.forRoot({
-      type: isSqlite ? 'better-sqlite3' : 'postgres',
-      ...(isSqlite
-        ? {
-            database: process.env.DATABASE_PATH || '/data/genesis.db',
-          }
-        : {
-            host: process.env.DB_HOST || 'localhost',
-            port: parseInt(process.env.DB_PORT || '5436'),
-            username: process.env.DB_USER || 'genesis_user',
-            password: process.env.DB_PASSWORD || 'genesis_password',
-            database: process.env.DB_NAME || 'genesis_db',
-            extra: {
-              max: parsePoolSetting(process.env.DB_POOL_MAX, 10),
-              min: parsePoolSetting(process.env.DB_POOL_MIN, 4),
-              idleTimeoutMillis: parsePoolSetting(
-                process.env.DB_POOL_IDLE_TIMEOUT_MS,
-                60_000,
-              ),
-              connectionTimeoutMillis: parsePoolSetting(
-                process.env.DB_POOL_CONNECTION_TIMEOUT_MS,
-                5_000,
-              ),
-              keepAlive: true,
-              keepAliveInitialDelayMillis: 10_000,
-              options: `-c timezone=${process.env.APP_TIME_ZONE || 'Asia/Shanghai'}`,
-            },
-          }),
+      type: 'postgres',
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5436'),
+      username: process.env.DB_USER || 'genesis_user',
+      password: process.env.DB_PASSWORD || 'genesis_password',
+      database: process.env.DB_NAME || 'genesis_db',
+      extra: {
+        max: parsePoolSetting(process.env.DB_POOL_MAX, 10),
+        min: parsePoolSetting(process.env.DB_POOL_MIN, 4),
+        idleTimeoutMillis: parsePoolSetting(
+          process.env.DB_POOL_IDLE_TIMEOUT_MS,
+          60_000,
+        ),
+        connectionTimeoutMillis: parsePoolSetting(
+          process.env.DB_POOL_CONNECTION_TIMEOUT_MS,
+          5_000,
+        ),
+        keepAlive: true,
+        keepAliveInitialDelayMillis: 10_000,
+        options: `-c timezone=${process.env.APP_TIME_ZONE || 'Asia/Shanghai'}`,
+      },
       entities: [
         User,
         HmacNonce,

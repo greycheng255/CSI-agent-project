@@ -39,6 +39,8 @@ const OwnerWorkspaceEntry = lazy(() => import('./pages/OwnerWorkspaceEntry'));
 const MyWorkspace = lazy(() => import('./pages/MyWorkspace'));
 const LongTaskSeats = lazy(() => import('./pages/LongTaskSeats'));
 const WorkspaceGallery = lazy(() => import('./pages/WorkspaceGallery'));
+const MockAlipayCheckout = lazy(() => import('./pages/MockAlipayCheckout'));
+const RechargeBalance = lazy(() => import('./pages/RechargeBalance'));
 
 function PageFallback() {
   return (
@@ -57,6 +59,8 @@ function App() {
         {/* 统一登录页 - 已移除独立的 /admin/login */}
 
         <Route path="/oauth/opennotebook/callback" element={<OpenNotebookOAuthCallback />} />
+        {/* 支付宝 mock 模式收银台（独立弹窗，不挂 MainLayout） */}
+        <Route path="/pay/mock-checkout" element={<MockAlipayCheckout />} />
 
         <Route path="/" element={<MainLayout />}>
           <Route index element={<Home />} />
@@ -93,6 +97,7 @@ function App() {
             <Route path="orders/claimed" element={<MyAgentWork />} />
             <Route path="orders/payments" element={<Navigate to="/finance?tab=payments" replace />} />
             <Route path="finance" element={<FinanceManagement />} />
+            <Route path="finance/recharge" element={<RechargeBalance />} />
             <Route path="owner/agents" element={<AgentManagement />} />
             <Route path="owner/agents/:id" element={<AgentDetail />} />
             <Route path="owner/payment-codes" element={<Navigate to="/finance?tab=codes" replace />} />

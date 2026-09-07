@@ -70,6 +70,10 @@ export class BalanceRecord {
   @Column({ name: 'withdrawal_id', type: 'varchar', nullable: true })
   withdrawalId: string | null;
 
+  // 关联充值支付单ID
+  @Column({ name: 'payment_id', type: 'varchar', nullable: true })
+  paymentId: string | null;
+
   // 描述
   @Column({ type: 'text', nullable: true })
   description: string | null;
