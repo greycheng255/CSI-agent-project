@@ -451,6 +451,45 @@ export class PaymentController {
     return { success: true, data: result };
   }
 
+  // ==================== 余额充值 ====================
+
+  /**
+   * 创建余额充值支付单（支付宝电脑网站支付）。
+   * body: { amountCny } 单位分；返回 paymentUrl 供前端在新窗口打开收银台。
+   */
+  @Post('alipay/recharge')
+  async createRechargePayment(
+    @Body() body: { amountCny: number },
+    @Req() req: RequestWithUserOrAdmin,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) throw new BadRequestException('User not authenticated');
+    if (!body?.amountCny) {
+      throw new BadRequestException('amountCny is required');
+    }
+    const result = await this.onlinePaymentService.createRechargePayment(
+      userId,
+      body.amountCny,
+    );
+    return { success: true, data: result };
+  }
+
+  /** 查询充值支付状态（前端轮询用，按 outTradeNo） */
+  @Get('alipay/recharge/:outTradeNo/status')
+  async getRechargePaymentStatus(
+    @Param('outTradeNo') outTradeNo: string,
+    @Query('refresh') refresh: string | undefined,
+    @Req() req: RequestWithUserOrAdmin,
+  ) {
+    if (!req.user) throw new BadRequestException('User not authenticated');
+    const result = await this.onlinePaymentService.getRechargePaymentStatus(
+      outTradeNo,
+      req.user.id,
+      refresh === '1',
+    );
+    return { success: true, data: result };
+  }
+
   // ==================== 兼容旧版 API ====================
 
   /**

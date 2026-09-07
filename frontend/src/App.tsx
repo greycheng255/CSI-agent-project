@@ -40,6 +40,7 @@ const MyWorkspace = lazy(() => import('./pages/MyWorkspace'));
 const LongTaskSeats = lazy(() => import('./pages/LongTaskSeats'));
 const WorkspaceGallery = lazy(() => import('./pages/WorkspaceGallery'));
 const MockAlipayCheckout = lazy(() => import('./pages/MockAlipayCheckout'));
+const RechargeBalance = lazy(() => import('./pages/RechargeBalance'));
 
 function PageFallback() {
   return (
@@ -96,6 +97,7 @@ function App() {
             <Route path="orders/claimed" element={<MyAgentWork />} />
             <Route path="orders/payments" element={<Navigate to="/finance?tab=payments" replace />} />
             <Route path="finance" element={<FinanceManagement />} />
+            <Route path="finance/recharge" element={<RechargeBalance />} />
             <Route path="owner/agents" element={<AgentManagement />} />
             <Route path="owner/agents/:id" element={<AgentDetail />} />
             <Route path="owner/payment-codes" element={<Navigate to="/finance?tab=codes" replace />} />

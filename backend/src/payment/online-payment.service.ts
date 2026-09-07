@@ -14,6 +14,7 @@ import { AlipayClientService } from './alipay-client.service';
 import {
   Payment,
   PaymentProvider,
+  PaymentPurpose,
   PaymentStatus,
 } from './entities/payment.entity';
 import {
@@ -25,9 +26,13 @@ import {
   OrderPaymentStatus,
   OrderPayoutStatus,
 } from './entities/order-payment.entity';
+import { BalanceService } from './balance.service';
 
 const PAYMENT_TIMEOUT_MINUTES = 15;
 const SUCCESS_TRADE_STATUSES = new Set(['TRADE_SUCCESS', 'TRADE_FINISHED']);
+/** 充值单笔最低 1 元，最高 50000 元（分） */
+const RECHARGE_MIN_FEN = 100;
+const RECHARGE_MAX_FEN = 5_000_000;
 
 export function yuanStringToFen(value: string): number | null {
   const normalized = value.trim();
@@ -48,6 +53,15 @@ type PaymentStatusView = {
   expiresAt: string;
 };
 
+type RechargeStatusView = {
+  paymentId: string;
+  outTradeNo: string;
+  status: 'PENDING' | 'PAID' | 'FAILED';
+  amountCny: number;
+  paidAt: string | null;
+  expiresAt: string;
+};
+
 @Injectable()
 export class OnlinePaymentService {
   private readonly logger = new Logger(OnlinePaymentService.name);
@@ -62,6 +76,7 @@ export class OnlinePaymentService {
     private readonly dataSource: DataSource,
     private readonly alipay: AlipayClientService,
     private readonly webhooksService: WebhooksService,
+    private readonly balanceService: BalanceService,
   ) {}
 
   isAlipayConfigured(): boolean {
@@ -376,13 +391,139 @@ export class OnlinePaymentService {
       where: { outTradeNo, provider: PaymentProvider.ALIPAY },
       relations: ['order'],
     });
-    if (!payment?.order?.id) {
+    if (!payment) {
+      fallback.searchParams.set('payment', 'unknown');
+      return fallback.toString();
+    }
+    // 充值单回跳到收支管理页
+    if (payment.purpose === PaymentPurpose.RECHARGE) {
+      const target = new URL('/finance', base);
+      target.searchParams.set('payment', 'recharged');
+      return target.toString();
+    }
+    if (!payment.order?.id) {
       fallback.searchParams.set('payment', 'unknown');
       return fallback.toString();
     }
     const target = new URL(`/orders/${payment.order.id}/pay`, base);
     target.searchParams.set('payment', 'returned');
     return target.toString();
+  }
+
+  // ==================== 余额充值 ====================
+
+  /**
+   * 创建余额充值支付单。与订单托管款共享 Payment 表，但 purpose=RECHARGE、
+   * order=null、userId 记录付款人。回调时按 purpose 分流到 recharge 结算。
+   */
+  async createRechargePayment(
+    userId: string,
+    amountCny: number,
+  ): Promise<RechargeStatusView & { paymentUrl: string | null }> {
+    if (!Number.isSafeInteger(amountCny) || amountCny <= 0) {
+      throw new BadRequestException('充值金额无效');
+    }
+    if (amountCny < RECHARGE_MIN_FEN) {
+      throw new BadRequestException('单笔充值不低于 1 元');
+    }
+    if (amountCny > RECHARGE_MAX_FEN) {
+      throw new BadRequestException('单笔充值不超过 50000 元');
+    }
+
+    const usePessimisticLock = this.dataSource.options.type !== 'sqlite';
+    const payment = await this.dataSource.transaction(async (manager) => {
+      // 复用未过期的 INIT 单，避免短时间重复发起
+      let existing = await manager.findOne(Payment, {
+        where: {
+          userId,
+          purpose: PaymentPurpose.RECHARGE,
+          provider: PaymentProvider.ALIPAY,
+          status: PaymentStatus.INIT,
+        },
+        order: { createdAt: 'DESC' },
+        ...(usePessimisticLock
+          ? { lock: { mode: 'pessimistic_write' as const } }
+          : {}),
+      });
+      if (existing && this.isExpired(existing)) {
+        existing.status = PaymentStatus.FAILED;
+        await manager.save(existing);
+        existing = null;
+      }
+      if (existing && existing.amountCny === amountCny) {
+        return existing;
+      }
+      return manager.save(
+        manager.create(Payment, {
+          order: null,
+          userId,
+          provider: PaymentProvider.ALIPAY,
+          purpose: PaymentPurpose.RECHARGE,
+          outTradeNo: this.createOutTradeNo(),
+          tradeNo: null,
+          amountCny,
+          status: PaymentStatus.INIT,
+          rawNotify: null,
+          paidAt: null,
+        }),
+      );
+    });
+
+    if (payment.status === PaymentStatus.PAID) {
+      return { ...this.toRechargeView(payment), paymentUrl: null };
+    }
+
+    const paymentUrl = this.alipay.createPagePayment({
+      outTradeNo: payment.outTradeNo,
+      amountCny: payment.amountCny,
+      subject: 'CSI 余额充值',
+      timeoutMinutes: PAYMENT_TIMEOUT_MINUTES,
+    });
+    return { ...this.toRechargeView(payment), paymentUrl };
+  }
+
+  /** 查询充值支付状态（前端轮询用，按 outTradeNo 而非 orderId） */
+  async getRechargePaymentStatus(
+    outTradeNo: string,
+    userId: string,
+    refresh = false,
+  ): Promise<RechargeStatusView> {
+    let payment = await this.paymentRepo.findOne({
+      where: { outTradeNo, provider: PaymentProvider.ALIPAY },
+    });
+    if (!payment || payment.purpose !== PaymentPurpose.RECHARGE) {
+      throw new NotFoundException('充值支付单不存在');
+    }
+    if (payment.userId && payment.userId !== userId) {
+      throw new ForbiddenException('无权查询该充值单');
+    }
+
+    if (payment.status === PaymentStatus.INIT && refresh) {
+      await this.refreshFromAlipay(payment.outTradeNo);
+      payment =
+        (await this.paymentRepo.findOne({
+          where: { outTradeNo, provider: PaymentProvider.ALIPAY },
+        })) || payment;
+    }
+    return this.toRechargeView(payment);
+  }
+
+  private toRechargeView(payment: Payment): RechargeStatusView {
+    return {
+      paymentId: payment.id,
+      outTradeNo: payment.outTradeNo,
+      status:
+        payment.status === PaymentStatus.PAID
+          ? 'PAID'
+          : payment.status === PaymentStatus.FAILED
+            ? 'FAILED'
+            : 'PENDING',
+      amountCny: payment.amountCny,
+      paidAt: payment.paidAt?.toISOString() || null,
+      expiresAt: new Date(
+        payment.createdAt.getTime() + PAYMENT_TIMEOUT_MINUTES * 60_000,
+      ).toISOString(),
+    };
   }
 
   private async settleSuccessfulPayment(input: {
@@ -413,6 +554,7 @@ export class OnlinePaymentService {
     if (paidFen == null) throw new Error('invalid_total_amount');
 
     let activatedOrder: Order | null = null;
+    let rechargeTarget: { userId: string; paymentId: string } | null = null;
     const usePessimisticLock = this.dataSource.options.type !== 'sqlite';
     await this.dataSource.transaction(async (manager) => {
       const payment = await manager.findOne(Payment, {
@@ -444,62 +586,80 @@ export class OnlinePaymentService {
         await manager.save(payment);
       }
 
-      const order = payment.order;
-      if (!order) throw new Error('payment_order_not_found');
-      let orderPayment = await manager.findOne(OrderPayment, {
-        where: { orderId: order.id },
-        ...(usePessimisticLock
-          ? { lock: { mode: 'pessimistic_write' as const } }
-          : {}),
-      });
-      if (!orderPayment) {
-        orderPayment = manager.create(OrderPayment, {
-          orderId: order.id,
-          platformCodeId: null,
-          ownerCodeId: null,
-          paymentStatus: OrderPaymentStatus.CONFIRMED,
-          payoutStatus: OrderPayoutStatus.PENDING,
-          amountCny: order.amountCny,
-          platformFeeCny: 0,
-          payoutCny: order.amountCny,
-          paymentProofUrl: null,
-          paidAt: payment.paidAt,
-          paymentConfirmedAt: payment.paidAt,
-          paymentConfirmedBy: null,
-          payoutProofUrl: null,
-          payoutAt: null,
-          payoutConfirmedAt: null,
-          payoutConfirmedBy: null,
-          remark: `支付宝交易号: ${input.tradeNo}`,
-        });
-      } else {
-        orderPayment.paymentStatus = OrderPaymentStatus.CONFIRMED;
-        orderPayment.paidAt = payment.paidAt;
-        orderPayment.paymentConfirmedAt = payment.paidAt;
-        orderPayment.amountCny = order.amountCny;
-        orderPayment.platformFeeCny = 0;
-        orderPayment.payoutCny = order.amountCny;
-        orderPayment.remark = `支付宝交易号: ${input.tradeNo}`;
-      }
-      await manager.save(orderPayment);
-
-      if (
-        order.status === OrderStatus.PENDING_PAYMENT ||
-        order.status === OrderStatus.CANCELED
-      ) {
-        order.status = OrderStatus.IN_PROGRESS;
-        order.escrowedAt = payment.paidAt;
-        order.platformFeeRate = 0;
-        order.platformFeeCny = 0;
-        order.payoutCny = order.amountCny;
-        activatedOrder = await manager.save(order);
-      }
-
       notification.processed = true;
       notification.processedAt = new Date();
       notification.failureReason = null;
       await manager.save(notification);
+
+      // 充值支付单的 userId + paymentId，供事务后入账使用
+      rechargeTarget =
+        payment.purpose === PaymentPurpose.RECHARGE
+          ? { userId: payment.userId || '', paymentId: payment.id }
+          : null;
+
+      // 订单托管款：回填 OrderPayment + 激活订单
+      if (payment.purpose === PaymentPurpose.ORDER) {
+        const order = payment.order;
+        if (!order) throw new Error('payment_order_not_found');
+        let orderPayment = await manager.findOne(OrderPayment, {
+          where: { orderId: order.id },
+          ...(usePessimisticLock
+            ? { lock: { mode: 'pessimistic_write' as const } }
+            : {}),
+        });
+        if (!orderPayment) {
+          orderPayment = manager.create(OrderPayment, {
+            orderId: order.id,
+            platformCodeId: null,
+            ownerCodeId: null,
+            paymentStatus: OrderPaymentStatus.CONFIRMED,
+            payoutStatus: OrderPayoutStatus.PENDING,
+            amountCny: order.amountCny,
+            platformFeeCny: 0,
+            payoutCny: order.amountCny,
+            paymentProofUrl: null,
+            paidAt: payment.paidAt,
+            paymentConfirmedAt: payment.paidAt,
+            paymentConfirmedBy: null,
+            payoutProofUrl: null,
+            payoutAt: null,
+            payoutConfirmedAt: null,
+            payoutConfirmedBy: null,
+            remark: `支付宝交易号: ${input.tradeNo}`,
+          });
+        } else {
+          orderPayment.paymentStatus = OrderPaymentStatus.CONFIRMED;
+          orderPayment.paidAt = payment.paidAt;
+          orderPayment.paymentConfirmedAt = payment.paidAt;
+          orderPayment.amountCny = order.amountCny;
+          orderPayment.platformFeeCny = 0;
+          orderPayment.payoutCny = order.amountCny;
+          orderPayment.remark = `支付宝交易号: ${input.tradeNo}`;
+        }
+        await manager.save(orderPayment);
+
+        if (
+          order.status === OrderStatus.PENDING_PAYMENT ||
+          order.status === OrderStatus.CANCELED
+        ) {
+          order.status = OrderStatus.IN_PROGRESS;
+          order.escrowedAt = payment.paidAt;
+          order.platformFeeRate = 0;
+          order.platformFeeCny = 0;
+          order.payoutCny = order.amountCny;
+          activatedOrder = await manager.save(order);
+        }
+      }
     });
+
+    // 充值入账（事务外，balanceService.recharge 按 paymentId 幂等）
+    if (rechargeTarget) {
+      await this.balanceService.recharge({
+        userId: rechargeTarget.userId,
+        amountCny: paidFen,
+        paymentId: rechargeTarget.paymentId,
+      });
+    }
 
     if (activatedOrder) {
       void this.webhooksService.notifyOrderPaid(activatedOrder);

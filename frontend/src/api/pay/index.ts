@@ -2,6 +2,8 @@ import { API_BASE } from '../../config/api';
 import type {
   AlipayPaymentState,
   CreateAlipayPaymentResult,
+  CreateRechargePaymentResult,
+  RechargePaymentState,
 } from '../../features/pay/types';
 
 interface ApiEnvelope<T> {
@@ -56,6 +58,33 @@ export function getAlipayPaymentStatus(
   const suffix = refresh ? '?refresh=1' : '';
   return request<AlipayPaymentState>(
     `/api/v1/payments/alipay/orders/${encodeURIComponent(orderId)}/status${suffix}`,
+    token,
+  );
+}
+
+export function createRechargePayment(
+  amountCny: number,
+  token: string,
+): Promise<CreateRechargePaymentResult> {
+  return request<CreateRechargePaymentResult>(
+    '/api/v1/payments/alipay/recharge',
+    token,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amountCny }),
+    },
+  );
+}
+
+export function getRechargePaymentStatus(
+  outTradeNo: string,
+  token: string,
+  refresh = false,
+): Promise<RechargePaymentState> {
+  const suffix = refresh ? '?refresh=1' : '';
+  return request<RechargePaymentState>(
+    `/api/v1/payments/alipay/recharge/${encodeURIComponent(outTradeNo)}/status${suffix}`,
     token,
   );
 }
