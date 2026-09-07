@@ -30,11 +30,19 @@ export class RevisionNegotiationService {
     private readonly dispatcher: WebhookDispatcherService,
   ) {}
 
-  /** 启动 2 天协商窗口（#15） */
+  /** 启动 2 天协商窗口（#15）——order 必须真实存在（Console 2026-09-07 冒烟发现项修复） */
   async start(
     orderId: string,
     reason: string,
   ): Promise<MarketplaceRevisionNegotiation> {
+    const order = await this.ordersRepo.findOne({ where: { id: orderId } });
+    if (!order) {
+      throw new ContractError(
+        404,
+        CONTRACT_ERROR_CODE.NOT_FOUND_ORDER,
+        `order not found: ${orderId}`,
+      );
+    }
     const negotiation = this.negotiationRepo.create({
       orderId,
       status: 'open',
