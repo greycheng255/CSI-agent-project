@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { BalanceService } from './balance.service';
+import { RechargeService } from './recharge.service';
 import {
   UserOrAdminGuard,
   type RequestWithUserOrAdmin,
@@ -19,7 +20,10 @@ import { AdminGuard } from '../admin/admin.guard';
 @Controller('api/v1/balance')
 @UseGuards(UserOrAdminGuard)
 export class BalanceController {
-  constructor(private readonly balanceService: BalanceService) {}
+  constructor(
+    private readonly balanceService: BalanceService,
+    private readonly rechargeService: RechargeService,
+  ) {}
 
   /**
    * 获取我的余额
@@ -129,7 +133,84 @@ export class BalanceController {
     };
   }
 
+  /**
+   * 创建余额充值单（返回支付宝收银台跳转 URL）
+   */
+  @Post('recharge')
+  async createRecharge(
+    @Req() req: RequestWithUserOrAdmin,
+    @Body() body: { amountCny: number },
+  ) {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new BadRequestException('User not authenticated');
+    }
+    if (typeof body.amountCny !== 'number') {
+      throw new BadRequestException('充值金额格式无效');
+    }
+
+    const result = await this.rechargeService.createRecharge(
+      userId,
+      body.amountCny,
+    );
+    return { success: true, data: result };
+  }
+
+  /**
+   * 查询充值状态（refresh=true 主动向支付宝查单收敛）
+   */
+  @Get('recharge/:id')
+  async getRechargeStatus(
+    @Req() req: RequestWithUserOrAdmin,
+    @Param('id') rechargeId: string,
+    @Query('refresh') refresh?: string,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new BadRequestException('User not authenticated');
+    }
+
+    const status = await this.rechargeService.getRechargeStatus(
+      rechargeId,
+      userId,
+      refresh === 'true' || refresh === '1',
+    );
+    return { success: true, data: status };
+  }
+
+  /**
+   * 我的充值记录
+   */
+  @Get('recharges')
+  async getMyRecharges(
+    @Req() req: RequestWithUserOrAdmin,
+    @Query('limit') limit?: string,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new BadRequestException('User not authenticated');
+    }
+
+    const recharges = await this.rechargeService.getMyRecharges(
+      userId,
+      limit ? Math.min(parseInt(limit, 10) || 20, 100) : 20,
+    );
+    return { success: true, data: recharges };
+  }
+
   // ==================== 管理员接口 ====================
+
+  /**
+   * 提现列表（管理员，可按状态过滤）
+   */
+  @Get('admin/withdrawals')
+  @UseGuards(AdminGuard)
+  async listWithdrawals(@Query('status') status?: string) {
+    const withdrawals = await this.balanceService.getWithdrawalsForAdmin(
+      status,
+    );
+    return { success: true, data: withdrawals };
+  }
 
   /**
    * 获取待审核的提现申请（管理员）

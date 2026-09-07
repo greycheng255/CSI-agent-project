@@ -160,4 +160,37 @@ describe('WebhookDispatcherService（投递器契约 §3.1/§4.1）', () => {
     const third = mockOutboxRepo.create.mock.calls[2][0];
     expect(third.payload.event_id).toBe('caller-id');
   });
+
+  it('扁平业务体自动包装 §8.3 信封（data 容器 + 外层元字段）', async () => {
+    mockOutboxRepo.create.mockImplementation((v) => v);
+    await service.enqueue('bid.won', 'http://x', {
+      marketplace_task_id: 't1',
+      workspace_id: 'ws-1',
+    });
+    const row = mockOutboxRepo.create.mock.calls[0][0];
+    expect(row.payload.event_type).toBe('bid.won');
+    expect(row.payload.event_version).toBe(1);
+    expect(row.payload.source).toBe('marketplace');
+    expect(row.payload.occurred_at).toBeTruthy();
+    expect(row.payload.sent_at).toBeTruthy();
+    expect(row.payload.data).toEqual({
+      marketplace_task_id: 't1',
+      workspace_id: 'ws-1',
+    });
+  });
+
+  it('已带 data 容器的完整信封原样透传（不双重包装）', async () => {
+    mockOutboxRepo.create.mockImplementation((v) => v);
+    const envelope = {
+      event_id: 'eid-1',
+      event_type: 'opportunity.pushed',
+      event_version: 1,
+      source: 'marketplace',
+      data: { task_brief: { title: 't' } },
+    };
+    await service.enqueue('opportunity.pushed', 'http://x', envelope, 'eid-1');
+    const row = mockOutboxRepo.create.mock.calls[0][0];
+    expect(row.payload).toEqual(envelope);
+    expect(row.payload.data.data).toBeUndefined();
+  });
 });

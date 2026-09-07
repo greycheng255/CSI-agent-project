@@ -14,6 +14,23 @@ function encryptionKey(): Buffer {
   return createHash('sha256').update(`${secret}|gateway-key-enc`).digest();
 }
 
+/**
+ * 解密密钥候选（2026-09-07 过渡兼容）：INBOUND_TOKEN 轮换（09d9→c2m）后，
+ * 存量密文仍由旧 token 派生密钥加密；依次尝试当前/回落 SERVICE_TOKEN/LEGACY，
+ * 直至 dev 默认。写入侧（encryptKey）始终用当前密钥，新数据自然收敛到新钥。
+ */
+function decryptionKeys(): Buffer[] {
+  const secrets = [
+    process.env.LONGTASK_INBOUND_TOKEN,
+    process.env.LONGTASK_SERVICE_TOKEN,
+    process.env.LONGTASK_INBOUND_TOKEN_LEGACY,
+    'csi-gateway-dev',
+  ].filter((s): s is string => Boolean(s && s.trim()));
+  return [...new Set(secrets)].map((s) =>
+    createHash('sha256').update(`${s}|gateway-key-enc`).digest(),
+  );
+}
+
 /** AES-256-GCM 加密（iv 12B + tag 16B + cipher），base64 单串存储 */
 export function encryptKey(plain: string): string {
   const iv = randomBytes(12);
@@ -26,12 +43,21 @@ export function decryptKey(blob: string): string {
   const buf = Buffer.from(blob, 'base64');
   const iv = buf.subarray(0, 12);
   const tag = buf.subarray(12, 28);
-  const decipher = createDecipheriv('aes-256-gcm', encryptionKey(), iv);
-  decipher.setAuthTag(tag);
-  return Buffer.concat([
-    decipher.update(buf.subarray(28)),
-    decipher.final(),
-  ]).toString('utf8');
+  const enc = buf.subarray(28);
+  let lastError: unknown;
+  for (const key of decryptionKeys()) {
+    try {
+      const decipher = createDecipheriv('aes-256-gcm', key, iv);
+      decipher.setAuthTag(tag);
+      return Buffer.concat([
+        decipher.update(enc),
+        decipher.final(),
+      ]).toString('utf8');
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
 }
 
 export interface IssuedKey {

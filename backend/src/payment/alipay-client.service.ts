@@ -14,6 +14,16 @@ export interface AlipayTradeQueryResult {
   raw: Record<string, unknown>;
 }
 
+export interface AlipayTransferResult {
+  status: 'SUCCESS' | 'FAIL' | 'UNKNOWN';
+  /** 支付宝转账单据号 */
+  orderId: string | null;
+  /** 支付宝支付流水号 */
+  fundOrderId: string | null;
+  failReason: string | null;
+  raw: Record<string, unknown>;
+}
+
 interface AlipayRuntimeConfig {
   appId: string;
   sellerId: string | null;
@@ -175,6 +185,77 @@ export class AlipayClientService {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * 单笔转账到支付宝账户（alipay.fund.trans.uni.transfer，提现自动打款用）。
+   * 需企业支付宝开通「转账到支付宝账户」产品授权；未配置开关时不应调用。
+   * @param outBizNo 商家转账唯一单号（提现申请 id）
+   * @param amountCny 转账金额（分）
+   * @param payeeAccount 收款方支付宝登录号（手机/邮箱）或 2088 开头会员 ID
+   * @param payeeRealName 收款方真实姓名（可空；填写可加强校验）
+   */
+  async transferToAccount(input: {
+    outBizNo: string;
+    amountCny: number;
+    payeeAccount: string;
+    payeeRealName?: string | null;
+    remark?: string;
+  }): Promise<AlipayTransferResult> {
+    const identityType = /^2088\d{12,}$/.test(input.payeeAccount.trim())
+      ? 'ALIPAY_USER_ID'
+      : 'ALIPAY_LOGON_ID';
+    const response = (await this.getClient().exec(
+      'alipay.fund.trans.uni.transfer',
+      {
+        bizContent: {
+          out_biz_no: input.outBizNo,
+          trans_amount: (input.amountCny / 100).toFixed(2),
+          product_code: 'TRANS_ACCOUNT_NO_PWD',
+          biz_scene: 'DIRECT_TRANSFER',
+          payee_info: {
+            identity: input.payeeAccount.trim(),
+            identity_type: identityType,
+            ...(input.payeeRealName?.trim()
+              ? { name: input.payeeRealName.trim() }
+              : {}),
+          },
+          remark: (input.remark || '余额提现').slice(0, 100),
+        },
+      },
+      { validateSign: true },
+    )) as unknown as Record<string, unknown>;
+
+    const code = readResponseString(response, 'code');
+    const status = readResponseString(response, 'status');
+    const subMsg =
+      readResponseString(response, 'subMsg', 'sub_msg') ||
+      readResponseString(response, 'msg');
+    if (code !== '10000') {
+      return {
+        status: 'FAIL',
+        orderId: readResponseString(response, 'orderId', 'order_id') || null,
+        fundOrderId: null,
+        failReason: subMsg || `alipay_code_${code}`,
+        raw: response,
+      };
+    }
+    return {
+      status: status === 'SUCCESS' ? 'SUCCESS' : 'UNKNOWN',
+      orderId: readResponseString(response, 'orderId', 'order_id') || null,
+      fundOrderId:
+        readResponseString(response, 'payFundOrderId', 'pay_fund_order_id') ||
+        null,
+      failReason: status === 'SUCCESS' ? null : subMsg || `status_${status}`,
+      raw: response,
+    };
+  }
+
+  isTransferEnabled(): boolean {
+    return (
+      process.env.ALIPAY_TRANSFER_ENABLED?.trim() === 'true' &&
+      this.isConfigured()
+    );
   }
 
   async queryTrade(outTradeNo: string): Promise<AlipayTradeQueryResult> {

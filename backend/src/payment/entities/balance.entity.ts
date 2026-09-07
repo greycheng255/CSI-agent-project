@@ -25,6 +25,7 @@ export enum BalanceChangeType {
   WITHDRAWAL = 'WITHDRAWAL', // 提现
   PLATFORM_FEE = 'PLATFORM_FEE', // 平台服务费
   PENALTY = 'PENALTY', // 罚款
+  ORDER_PAYMENT = 'ORDER_PAYMENT', // 余额支付订单（托管扣款）
 }
 
 /**

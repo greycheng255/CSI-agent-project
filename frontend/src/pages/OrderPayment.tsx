@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, CreditCard, ImagePlus, Loader2, QrCode, ReceiptText, Upload } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, CreditCard, ImagePlus, Loader2, QrCode, ReceiptText, Upload, Wallet } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
 import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
@@ -37,6 +37,43 @@ export default function OrderPayment() {
   const [proofPreviewUrl, setProofPreviewUrl] = useState('');
   const previewUrlRef = useRef('');
   const [submitting, setSubmitting] = useState(false);
+
+  // 余额支付
+  const [myBalance, setMyBalance] = useState<number | null>(null);
+  const [balancePaying, setBalancePaying] = useState(false);
+  const [balanceError, setBalanceError] = useState('');
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_BASE}/api/v1/balance/my`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('balance-load-failed'))))
+      .then((data) => setMyBalance(data?.data?.availableCny ?? 0))
+      .catch(() => setMyBalance(null));
+  }, [token]);
+
+  const handlePayWithBalance = async () => {
+    if (!orderId || !token) return;
+    setBalancePaying(true);
+    setBalanceError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/payments/order/${orderId}/pay-with-balance`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        setBalanceError(payload?.message || '余额支付失败，请重试');
+        return;
+      }
+      navigate(`/orders/${orderId}`, { replace: true });
+    } catch {
+      setBalanceError('余额支付请求失败，请重试');
+    } finally {
+      setBalancePaying(false);
+    }
+  };
 
   const fetchPaymentInfo = useCallback(async () => {
     if (!orderId || !token) return;
@@ -162,6 +199,43 @@ export default function OrderPayment() {
         amountCny={orderPayment.amountCny}
         onPaid={() => navigate(`/orders/${orderId}`, { replace: true })}
       />
+
+      {/* 余额支付：即时进入托管，无需管理员确认 */}
+      <section className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white">
+        <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="flex items-start gap-3">
+            <Wallet className="mt-0.5 h-5 w-5 shrink-0 text-[var(--brand-600)]" />
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--text-900)]">余额支付</h2>
+              <p className="mt-1 text-sm leading-6 text-[var(--text-500)]">
+                可用余额
+                <span className="ml-1 font-semibold tabular-nums text-[var(--text-800)]">
+                  {myBalance === null ? '—' : amount(myBalance)}
+                </span>
+                ，支付后即时进入托管，无需等待平台确认。
+              </p>
+              {balanceError && (
+                <p className="mt-2 text-sm text-[var(--state-error)]">{balanceError}</p>
+              )}
+            </div>
+          </div>
+          {myBalance !== null && myBalance >= orderPayment.amountCny ? (
+            <button
+              type="button"
+              onClick={handlePayWithBalance}
+              disabled={balancePaying}
+              className="btn-cs btn-primary btn-sm shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {balancePaying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+              {balancePaying ? '正在支付...' : `余额支付 ${amount(orderPayment.amountCny)}`}
+            </button>
+          ) : (
+            <Link to="/finance?tab=balance" className="btn-cs btn-ghost-dark btn-sm shrink-0">
+              余额不足，去充值
+            </Link>
+          )}
+        </div>
+      </section>
 
       <div className="flex items-center gap-3 text-xs text-[var(--text-500)]">
         <span className="h-px flex-1 bg-[var(--border)]" />

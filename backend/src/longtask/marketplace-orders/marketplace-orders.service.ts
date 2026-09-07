@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MarketplaceOrder } from './marketplace-order.entity';
+import { MarketplaceCancelRequest } from './cancel-request.entity';
 import {
   CONTRACT_ERROR_CODE,
   ContractError,
@@ -16,6 +17,8 @@ export class MarketplaceOrdersService {
   constructor(
     @InjectRepository(MarketplaceOrder)
     private readonly repo: Repository<MarketplaceOrder>,
+    @InjectRepository(MarketplaceCancelRequest)
+    private readonly cancelRepo: Repository<MarketplaceCancelRequest>,
   ) {}
 
   async applyProjectId(
@@ -55,12 +58,29 @@ export class MarketplaceOrdersService {
   /** 对账 #37：订单状态（Console 每 10min 对账调用） */
   async orderStatus(orderId: string) {
     const order = await this.getOrThrow(orderId);
+    // cancel_request 扩展键（双方实现约定，§19.1 样例外）：Console 取消协商对账兜底依赖。
+    // 无取消请求时键值为 null（键恒出现）。
+    const latestCancel = await this.cancelRepo.findOne({
+      where: { orderId },
+      order: { cancelProposalSeq: 'DESC' },
+    });
     return {
       order_id: order.id,
       project_id: order.projectId,
       contract_status: order.contractStatus,
       delivery_status: order.deliveryStatus,
       settlement_status: order.settlementStatus,
+      cancel_request: latestCancel
+        ? {
+            cancel_request_id: latestCancel.id,
+            cancel_proposal_seq: latestCancel.cancelProposalSeq,
+            status: latestCancel.status,
+            trigger: latestCancel.trigger,
+            owner_response: latestCancel.ownerResponse,
+            resolution: latestCancel.resolution,
+            created_at: latestCancel.createdAt,
+          }
+        : null,
     };
   }
 

@@ -2,9 +2,11 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
+import { AlipayClientService } from './alipay-client.service';
 import {
   UserBalance,
   BalanceRecord,
@@ -15,6 +17,8 @@ import {
 
 @Injectable()
 export class BalanceService {
+  private readonly logger = new Logger(BalanceService.name);
+
   constructor(
     @InjectRepository(UserBalance)
     private userBalanceRepository: Repository<UserBalance>,
@@ -23,6 +27,7 @@ export class BalanceService {
     @InjectRepository(Withdrawal)
     private withdrawalRepository: Repository<Withdrawal>,
     private dataSource: DataSource,
+    private alipay: AlipayClientService,
   ) {}
 
   /**
@@ -55,15 +60,17 @@ export class BalanceService {
   }
 
   /**
-   * 增加可用余额（订单收入）
+   * 增加可用余额（订单收入 / 充值入账）
    */
   async addIncome(params: {
     userId: string;
     amountCny: number;
     orderId: string;
     description?: string;
+    changeType?: BalanceChangeType;
   }): Promise<UserBalance> {
     const { userId, amountCny, orderId, description } = params;
+    const changeType = params.changeType ?? BalanceChangeType.ORDER_INCOME;
 
     if (amountCny <= 0) {
       throw new BadRequestException('Amount must be positive');
@@ -100,9 +107,9 @@ export class BalanceService {
           amountCny,
           beforeBalanceCny: beforeBalance,
           afterBalanceCny: balance.availableCny,
-          changeType: BalanceChangeType.ORDER_INCOME,
+          changeType,
           orderId,
-          description: description || `订单收入: ${amountCny}元`,
+          description: description || `入账: ${amountCny}分`,
         }),
       );
 
@@ -227,6 +234,54 @@ export class BalanceService {
   }
 
   /**
+   * 余额支付订单（托管扣款）：可用余额直接支付订单金额进入平台托管
+   */
+  async payFromBalance(params: {
+    userId: string;
+    amountCny: number;
+    orderId: string;
+  }): Promise<UserBalance> {
+    const { userId, amountCny, orderId } = params;
+
+    if (amountCny <= 0) {
+      throw new BadRequestException('Amount must be positive');
+    }
+
+    return this.dataSource.transaction(async (manager) => {
+      const balance = await manager.findOne(UserBalance, {
+        where: { userId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!balance) {
+        throw new BadRequestException('余额账户不存在，请先充值');
+      }
+      if (balance.availableCny < amountCny) {
+        throw new BadRequestException(
+          `可用余额不足（需 ${amountCny} 分，可用 ${balance.availableCny} 分）`,
+        );
+      }
+
+      const beforeBalance = balance.availableCny;
+      balance.availableCny -= amountCny;
+      await manager.save(balance);
+
+      await manager.save(
+        this.balanceRecordRepository.create({
+          userId,
+          amountCny: -amountCny,
+          beforeBalanceCny: beforeBalance,
+          afterBalanceCny: balance.availableCny,
+          changeType: BalanceChangeType.ORDER_PAYMENT,
+          orderId,
+          description: `余额支付订单: ${amountCny}分`,
+        }),
+      );
+
+      return balance;
+    });
+  }
+
+  /**
    * 申请提现
    */
   async requestWithdrawal(params: {
@@ -241,7 +296,8 @@ export class BalanceService {
       throw new BadRequestException('提现金额必须大于0');
     }
 
-    if (amountCny < 100) {
+    // 金额单位为分：最低提现 100 元 = 10000 分
+    if (amountCny < 10000) {
       throw new BadRequestException('最低提现金额为100元');
     }
 
@@ -305,7 +361,8 @@ export class BalanceService {
   }): Promise<Withdrawal> {
     const { withdrawalId, adminUserId, approved, notes } = params;
 
-    return this.dataSource.transaction(async (manager) => {
+    let reviewedWithdrawal!: Withdrawal;
+    await this.dataSource.transaction(async (manager) => {
       const withdrawal = await manager.findOne(Withdrawal, {
         where: { id: withdrawalId },
         lock: { mode: 'pessimistic_write' },
@@ -344,11 +401,57 @@ export class BalanceService {
         balance.availableCny += withdrawal.amountCny;
       }
 
-      await manager.save(withdrawal);
+      const reviewed = await manager.save(withdrawal);
       await manager.save(balance);
-
-      return withdrawal;
+      reviewedWithdrawal = reviewed;
     });
+
+    // 自动转账（企业资质 + ALIPAY_TRANSFER_ENABLED=true 时启用；事务外调用外部 API）
+    if (
+      reviewedWithdrawal.status === WithdrawalStatus.APPROVED &&
+      reviewedWithdrawal.paymentMethod === 'ALIPAY' &&
+      this.alipay.isTransferEnabled()
+    ) {
+      try {
+        const transfer = await this.alipay.transferToAccount({
+          outBizNo: reviewedWithdrawal.id,
+          amountCny: reviewedWithdrawal.amountCny,
+          payeeAccount: reviewedWithdrawal.accountInfo,
+          remark: 'CSI 平台余额提现',
+        });
+        if (transfer.status === 'SUCCESS' && transfer.orderId) {
+          reviewedWithdrawal.status = WithdrawalStatus.COMPLETED;
+          reviewedWithdrawal.transactionId = transfer.orderId;
+          this.logger.log(
+            `提现自动转账成功 | withdrawal=${reviewedWithdrawal.id} alipayOrder=${transfer.orderId}`,
+          );
+        } else {
+          // 转账失败：保持 APPROVED，记录原因，管理员线下打款后手动 complete
+          reviewedWithdrawal.reviewNotes = [
+            reviewedWithdrawal.reviewNotes,
+            `自动转账未成功(${transfer.failReason || '未知原因'})，请线下打款后手动完成`,
+          ]
+            .filter(Boolean)
+            .join('；');
+          this.logger.warn(
+            `提现自动转账失败 | withdrawal=${reviewedWithdrawal.id} reason=${transfer.failReason}`,
+          );
+        }
+      } catch (error) {
+        reviewedWithdrawal.reviewNotes = [
+          reviewedWithdrawal.reviewNotes,
+          `自动转账异常(${error instanceof Error ? error.message : 'unknown'})，请线下打款后手动完成`,
+        ]
+          .filter(Boolean)
+          .join('；');
+        this.logger.error(
+          `提现自动转账异常 | withdrawal=${reviewedWithdrawal.id}`,
+        );
+      }
+      await this.withdrawalRepository.save(reviewedWithdrawal);
+    }
+
+    return reviewedWithdrawal;
   }
 
   /**
@@ -403,13 +506,38 @@ export class BalanceService {
   }
 
   /**
+   * 管理员查询提现列表（可按状态过滤；user 仅暴露 id/displayName/phone）
+   */
+  async getWithdrawalsForAdmin(status?: string): Promise<unknown[]> {
+    const withdrawals = await this.withdrawalRepository.find({
+      ...(status ? { where: { status: status as WithdrawalStatus } } : {}),
+      order: { createdAt: 'DESC' },
+      relations: ['user'],
+      take: 200,
+    });
+    return withdrawals.map((w) => this.toAdminWithdrawalView(w));
+  }
+
+  /**
    * 获取所有待审核的提现申请（管理员用）
    */
-  async getPendingWithdrawals(): Promise<Withdrawal[]> {
-    return this.withdrawalRepository.find({
+  async getPendingWithdrawals(): Promise<unknown[]> {
+    const withdrawals = await this.withdrawalRepository.find({
       where: { status: WithdrawalStatus.PENDING },
       order: { createdAt: 'ASC' },
       relations: ['user'],
     });
+    return withdrawals.map((w) => this.toAdminWithdrawalView(w));
+  }
+
+  /** 管理端出参视图：剥离 user 密码哈希等敏感字段 */
+  private toAdminWithdrawalView(withdrawal: Withdrawal) {
+    const { user, ...rest } = withdrawal;
+    return {
+      ...rest,
+      user: user
+        ? { id: user.id, displayName: user.displayName, phone: user.phone }
+        : null,
+    };
   }
 }

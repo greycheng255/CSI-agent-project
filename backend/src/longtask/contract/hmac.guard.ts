@@ -27,14 +27,23 @@ export class HmacGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest();
     // C→M 入站方向密钥（Console 清单 C2：按方向分离；未设时回落统一 token）
-    const secret = process.env.LONGTASK_INBOUND_TOKEN ?? process.env.LONGTASK_SERVICE_TOKEN;
-    if (!secret) {
+    const primary =
+      process.env.LONGTASK_INBOUND_TOKEN ?? process.env.LONGTASK_SERVICE_TOKEN;
+    if (!primary) {
       throw new UnauthorizedException('AUTH_TOKEN_INVALID');
     }
+    // 过渡兼容（2026-09-07）：Console 凭证从旧口径（09d9 Bearer + 2c42 HMAC）
+    // 切换到 c2m 单密钥期间，LEGACY 变量并行接受旧凭证；对端确认切换后应移除。
+    const legacyToken =
+      process.env.LONGTASK_INBOUND_TOKEN_LEGACY?.trim() || null;
+    const legacyHmac =
+      process.env.LONGTASK_INBOUND_HMAC_SECRET_LEGACY?.trim() || null;
 
     const bearer = (req.headers?.['authorization'] ?? '') as string;
     const token = bearer.replace(/^Bearer\s+/i, '').trim();
-    if (token !== secret) {
+    const matchedBearer =
+      token === primary ? primary : legacyToken && token === legacyToken ? legacyToken : null;
+    if (!matchedBearer) {
       throw new UnauthorizedException('AUTH_TOKEN_INVALID');
     }
 
@@ -62,10 +71,17 @@ export class HmacGuard implements CanActivate {
 
     const raw = deriveRawPayload({ rawBody: req.rawBody, body: req.body });
     // 联调对齐（2026-09-04 代理抓包）：Console 服务级调用 Bearer 与 HMAC 使用不同密钥
-    // （Bearer=CSI_SERVICE_TOKEN，HMAC=CSI_WEBHOOK_SECRET）。设置 LONGTASK_INBOUND_HMAC_SECRET
-    // 时 HMAC 重算优先用该密钥，回落 INBOUND 保持原单密钥口径（向后兼容）。
-    const hmacSecret = process.env.LONGTASK_INBOUND_HMAC_SECRET || secret;
-    if (!verifySignature(raw, sig.ts, sig.v1, hmacSecret)) {
+    // （Bearer=CSI_SERVICE_TOKEN，HMAC=CSI_WEBHOOK_SECRET）。HMAC 重算密钥候选：
+    // 专用 HMAC 密钥（若设）→ 命中的 Bearer（单密钥口径）→ 旧专用 HMAC 密钥（过渡兼容）。
+    const hmacCandidates = [
+      process.env.LONGTASK_INBOUND_HMAC_SECRET,
+      matchedBearer,
+      legacyHmac,
+    ].filter((s): s is string => Boolean(s && s.trim()));
+    const signatureValid = hmacCandidates.some((candidate) =>
+      verifySignature(raw, sig.ts, sig.v1, candidate),
+    );
+    if (!signatureValid) {
       throw new UnauthorizedException('AUTH_HMAC_SIGNATURE_MISMATCH');
     }
 

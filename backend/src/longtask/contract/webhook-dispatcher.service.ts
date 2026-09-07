@@ -64,9 +64,10 @@ export class WebhookDispatcherService {
 
   /**
    * 出站入队（event_id 缺省生成 uuid-v7 语义的 uuid；重投复用同一 id）。
-   * 契约 §8.3 统一信封：接收方按 body 内 event_id 去重（§4.1），
-   * 故将 event_id 注入 payload（与 outbox event_id、Idempotency-Key 头三者一致）；
-   * payload 已显式携带 event_id 时不覆盖。
+   * §8.3 统一信封：接收方按 body 内 event_id 去重（§4.1），event_id 注入 payload
+   * （与 outbox event_id、Idempotency-Key 头三者一致）。
+   * 调用方传扁平业务体时自动组装信封外层（event_version/occurred_at/sent_at/source/data）；
+   * 调用方已自带 data 容器的完整信封（如 opportunity.pushed §9.1）则原样透传，仅补齐 event_id。
    */
   enqueue(
     eventType: string,
@@ -74,12 +75,24 @@ export class WebhookDispatcherService {
     payload: Record<string, unknown>,
     eventId?: string,
   ): Promise<WebhookOutbox> {
-    const id = eventId ?? randomUUID();
+    const id = eventId ?? (payload.event_id as string | undefined) ?? randomUUID();
+    const body =
+      payload.data && typeof payload.data === 'object'
+        ? { ...payload, event_id: payload.event_id ?? id }
+        : {
+            event_id: id,
+            event_type: eventType,
+            event_version: 1,
+            occurred_at: new Date().toISOString(),
+            sent_at: new Date().toISOString(),
+            source: 'marketplace',
+            data: payload,
+          };
     const row = this.outboxRepo.create({
-      eventId: id,
+      eventId: body.event_id as string,
       eventType,
       targetUrl,
-      payload: { ...payload, event_id: payload.event_id ?? id },
+      payload: body,
       status: 'pending',
       attempts: 0,
       nextAttemptAt: new Date(),

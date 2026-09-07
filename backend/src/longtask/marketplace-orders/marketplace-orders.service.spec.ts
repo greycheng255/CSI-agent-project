@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { MarketplaceOrdersService } from './marketplace-orders.service';
 import { MarketplaceOrder } from './marketplace-order.entity';
+import { MarketplaceCancelRequest } from './cancel-request.entity';
 
 describe('MarketplaceOrdersService（T12/T13：project_id 回填 + 对账）', () => {
   let service: MarketplaceOrdersService;
@@ -11,6 +12,7 @@ describe('MarketplaceOrdersService（T12/T13：project_id 回填 + 对账）', (
     find: jest.fn(),
     save: jest.fn(),
   };
+  const mockCancelRepo = { findOne: jest.fn() };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -18,6 +20,10 @@ describe('MarketplaceOrdersService（T12/T13：project_id 回填 + 对账）', (
       providers: [
         MarketplaceOrdersService,
         { provide: getRepositoryToken(MarketplaceOrder), useValue: mockRepo },
+        {
+          provide: getRepositoryToken(MarketplaceCancelRequest),
+          useValue: mockCancelRepo,
+        },
       ],
     }).compile();
     service = module.get(MarketplaceOrdersService);
@@ -59,7 +65,7 @@ describe('MarketplaceOrdersService（T12/T13：project_id 回填 + 对账）', (
     });
   });
 
-  it('对账 #37：返回订单状态视图', async () => {
+  it('对账 #37：返回订单状态视图（无取消请求 → cancel_request 为 null）', async () => {
     mockRepo.findOne.mockResolvedValueOnce({
       id: 'o1',
       projectId: 'p-1',
@@ -67,6 +73,7 @@ describe('MarketplaceOrdersService（T12/T13：project_id 回填 + 对账）', (
       deliveryStatus: 'in_accept',
       settlementStatus: null,
     });
+    mockCancelRepo.findOne.mockResolvedValueOnce(null);
     const status = await service.orderStatus('o1');
     expect(status).toEqual({
       order_id: 'o1',
@@ -74,6 +81,30 @@ describe('MarketplaceOrdersService（T12/T13：project_id 回填 + 对账）', (
       contract_status: 'signed',
       delivery_status: 'in_accept',
       settlement_status: null,
+      cancel_request: null,
+    });
+  });
+
+  it('对账 #37：存在取消请求时返回 cancel_request 扩展对象（Console 对账兜底键）', async () => {
+    mockRepo.findOne.mockResolvedValueOnce({ id: 'o1' });
+    mockCancelRepo.findOne.mockResolvedValueOnce({
+      id: 'cr-1',
+      cancelProposalSeq: 2,
+      status: 'open',
+      trigger: 'employer_request',
+      ownerResponse: null,
+      resolution: null,
+      createdAt: new Date('2026-09-06T00:00:00Z'),
+    });
+    const status = await service.orderStatus('o1');
+    expect(status.cancel_request).toEqual({
+      cancel_request_id: 'cr-1',
+      cancel_proposal_seq: 2,
+      status: 'open',
+      trigger: 'employer_request',
+      owner_response: null,
+      resolution: null,
+      created_at: new Date('2026-09-06T00:00:00Z'),
     });
   });
 

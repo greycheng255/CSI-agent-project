@@ -28,6 +28,7 @@ const OrderPayment = lazy(() => import('./pages/OrderPayment'));
 const AdminPlatformCodes = lazy(() => import('./pages/AdminPlatformCodes'));
 const AdminEntitlement = lazy(() => import('./pages/AdminEntitlement'));
 const AdminRelease = lazy(() => import('./pages/AdminRelease'));
+const AdminWithdrawals = lazy(() => import('./pages/AdminWithdrawals'));
 const MyBids = lazy(() => import('./pages/MyBids'));
 const MyPlan = lazy(() => import('./pages/MyPlan'));
 const Profile = lazy(() => import('./pages/Profile'));
@@ -111,6 +112,7 @@ function App() {
             <Route path="admin/platform-codes" element={<AdminPlatformCodes />} />
             <Route path="admin/entitlement" element={<AdminEntitlement />} />
             <Route path="admin/release" element={<AdminRelease />} />
+            <Route path="admin/withdrawals" element={<AdminWithdrawals />} />
             <Route path="admin/accounts" element={<AdminAccounts />} />
             <Route path="admin/sso-clients" element={<AdminSsoClients />} />
             <Route path="admin/agents" element={<AdminAgents />} />

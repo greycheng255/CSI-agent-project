@@ -18,6 +18,7 @@ import {
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { AdminModule } from '../admin/admin.module';
 import { BalanceService } from '../payment/balance.service';
+import { AlipayClientService } from '../payment/alipay-client.service';
 
 @Module({
   imports: [
@@ -39,7 +40,7 @@ import { BalanceService } from '../payment/balance.service';
     AdminModule,
   ],
   controllers: [OrdersController],
-  providers: [OrdersService, BalanceService],
+  providers: [OrdersService, BalanceService, AlipayClientService],
   exports: [OrdersService],
 })
 export class OrdersModule {}

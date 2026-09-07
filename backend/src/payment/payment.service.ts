@@ -25,6 +25,8 @@ import {
   OrderPayoutStatus,
 } from './entities/order-payment.entity';
 import { UploadService } from '../upload/upload.service';
+import { BalanceService } from './balance.service';
+import { BalanceChangeType } from './entities/balance.entity';
 
 @Injectable()
 export class PaymentService {
@@ -45,6 +47,7 @@ export class PaymentService {
     private readonly orderPaymentRepo: Repository<OrderPayment>,
     private readonly webhooksService: WebhooksService,
     private readonly uploadService: UploadService,
+    private readonly balanceService: BalanceService,
   ) {}
 
   // ==================== 用户收款码管理 ====================
@@ -356,6 +359,66 @@ export class PaymentService {
       return this.orderPaymentRepo.save(orderPayment);
     }
     return orderPayment;
+  }
+
+  /**
+   * 余额支付订单：雇主用可用余额直接支付，即时进入托管（等价于线下凭证被确认后的状态）
+   */
+  async payWithBalance(orderId: string, userId: string): Promise<OrderPayment> {
+    const order = await this.orderRepo.findOne({
+      where: { id: orderId },
+      relations: ['client'],
+    });
+    if (!order) throw new NotFoundException('Order not found');
+    const clientId = order.client?.id || order.clientUserId;
+    if (!clientId || clientId !== userId) {
+      throw new ForbiddenException('Only the client can pay this order');
+    }
+    if (order.status !== OrderStatus.PENDING_PAYMENT) {
+      throw new BadRequestException('订单当前状态不可支付');
+    }
+
+    const orderPayment = await this.orderPaymentRepo.findOne({
+      where: { orderId },
+    });
+    if (!orderPayment) throw new NotFoundException('Order payment not found');
+    if (orderPayment.paymentStatus !== OrderPaymentStatus.PENDING) {
+      throw new BadRequestException('Payment already confirmed');
+    }
+
+    // 1. 余额扣款（独立事务 + 流水）；不足会抛 BadRequestException
+    await this.balanceService.payFromBalance({
+      userId,
+      amountCny: orderPayment.amountCny,
+      orderId,
+    });
+
+    // 2. 置单进入托管；失败则退款补偿，保证余额与订单一致
+    try {
+      orderPayment.paymentStatus = OrderPaymentStatus.PAID;
+      orderPayment.paidAt = new Date();
+      await this.orderPaymentRepo.save(orderPayment);
+
+      order.status = OrderStatus.IN_PROGRESS;
+      order.escrowedAt = new Date();
+      order.platformFeeRate = 0;
+      order.platformFeeCny = 0;
+      order.payoutCny = order.amountCny;
+      await this.orderRepo.save(order);
+
+      void this.webhooksService.notifyOrderPaid(order);
+      this.logger.log(`Balance payment confirmed for order: ${orderId}`);
+      return orderPayment;
+    } catch (error) {
+      await this.balanceService.addIncome({
+        userId,
+        amountCny: orderPayment.amountCny,
+        orderId,
+        changeType: BalanceChangeType.REFUND,
+        description: `余额支付失败退款: ${orderPayment.amountCny}分`,
+      });
+      throw error;
+    }
   }
 
   /**

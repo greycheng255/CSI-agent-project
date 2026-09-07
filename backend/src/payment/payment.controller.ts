@@ -280,6 +280,21 @@ export class PaymentController {
   }
 
   /**
+   * 余额支付订单（即时进入托管，无需管理员确认）
+   */
+  @Post('order/:orderId/pay-with-balance')
+  async payWithBalance(
+    @Param('orderId') orderId: string,
+    @Req() req: RequestWithUserOrAdmin,
+  ) {
+    const userId = req.user?.id;
+    if (!userId) throw new BadRequestException('User not authenticated');
+
+    const result = await this.paymentService.payWithBalance(orderId, userId);
+    return { success: true, data: result };
+  }
+
+  /**
    * 雇主确认已支付（上传支付凭证）
    */
   @Post('order/:orderId/confirm-payment')

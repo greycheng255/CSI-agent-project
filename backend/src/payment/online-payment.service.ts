@@ -11,6 +11,7 @@ import { DataSource, Repository } from 'typeorm';
 import { Order, OrderStatus } from '../orders/entities/order.entity';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { AlipayClientService } from './alipay-client.service';
+import { RechargeService } from './recharge.service';
 import {
   Payment,
   PaymentProvider,
@@ -76,6 +77,7 @@ export class OnlinePaymentService {
     private readonly dataSource: DataSource,
     private readonly alipay: AlipayClientService,
     private readonly webhooksService: WebhooksService,
+    private readonly rechargeService: RechargeService,
     private readonly balanceService: BalanceService,
   ) {}
 
@@ -221,16 +223,30 @@ export class OnlinePaymentService {
     }
 
     try {
-      await this.settleSuccessfulPayment({
-        logId: log.id,
-        outTradeNo: params.out_trade_no || '',
-        tradeNo: params.trade_no || '',
-        totalAmount: params.total_amount || '',
-        appId: params.app_id || '',
-        sellerId: params.seller_id || '',
-        raw: params,
-        requireMerchantIdentity: true,
-      });
+      // 分流：RCH 前缀 = 余额充值单；其余 = 订单支付单
+      if ((params.out_trade_no || '').startsWith('RCH')) {
+        await this.rechargeService.settleRecharge({
+          outTradeNo: params.out_trade_no || '',
+          tradeNo: params.trade_no || '',
+          totalAmount: params.total_amount || '',
+          raw: params,
+        });
+        log.processed = true;
+        log.processedAt = new Date();
+        log.failureReason = null;
+        await this.notificationRepo.save(log);
+      } else {
+        await this.settleSuccessfulPayment({
+          logId: log.id,
+          outTradeNo: params.out_trade_no || '',
+          tradeNo: params.trade_no || '',
+          totalAmount: params.total_amount || '',
+          appId: params.app_id || '',
+          sellerId: params.seller_id || '',
+          raw: params,
+          requireMerchantIdentity: true,
+        });
+      }
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unknown_error';
@@ -386,6 +402,17 @@ export class OnlinePaymentService {
     if (!outTradeNo || !this.alipay.verifyNotification(params)) {
       fallback.searchParams.set('payment', 'invalid');
       return fallback.toString();
+    }
+    // 充值单回跳：余额 tab（带 rechargeId 供前端轮询入账状态）
+    if (outTradeNo.startsWith('RCH')) {
+      const target = new URL('/finance', base);
+      target.searchParams.set('tab', 'balance');
+      target.searchParams.set('payment', 'returned');
+      const recharge = await this.rechargeService.findByOutTradeNo(outTradeNo);
+      if (recharge) {
+        target.searchParams.set('recharge', recharge.id);
+      }
+      return target.toString();
     }
     const payment = await this.paymentRepo.findOne({
       where: { outTradeNo, provider: PaymentProvider.ALIPAY },

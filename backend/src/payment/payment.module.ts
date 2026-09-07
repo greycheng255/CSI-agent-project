@@ -21,6 +21,8 @@ import {
   BalanceRecord,
   Withdrawal,
 } from './entities/balance.entity';
+import { RechargeOrder } from './entities/recharge.entity';
+import { RechargeService } from './recharge.service';
 import { OrdersModule } from '../orders/orders.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { UploadModule } from '../upload/upload.module';
@@ -62,6 +64,7 @@ subDirs.forEach((dir) => {
       UserBalance,
       BalanceRecord,
       Withdrawal,
+      RechargeOrder,
     ]),
     MulterModule.register({
       storage: diskStorage({
@@ -102,6 +105,7 @@ subDirs.forEach((dir) => {
     OnlinePaymentService,
     AlipayClientService,
     BalanceService,
+    RechargeService,
   ],
   exports: [PaymentService, OnlinePaymentService, BalanceService],
 })
