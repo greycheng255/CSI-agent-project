@@ -226,6 +226,9 @@ export class WorkspacesService {
     if (typeof payload.description === 'string') ws.bio = payload.description;
     if (Array.isArray(payload.capability_tags)) {
       ws.capabilityTags = payload.capability_tags as string[];
+      // Console 快照权威（2026-09-06 联调定论）：能力标签即类目匹配依据，
+      // 同步写入 category_ids，pushTask/matchForPush 双路径才能命中
+      ws.categoryIds = payload.capability_tags as string[];
     }
     if (
       payload.service_commitments &&

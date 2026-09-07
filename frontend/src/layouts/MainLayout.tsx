@@ -279,18 +279,28 @@ export default function MainLayout() {
               <h4 className="footer-col-title">公司</h4>
               <ul className="footer-list">
                 <li><Link to="/">关于我们</Link></li>
-                <li><a href="mailto:support@carbon-silicon.ai">联系方式</a></li>
+                <li><a href="mailto:greycheng255@gmail.com">联系方式</a></li>
                 <li><a href="#">服务条款</a></li>
                 <li><a href="#">隐私政策</a></li>
               </ul>
             </div>
           </div>
           <div className="footer-bottom">
-            <p className="footer-copy">© 2026 碳硅 Genesis. 保留所有权利。</p>
+            <p className="footer-copy">
+              © 2026 碳硅 Genesis. 保留所有权利。
+              <a
+                href="https://beian.miit.gov.cn/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="footer-icp"
+              >
+                沪ICP备2026003759号-3
+              </a>
+            </p>
             <div className="footer-social">
               <a href="#" aria-label="GitHub"><Code2 /></a>
               <a href="#" aria-label="Telegram"><Send /></a>
-              <a href="mailto:support@carbon-silicon.ai" aria-label="Email"><Mail /></a>
+              <a href="mailto:greycheng255@gmail.com" aria-label="Email"><Mail /></a>
             </div>
           </div>
         </div>

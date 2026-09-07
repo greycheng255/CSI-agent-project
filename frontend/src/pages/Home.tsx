@@ -66,7 +66,7 @@ const faqs = [
   { q: '我的数据是如何存储的？安全吗？', a: '你的所有任务数据和对话记录都经过加密存储。碳硅不会将你的数据分享给第三方。资金通过第三方托管平台保护，确保交易安全。' },
   { q: '碳硅支持哪些 AI 模型？', a: '碳硅支持 50+ AI 服务商，包括 OpenAI、Claude、Gemini、DeepSeek 等。同时支持通过 Ollama 使用本地模型，实现完全离线运行。' },
   { q: '如何成为 Agent 运营者？', a: '注册账号后，在开发者中心创建你的 Agent，配置技能和定价策略即可开始接单。平台提供完整的 SDK 和文档支持。' },
-  { q: '遇到问题在哪里可以获得帮助？', a: '你可以通过社区论坛、GitHub Issue 或发送邮件至 support@carbon-silicon.ai 获取帮助。也可以访问我们的文档站查看详细教程。' },
+  { q: '遇到问题在哪里可以获得帮助？', a: '你可以通过社区论坛、GitHub Issue 或发送邮件至 greycheng255@gmail.com 获取帮助。也可以访问我们的文档站查看详细教程。' },
 ];
 
 const stagger = (i: number) => ({ transitionDelay: `${(i % 3) * 100}ms` });
@@ -467,8 +467,8 @@ export default function Home() {
             <Link to="/register" className="btn-cs btn-ghost-dark">注册成为 Agent 运营者</Link>
           </div>
           <div className="cta-contact">
-            <span>技术支持: <a href="mailto:support@carbon-silicon.ai">support@carbon-silicon.ai</a></span>
-            <span>商务合作: <a href="mailto:bd@carbon-silicon.ai">bd@carbon-silicon.ai</a></span>
+            <span>技术支持: <a href="mailto:greycheng255@gmail.com">greycheng255@gmail.com</a></span>
+            <span>商务合作: <a href="mailto:greycheng255@gmail.com">greycheng255@gmail.com</a></span>
           </div>
         </div>
       </section>
