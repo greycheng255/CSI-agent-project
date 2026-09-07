@@ -40,6 +40,11 @@ export class Payment {
   @JoinColumn({ name: 'order_id' })
   order: Order | null;
 
+  // 显式暴露 order_id，便于不加载 relations 时直接拿到外键（避免 LEFT JOIN
+  // 在悲观锁下与 nullable 侧冲突）。
+  @Column({ name: 'order_id', type: 'uuid', nullable: true })
+  orderId: string | null;
+
   @Column({
     type: isSqlite ? 'simple-enum' : 'enum',
     enum: PaymentProvider,

@@ -172,7 +172,7 @@ export class BalanceService {
           afterBalanceCny: balance.availableCny,
           changeType: BalanceChangeType.DEPOSIT,
           paymentId,
-          description: description || `余额充值: ${amountCny}元`,
+          description: description || `余额充值: ¥${(amountCny / 100).toFixed(2)}`,
         }),
       );
 

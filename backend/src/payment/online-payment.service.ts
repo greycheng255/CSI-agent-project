@@ -335,9 +335,63 @@ export class OnlinePaymentService {
       throw new BadRequestException('Mock 支付仅在 mock 模式下可用');
     }
     const tradeNo = `MOCK${Date.now()}`;
+
+    // Path A：RCH 前缀走独立 recharge_orders 表结算路径
+    if (outTradeNo.startsWith('RCH')) {
+      const recharge = await this.rechargeService.findByOutTradeNo(outTradeNo);
+      if (!recharge) throw new NotFoundException('充值单不存在');
+      const rawPayload: Record<string, string> = {
+        mock: '1',
+        out_trade_no: outTradeNo,
+        trade_no: tradeNo,
+        trade_status: 'TRADE_SUCCESS',
+        total_amount: totalAmount,
+        app_id: this.alipay.appId,
+        seller_id: this.alipay.sellerId || '',
+      };
+      const log = await this.notificationRepo.save(
+        this.notificationRepo.create({
+          provider: PaymentProvider.ALIPAY,
+          source: PaymentNotificationSource.CALLBACK,
+          notifyId: `MOCK-${outTradeNo}-${Date.now()}`,
+          outTradeNo,
+          tradeNo,
+          signatureValid: true,
+          processed: false,
+          failureReason: null,
+          rawPayload,
+          clientIp: null,
+          processedAt: null,
+        }),
+      );
+      try {
+        await this.rechargeService.settleRecharge({
+          outTradeNo,
+          tradeNo,
+          totalAmount,
+          raw: rawPayload,
+        });
+        log.processed = true;
+        log.processedAt = new Date();
+        log.failureReason = null;
+        await this.notificationRepo.save(log);
+        return { orderId: '', outTradeNo };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'unknown_error';
+        log.processed = false;
+        log.failureReason = message.slice(0, 1000);
+        await this.notificationRepo.save(log);
+        this.logger.error(
+          `支付宝 mock 回调处理失败 (RCH) outTradeNo=${outTradeNo}: ${message}`,
+        );
+        throw error;
+      }
+    }
+
+    // Path B：CSI 前缀走 payments 表 purpose=RECHARGE 结算路径
     const payment = await this.paymentRepo.findOne({
       where: { outTradeNo, provider: PaymentProvider.ALIPAY },
-      relations: ['order'],
     });
     if (!payment) throw new NotFoundException('支付订单不存在');
     if (payment.status === PaymentStatus.PAID) {
@@ -584,12 +638,15 @@ export class OnlinePaymentService {
     let rechargeTarget: { userId: string; paymentId: string; amountCny: number } | null = null;
     const usePessimisticLock = this.dataSource.options.type !== 'sqlite';
     await this.dataSource.transaction(async (manager) => {
+      // 注意：不能在这里对 Payment 同时使用 relations:['order'] + pessimistic_write，
+      // 因为 RECHARGE 单的 order_id 为 null，LEFT JOIN 出来的 orders 行落到 nullable 侧，
+      // PostgreSQL 拒绝在 outer join 的 nullable 侧应用 FOR UPDATE。
+      // 改为先锁住 Payment（无 relations），再按需单独加载并锁住 order。
       const payment = await manager.findOne(Payment, {
         where: {
           outTradeNo: input.outTradeNo,
           provider: PaymentProvider.ALIPAY,
         },
-        relations: ['order'],
         ...(usePessimisticLock
           ? { lock: { mode: 'pessimistic_write' as const } }
           : {}),
@@ -626,7 +683,14 @@ export class OnlinePaymentService {
 
       // 订单托管款：回填 OrderPayment + 激活订单
       if (payment.purpose === PaymentPurpose.ORDER) {
-        const order = payment.order;
+        // 单独加载 order 并加锁（避免与 Payment 一起 LEFT JOIN 后落 FOR UPDATE 限制）
+        const order = await manager.findOne(Order, {
+          where: { id: payment.orderId || '' },
+          relations: ['task', 'client', 'owner'],
+          ...(usePessimisticLock
+            ? { lock: { mode: 'pessimistic_write' as const } }
+            : {}),
+        });
         if (!order) throw new Error('payment_order_not_found');
         let orderPayment = await manager.findOne(OrderPayment, {
           where: { orderId: order.id },

@@ -111,6 +111,7 @@ import {
   BalanceRecord,
   Withdrawal,
 } from './payment/entities/balance.entity';
+import { RechargeOrder } from './payment/entities/recharge.entity';
 import { PlatformPaymentCode } from './payment/entities/platform-payment-code.entity';
 import { OrderPayment } from './payment/entities/order-payment.entity';
 import { PaymentNotification } from './payment/entities/payment-notification.entity';
@@ -211,6 +212,7 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
         UserBalance,
         BalanceRecord,
         Withdrawal,
+        RechargeOrder,
         // 长任务线实体
         Workspace,
         MarketplaceTask,
