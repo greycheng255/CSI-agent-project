@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -56,5 +57,26 @@ export class AlipayCallbackController {
       stringParams(query),
     );
     response.redirect(302, target);
+  }
+
+  /**
+   * Mock 模式专用收银台回调端点。由前端 mock 收银台页面在用户点击
+   * 「确认支付（模拟）」后调用，无需登录态；服务端仅在 mock 模式下处理。
+   * 返回 orderId 便于前端跳回订单支付页。
+   */
+  @Post('mock/notify')
+  @HttpCode(200)
+  async mockNotify(
+    @Body() body: { out_trade_no?: string; total_amount?: string },
+  ): Promise<{ success: true; data: { orderId: string; outTradeNo: string } }> {
+    const outTradeNo = body.out_trade_no?.trim();
+    const totalAmount = body.total_amount?.trim();
+    if (!outTradeNo) throw new BadRequestException('out_trade_no is required');
+    if (!totalAmount) throw new BadRequestException('total_amount is required');
+    const data = await this.onlinePaymentService.handleMockPaymentSuccess(
+      outTradeNo,
+      totalAmount,
+    );
+    return { success: true, data };
   }
 }

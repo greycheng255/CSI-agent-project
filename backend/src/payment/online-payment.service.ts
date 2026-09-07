@@ -291,6 +291,76 @@ export class OnlinePaymentService {
     }
   }
 
+  /**
+   * Mock 模式专用：本地 mock 收银台确认支付后调用，模拟一次成功的
+   * 支付宝回调。复用 settleSuccessfulPayment 的幂等与结算逻辑，但跳过
+   * 商户身份 / 签名校验（mock 模式下 verifyNotification 一律放行）。
+   */
+  async handleMockPaymentSuccess(
+    outTradeNo: string,
+    totalAmount: string,
+  ): Promise<{ orderId: string; outTradeNo: string }> {
+    if (!this.alipay.isMockMode()) {
+      throw new BadRequestException('Mock 支付仅在 mock 模式下可用');
+    }
+    const tradeNo = `MOCK${Date.now()}`;
+    const payment = await this.paymentRepo.findOne({
+      where: { outTradeNo, provider: PaymentProvider.ALIPAY },
+      relations: ['order'],
+    });
+    if (!payment) throw new NotFoundException('支付订单不存在');
+    if (payment.status === PaymentStatus.PAID) {
+      return { orderId: payment.order?.id || '', outTradeNo };
+    }
+
+    const rawPayload: Record<string, string> = {
+      mock: '1',
+      out_trade_no: outTradeNo,
+      trade_no: tradeNo,
+      trade_status: 'TRADE_SUCCESS',
+      total_amount: totalAmount,
+      app_id: this.alipay.appId,
+      seller_id: this.alipay.sellerId || '',
+    };
+    const log = await this.notificationRepo.save(
+      this.notificationRepo.create({
+        provider: PaymentProvider.ALIPAY,
+        source: PaymentNotificationSource.CALLBACK,
+        notifyId: `MOCK-${outTradeNo}-${Date.now()}`,
+        outTradeNo,
+        tradeNo,
+        signatureValid: true,
+        processed: false,
+        failureReason: null,
+        rawPayload,
+        clientIp: null,
+        processedAt: null,
+      }),
+    );
+
+    try {
+      await this.settleSuccessfulPayment({
+        logId: log.id,
+        outTradeNo,
+        tradeNo,
+        totalAmount,
+        appId: this.alipay.appId,
+        sellerId: this.alipay.sellerId || '',
+        raw: rawPayload,
+        requireMerchantIdentity: false,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'unknown_error';
+      await this.failNotification(log, message);
+      this.logger.error(
+        `支付宝 mock 回调处理失败 outTradeNo=${outTradeNo}: ${message}`,
+      );
+      throw error;
+    }
+    return { orderId: payment.order?.id || '', outTradeNo };
+  }
+
   async resolveReturnTarget(params: Record<string, string>): Promise<string> {
     const base =
       process.env.PAYMENT_FRONTEND_BASE_URL?.trim() ||

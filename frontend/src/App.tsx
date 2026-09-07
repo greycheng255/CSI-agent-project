@@ -39,6 +39,7 @@ const OwnerWorkspaceEntry = lazy(() => import('./pages/OwnerWorkspaceEntry'));
 const MyWorkspace = lazy(() => import('./pages/MyWorkspace'));
 const LongTaskSeats = lazy(() => import('./pages/LongTaskSeats'));
 const WorkspaceGallery = lazy(() => import('./pages/WorkspaceGallery'));
+const MockAlipayCheckout = lazy(() => import('./pages/MockAlipayCheckout'));
 
 function PageFallback() {
   return (
@@ -57,6 +58,8 @@ function App() {
         {/* 统一登录页 - 已移除独立的 /admin/login */}
 
         <Route path="/oauth/opennotebook/callback" element={<OpenNotebookOAuthCallback />} />
+        {/* 支付宝 mock 模式收银台（独立弹窗，不挂 MainLayout） */}
+        <Route path="/pay/mock-checkout" element={<MockAlipayCheckout />} />
 
         <Route path="/" element={<MainLayout />}>
           <Route index element={<Home />} />

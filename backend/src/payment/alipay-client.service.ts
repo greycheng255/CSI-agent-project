@@ -4,6 +4,7 @@ import { AlipaySdk, type AlipaySdkConfig } from 'alipay-sdk';
 
 const DEFAULT_GATEWAY = 'https://openapi.alipay.com/gateway.do';
 const PRODUCT_CODE = 'FAST_INSTANT_TRADE_PAY';
+const MOCK_APP_ID = 'MOCK_APP_ID';
 
 export interface AlipayTradeQueryResult {
   status: 'PAID' | 'PENDING' | 'CLOSED' | 'UNKNOWN';
@@ -19,6 +20,10 @@ interface AlipayRuntimeConfig {
   notifyUrl: string;
   returnUrl: string;
   sdk: AlipaySdkConfig;
+}
+
+function envFlag(name: string): boolean {
+  return process.env[name]?.trim().toLowerCase() === 'true';
 }
 
 function stripPem(raw: string): string {
@@ -101,7 +106,22 @@ export class AlipayClientService {
   private client: AlipaySdk | null = null;
   private runtimeConfig: AlipayRuntimeConfig | null = null;
 
+  /**
+   * Mock 模式：支付宝商户资质审批期间使用。跳过签名/验签，使用本地
+   * mock 收银台页面，让在线支付的创建、回调、查询、结算链路可端到端联调。
+   *
+   * 触发条件：ALIPAY_MOCK_MODE=true，或 ALIPAY_APP_ID /
+   * ALIPAY_PRIVATE_KEY / ALIPAY_PUBLIC_KEY 任一缺失时自动启用。
+   */
+  isMockMode(): boolean {
+    if (envFlag('ALIPAY_MOCK_MODE')) return true;
+    return !['ALIPAY_APP_ID', 'ALIPAY_PRIVATE_KEY', 'ALIPAY_PUBLIC_KEY'].every(
+      (name) => Boolean(process.env[name]?.trim()),
+    );
+  }
+
   isConfigured(): boolean {
+    if (this.isMockMode()) return true;
     return [
       'ALIPAY_APP_ID',
       'ALIPAY_PRIVATE_KEY',
@@ -125,6 +145,9 @@ export class AlipayClientService {
     subject: string;
     timeoutMinutes?: number;
   }): string {
+    if (this.isMockMode()) {
+      return this.createMockCheckoutUrl(input);
+    }
     const config = this.getRuntimeConfig();
     return this.getClient().pageExecute('alipay.trade.page.pay', 'GET', {
       notify_url: config.notifyUrl,
@@ -140,6 +163,12 @@ export class AlipayClientService {
   }
 
   verifyNotification(params: Record<string, string>): boolean {
+    if (this.isMockMode()) {
+      // mock 模式下回调来自本地 mock 收银台，没有真实签名；一律放行，
+      // 商户身份校验由 OnlinePaymentService.settleSuccessfulPayment 的
+      // requireMerchantIdentity=false 分支跳过。
+      return true;
+    }
     try {
       const client = this.getClient();
       return client.checkNotifySignV2(params) || client.checkNotifySign(params);
@@ -149,6 +178,17 @@ export class AlipayClientService {
   }
 
   async queryTrade(outTradeNo: string): Promise<AlipayTradeQueryResult> {
+    if (this.isMockMode()) {
+      // mock 模式不主动查询渠道：支付结果以本地 mock notify 落库为准，
+      // 这里返回 UNKNOWN 让 refreshFromAlipay 不改变订单状态。
+      return {
+        status: 'UNKNOWN',
+        outTradeNo,
+        tradeNo: null,
+        totalAmount: null,
+        raw: { mock: true, out_trade_no: outTradeNo },
+      };
+    }
     const response = (await this.getClient().exec(
       'alipay.trade.query',
       { bizContent: { out_trade_no: outTradeNo } },
@@ -186,7 +226,28 @@ export class AlipayClientService {
     };
   }
 
+  private createMockCheckoutUrl(input: {
+    outTradeNo: string;
+    amountCny: number;
+    subject: string;
+  }): string {
+    const base =
+      process.env.PAYMENT_FRONTEND_BASE_URL?.trim() ||
+      process.env.FRONTEND_BASE_URL?.trim() ||
+      'http://localhost:5173';
+    const url = new URL('/pay/mock-checkout', base);
+    url.searchParams.set('out_trade_no', input.outTradeNo);
+    url.searchParams.set('total_amount', (input.amountCny / 100).toFixed(2));
+    url.searchParams.set('subject', input.subject.slice(0, 256));
+    return url.toString();
+  }
+
   private getClient(): AlipaySdk {
+    if (this.isMockMode()) {
+      throw new ServiceUnavailableException(
+        '支付宝在线支付处于 mock 模式，无法获取真实 SDK 客户端',
+      );
+    }
     if (!this.isConfigured()) {
       throw new ServiceUnavailableException('支付宝在线支付尚未配置');
     }
@@ -200,6 +261,29 @@ export class AlipayClientService {
     if (this.runtimeConfig) return this.runtimeConfig;
     if (!this.isConfigured()) {
       throw new ServiceUnavailableException('支付宝在线支付尚未配置');
+    }
+
+    if (this.isMockMode()) {
+      const mockAppId =
+        process.env.ALIPAY_APP_ID?.trim() || MOCK_APP_ID;
+      this.runtimeConfig = {
+        appId: mockAppId,
+        sellerId: process.env.ALIPAY_PID?.trim() || null,
+        notifyUrl: process.env.ALIPAY_NOTIFY_URL?.trim() || '',
+        returnUrl: process.env.ALIPAY_RETURN_URL?.trim() || '',
+        sdk: {
+          appId: mockAppId,
+          privateKey: '',
+          alipayPublicKey: '',
+          keyType: 'PKCS8',
+          gateway: process.env.ALIPAY_GATEWAY?.trim() || DEFAULT_GATEWAY,
+          signType: 'RSA2',
+          charset: 'utf-8',
+          camelcase: true,
+          timeout: 10_000,
+        },
+      };
+      return this.runtimeConfig;
     }
 
     try {
