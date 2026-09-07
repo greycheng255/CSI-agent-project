@@ -66,6 +66,7 @@ export class EntitlementController {
   /**
    * E7：用户 AI 网关凭证数据面（BYOK，服务级通道）。
    * Console 执行引擎按 org 拉取用户配置的网关地址与 API Key（明文，仅 HMAC 通道可取）。
+   * 2026-09-07 加固：decryptKey 异常（脏数据/密钥轮换过渡期）→ 502 而非 500，便于 Console 重试。
    */
   @Get('llm-config/:orgId')
   async llmConfig(@Param('orgId') orgId: string) {
@@ -73,7 +74,29 @@ export class EntitlementController {
     if (!row) {
       throw new ContractError(404, 'LLM_CONFIG_MISSING', `no llm config for org ${orgId}`);
     }
-    return { org_id: orgId, base_url: row.baseUrl, api_key: decryptKey(row.apiKeyEnc) };
+    if (!row.apiKeyEnc) {
+      throw new ContractError(
+        422,
+        'LLM_CONFIG_INVALID',
+        `llm config for org ${orgId} has no encrypted api key`,
+      );
+    }
+    let apiKey: string;
+    try {
+      apiKey = decryptKey(row.apiKeyEnc);
+    } catch (err) {
+      throw new ContractError(
+        502,
+        'LLM_CONFIG_DECRYPT_FAILED',
+        `failed to decrypt api key for org ${orgId}: ${(err as Error).message}`,
+      );
+    }
+    return {
+      org_id: orgId,
+      base_url: row.baseUrl,
+      api_key: apiKey,
+      key_prefix: row.keyPrefix,
+    };
   }
 
   /** 权益校验点：runtime_instance 数上限 / model 目录 / media_model 媒体模型目录 / runtime_profile 目录 */
