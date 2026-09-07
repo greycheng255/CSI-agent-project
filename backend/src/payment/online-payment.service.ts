@@ -554,7 +554,7 @@ export class OnlinePaymentService {
     if (paidFen == null) throw new Error('invalid_total_amount');
 
     let activatedOrder: Order | null = null;
-    let rechargeTarget: { userId: string; paymentId: string } | null = null;
+    let rechargeTarget: { userId: string; paymentId: string; amountCny: number } | null = null;
     const usePessimisticLock = this.dataSource.options.type !== 'sqlite';
     await this.dataSource.transaction(async (manager) => {
       const payment = await manager.findOne(Payment, {
@@ -594,7 +594,7 @@ export class OnlinePaymentService {
       // 充值支付单的 userId + paymentId，供事务后入账使用
       rechargeTarget =
         payment.purpose === PaymentPurpose.RECHARGE
-          ? { userId: payment.userId || '', paymentId: payment.id }
+          ? { userId: payment.userId || '', paymentId: payment.id, amountCny: payment.amountCny }
           : null;
 
       // 订单托管款：回填 OrderPayment + 激活订单
@@ -653,11 +653,16 @@ export class OnlinePaymentService {
     });
 
     // 充值入账（事务外，balanceService.recharge 按 paymentId 幂等）
-    if (rechargeTarget) {
+    // 注意：rechargeTarget 在事务闭包内赋值，TS 控制流不跟踪闭包赋值，
+    // 闭包外访问会被收窄为初始 null，故显式断言为联合类型。
+    const rechargeResolved = rechargeTarget as
+      | { userId: string; paymentId: string; amountCny: number }
+      | null;
+    if (rechargeResolved) {
       await this.balanceService.recharge({
-        userId: rechargeTarget.userId,
-        amountCny: paidFen,
-        paymentId: rechargeTarget.paymentId,
+        userId: rechargeResolved.userId,
+        amountCny: rechargeResolved.amountCny,
+        paymentId: rechargeResolved.paymentId,
       });
     }
 
