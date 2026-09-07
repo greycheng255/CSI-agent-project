@@ -55,6 +55,7 @@ import { LongtaskModule } from './longtask/longtask.module';
 import { EntitlementModule } from './entitlement/entitlement.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { LlmProxyModule } from './llm-proxy/llm-proxy.module';
+import { GatewayApiKey } from './gateway/gateway-key.entity';
 import {
   EntitlementCreditHold,
   EntitlementFreeGrant,
@@ -236,6 +237,8 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
         EntitlementCreditHold,
         EntitlementUsageRecord,
         EntitlementPaymentOrder,
+        // 网关 workspace key 签发/轮换/吊销（K1-K4）
+        GatewayApiKey,
       ],
       synchronize: process.env.DB_SYNC === 'true',
     }),
