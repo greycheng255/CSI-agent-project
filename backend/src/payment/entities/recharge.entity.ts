@@ -40,7 +40,7 @@ export class RechargeOrder {
   @Column({ type: 'varchar', length: 16, default: RechargeStatus.INIT })
   status: RechargeStatus;
 
-  @Column({ type: isSqlite ? 'simple-json' : 'jsonb', nullable: true })
+  @Column({ name: 'raw_notify', type: isSqlite ? 'simple-json' : 'jsonb', nullable: true })
   rawNotify: Record<string, unknown> | null;
 
   @Column({
