@@ -39,8 +39,12 @@ DBH="${DB_HOST:-122.51.51.177}"; DBP="${DB_PORT:-15435}"; DBU="${DB_USER:-genesi
 psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" << 'SQL'
 DELETE FROM marketplace_revision_negotiations WHERE id = '033b4135-b1a3-4ddc-9215-59db87ff17fc';
 DELETE FROM marketplace_bids WHERE id::text LIKE 'dd8730b0-%';
+-- M 侧冒烟探针残留：假 org …d104 经 E6 真实激活 beta-free 订阅（有效期至 2026-10-09），M 侧无权撤销，由我方清理
+DELETE FROM entitlement_free_grants WHERE org_id = '00000000-0000-0000-0000-00000000d104';
+DELETE FROM org_subscriptions WHERE org_id = '00000000-0000-0000-0000-00000000d104';
 SELECT count(*) AS remaining_negotiations FROM marketplace_revision_negotiations WHERE id = '033b4135-b1a3-4ddc-9215-59db87ff17fc';
 SELECT count(*) AS remaining_bids FROM marketplace_bids WHERE id::text LIKE 'dd8730b0-%';
+SELECT count(*) AS remaining_d104_subscriptions FROM org_subscriptions WHERE org_id = '00000000-0000-0000-0000-00000000d104';
 SQL
 
 echo "=== 5.5 预置 L 族 AI Token（test org，BYOK）==="

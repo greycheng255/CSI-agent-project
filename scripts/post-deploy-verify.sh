@@ -207,8 +207,10 @@ if command -v psql &>/dev/null; then
   DBH="${DB_HOST:-122.51.51.177}"; DBP="${DB_PORT:-15435}"; DBU="${DB_USER:-genesis_db}"; DBN="${DB_NAME:-genesis_db}"
   N=$(psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" -t -c "SELECT count(*) FROM marketplace_revision_negotiations WHERE id = '033b4135-b1a3-4ddc-9215-59db87ff17fc'" 2>/dev/null | xargs)
   B=$(psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" -t -c "SELECT count(*) FROM marketplace_bids WHERE id::text LIKE 'dd8730b0-%'" 2>/dev/null | xargs)
+  D=$(psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" -t -c "SELECT count(*) FROM org_subscriptions WHERE org_id = '00000000-0000-0000-0000-00000000d104'" 2>/dev/null | xargs)
   echo "negotiation 033b4135 残留: ${N} (期望 0)"
   echo "bid dd8730b0 残留: ${B} (期望 0)"
+  echo "d104 探针订阅残留: ${D} (期望 0)"
 else
   echo "⚠️  psql 不可用，请手动确认 DB 残留已清理"
 fi
