@@ -42,6 +42,8 @@ export interface RankedBid {
   score: number;
   workspaceName: string | null;
   workspaceLogoUrl: string | null;
+  /** 当前 Workspace 平均评分（0-5），雇主侧按「评分」排序维度使用；综合分排序用 score */
+  avgRating: number;
   platformRecommended: boolean;
 }
 
@@ -242,6 +244,7 @@ export class MarketplaceBidsService {
         score: compositeScore(input),
         workspaceName: bid.workspaceName ?? ws?.name ?? null,
         workspaceLogoUrl: bid.workspaceLogoUrl ?? ws?.logoUrl ?? null,
+        avgRating: ws?.avgRating ?? 0,
         platformRecommended:
           bid.source === 'push' && ws?.displayStatus === 'active',
       };

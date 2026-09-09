@@ -99,7 +99,16 @@ export default function WorkspaceGallery() {
                       </span>
                     )}
                     <div className="min-w-0">
-                      <h2 className="truncate font-medium text-[var(--text-900)]">{ws.name}</h2>
+                      <div className="flex items-center gap-2">
+                        <h2 className="truncate font-medium text-[var(--text-900)]">
+                          {ws.name}
+                        </h2>
+                        {toNumber(ws.completedTasksCount) < 3 && (
+                          <span className="shrink-0 rounded-full bg-[var(--brand-50)] px-2 py-0.5 text-[10px] font-semibold text-[var(--brand-600)]">
+                            新店
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-[var(--text-500)]">
                         {ws.completedTasksCount} 单完成 · 评分 {toNumber(ws.avgRating).toFixed(1)}
                       </p>

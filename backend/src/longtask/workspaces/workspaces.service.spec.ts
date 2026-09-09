@@ -99,6 +99,17 @@ describe('WorkspacesService（T1：展示页/投递/竞标主体投影）', () =
     expect(updated.displayStatus).toBe('suspended');
   });
 
+  it('更新展示页：写入经营类目（categoryIds，投递匹配依据）', async () => {
+    const ws = { id: 'w1', categoryIds: null };
+    mockRepo.findOne.mockResolvedValueOnce(ws);
+    mockRepo.save.mockImplementation((v) => v);
+    const updated = await service.updateShowcase('w1', {
+      categoryIds: ['web'],
+      receivePlatformPush: true,
+    });
+    expect(updated.categoryIds).toEqual(['web']);
+  });
+
   it('更新展示页：服务承诺写入', async () => {
     const ws = {
       id: 'w1',
@@ -181,5 +192,63 @@ describe('WorkspacesService（T1：展示页/投递/竞标主体投影）', () =
     );
     expect(duplicate).toBe(true);
     expect(mockRepo.save).not.toHaveBeenCalled();
+  });
+
+  describe('ensureDefaultForOwner（PRD §4.1/§4.2 默认工作室自动开通）', () => {
+    it('无工作室 → 自动创建默认工作室并绑定 owner（默认值对齐）', async () => {
+      mockRepo.findOne.mockResolvedValue(null); // owner 查询 + slug 冲突探测均无命中
+      mockRepo.create.mockImplementation((v) => v);
+      mockRepo.save.mockImplementation((v) => v);
+
+      const { created, workspace } = await service.ensureDefaultForOwner({
+        ownerUserId: '11111111-2222-3333-4444-555555555555',
+        displayName: '星辰',
+      });
+      expect(created).toBe(true);
+      expect(workspace.name).toBe('星辰 的 AI 工作室');
+      expect(workspace.slug).toBe('ai-ws-11111111');
+      expect(workspace.ownerUserId).toBe('11111111-2222-3333-4444-555555555555');
+      expect(workspace.displayStatus).toBe('active');
+      expect(workspace.receivePlatformPush).toBe(true);
+    });
+
+    it('已有工作室 → 幂等返回 existing，不重复创建', async () => {
+      const existing = { id: 'w1', name: '已有工作室', ownerUserId: 'u1' };
+      mockRepo.findOne.mockResolvedValueOnce(existing);
+      const { created, workspace } = await service.ensureDefaultForOwner({
+        ownerUserId: 'u1',
+        displayName: '甲',
+      });
+      expect(created).toBe(false);
+      expect(workspace).toBe(existing);
+      expect(mockRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('默认 slug 冲突 → 自动追加序号', async () => {
+      mockRepo.findOne
+        .mockResolvedValueOnce(null) // owner 无
+        .mockResolvedValueOnce({ id: 'occupy', slug: 'ai-ws-11111111' }) // slug 被占
+        .mockResolvedValueOnce(null); // -2 可用
+      mockRepo.create.mockImplementation((v) => v);
+      mockRepo.save.mockImplementation((v) => v);
+      const { workspace } = await service.ensureDefaultForOwner({
+        ownerUserId: '11111111-2222-3333-4444-555555555555',
+        displayName: '乙',
+      });
+      expect(workspace.slug).toBe('ai-ws-11111111-2');
+    });
+
+    it('displayName 为空/未提供 → 使用默认名「我的 AI 工作室」', async () => {
+      mockRepo.findOne.mockResolvedValue(null);
+      mockRepo.create.mockImplementation((v) => v);
+      mockRepo.save.mockImplementation((v) => v);
+      const { created, workspace } = await service.ensureDefaultForOwner({
+        ownerUserId: '22222222-2222-3333-4444-555555555555',
+        displayName: '  ',
+      });
+      expect(created).toBe(true);
+      expect(workspace.name).toBe('我的 AI 工作室');
+      expect(workspace.slug).toBe('ai-ws-22222222');
+    });
   });
 });

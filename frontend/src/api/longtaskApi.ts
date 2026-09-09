@@ -98,6 +98,8 @@ export async function createWorkspace(
 export interface UpdateWorkspaceShowcaseInput {
   bio?: string | null;
   capabilityTags?: string[] | null;
+  /** 经营类目（PRD §4.1 引导配置「选择经营类目」；接收该类目商机推送） */
+  categoryIds?: string[] | null;
   announcement?: string | null;
   showcaseCases?: WorkspaceShowcaseCase[] | null;
   serviceCommitments?: Record<string, unknown>;
@@ -142,6 +144,8 @@ export interface MarketplaceSeatBid {
   score: number;
   workspaceName: string | null;
   workspaceLogoUrl: string | null;
+  /** 当前 Workspace 平均评分（0-5；pg numeric 可能返回字符串），用于「评分」排序 */
+  avgRating?: number | string;
   platformRecommended: boolean;
 }
 
@@ -166,6 +170,8 @@ export interface MarketplaceTaskInfo {
   seatTaken?: number;
   seatLimit?: number;
   expiresAt?: string | null;
+  /** 任务发布者（雇主），用于席位页判断当前用户是否可执行选标/全部驳回 */
+  employerUserId?: string | null;
 }
 
 export async function getMarketplaceTask(
@@ -173,6 +179,51 @@ export async function getMarketplaceTask(
 ): Promise<MarketplaceTaskInfo> {
   return requestJson<MarketplaceTaskInfo>(
     `/api/v1/longtask/marketplace-tasks/${encodeURIComponent(taskId)}`,
+  );
+}
+
+/** 雇主选标结果（MarketplaceOrder 投影） */
+export interface SelectBidResult {
+  id: string;
+  workspaceId: string;
+  marketplaceTaskId: string;
+  contractStatus: string;
+  finalPriceCny: number | null;
+}
+
+/**
+ * 雇主选标（PRD §5.6.2）：仅任务发布者本人可调用。
+ * 选标后立即锁定：winner=won、其余=lost、任务→selected，并创建 Order。
+ */
+export async function selectMarketplaceBid(
+  token: string,
+  input: { taskId: string; bidId: string },
+): Promise<SelectBidResult> {
+  return requestJson<SelectBidResult>(
+    `/api/v1/longtask/marketplace-tasks/${encodeURIComponent(input.taskId)}/select`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ bidId: input.bidId }),
+    },
+  );
+}
+
+/**
+ * 雇主全部驳回并重开竞标（PRD §5.6.3）：仅任务发布者本人可调用。
+ * 当前轮 submitted → rejected，bid_round +1、席位清零。
+ */
+export async function rejectAllMarketplaceBids(
+  token: string,
+  taskId: string,
+): Promise<{ rejectedCount: number }> {
+  return requestJson<{ rejectedCount: number }>(
+    `/api/v1/longtask/marketplace-tasks/${encodeURIComponent(taskId)}/reject-all`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: '{}',
+    },
   );
 }
 
@@ -197,4 +248,73 @@ export async function listWorkspaceGallery(): Promise<
   return requestJson<WorkspaceGalleryItem[]>(
     '/api/v1/longtask/workspaces/gallery',
   );
+}
+
+/** 默认工作室自动开通结果 */
+export interface EnsureDefaultWorkspaceResult {
+  created: boolean;
+  workspace: WorkspaceShowcaseData;
+}
+
+/**
+ * 默认 Workspace 自动开通（PRD §4.1/§4.2）：Owner 登录态无工作室时自动创建默认工作室；
+ * 已有则幂等返回现有。前端在「我的工作室」/ 手动参与竞标等无工作室场景调用。
+ */
+export async function ensureDefaultWorkspace(
+  token: string,
+  displayName?: string | null,
+): Promise<EnsureDefaultWorkspaceResult> {
+  return requestJson<EnsureDefaultWorkspaceResult>(
+    '/api/v1/longtask/workspaces/ensure-default',
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify(displayName ? { displayName } : {}),
+    },
+  );
+}
+
+export interface OwnerMarketplaceBidInput {
+  taskId: string;
+  workspaceId: string;
+  priceCny: number;
+  planSummary?: string | null;
+  estimatedDeliveryAt?: string | null;
+}
+
+/** 提交竞标后响应（后端 MarketplaceBidsService.submit 返回） */
+export interface OwnerMarketplaceBidResult {
+  bid: {
+    id: string;
+    marketplaceTaskId: string;
+    bidRound: number;
+    workspaceId: string;
+    workspaceName: string | null;
+    workspaceLogoUrl: string | null;
+    priceCny: number;
+    planSummary: string | null;
+    estimatedDeliveryAt: string | null;
+    status: string;
+    source: 'push' | 'pull' | 'manual_assign';
+    createdAt: string;
+  };
+  seatTaken: number;
+  seatLimit: number;
+  seatFull: boolean;
+  seatFullDeadline: string | null;
+}
+
+/**
+ * Agent Owner 手动参与竞标（不等 Console 5min 轮询）：workspace owner 登录态立即占席位。
+ * 后端校验 workspace.ownerUserId === 登录用户；source 记 manual_assign。
+ */
+export async function submitOwnerMarketplaceBid(
+  token: string,
+  input: OwnerMarketplaceBidInput,
+): Promise<OwnerMarketplaceBidResult> {
+  return requestJson<OwnerMarketplaceBidResult>('/api/v1/longtask/owner/bids', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(input),
+  });
 }

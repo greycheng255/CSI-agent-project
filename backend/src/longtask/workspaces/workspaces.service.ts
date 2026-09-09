@@ -32,6 +32,8 @@ export interface CreateWorkspaceInput {
 export interface UpdateShowcaseInput {
   bio?: string | null;
   capabilityTags?: string[] | null;
+  /** 经营类目（PRD §4.1 引导配置「选择经营类目」；matchForPush 投递匹配依据） */
+  categoryIds?: string[] | null;
   announcement?: string | null;
   showcaseCases?: unknown[] | null;
   displayStatus?: 'active' | 'suspended' | 'frozen';
@@ -79,6 +81,42 @@ export class WorkspacesService {
       displayStatus: 'active',
     });
     return this.repo.save(entity);
+  }
+
+  /**
+   * 默认 Workspace 自动开通（PRD §4.1/§4.2）：
+   * Owner 尚无工作室时自动初始化默认工作室并绑定归属。幂等——已有任一工作室则直接返回。
+   * 默认名 `{displayName} 的 AI 工作室`；slug 冲突自动追加序号（-2/-3…）。
+   * 引导配置（类目/简介/logo/推送开关）保留默认：类目为空 → 不接收商机推送（PRD §4.1 边界）。
+   */
+  async ensureDefaultForOwner(input: {
+    ownerUserId: string;
+    orgId?: string | null;
+    displayName?: string | null;
+  }): Promise<{ created: boolean; workspace: Workspace }> {
+    const existing = await this.findByOwner(input.ownerUserId);
+    if (existing) return { created: false, workspace: existing };
+
+    const baseName = input.displayName?.trim();
+    const name = baseName ? `${baseName} 的 AI 工作室` : '我的 AI 工作室';
+    const baseSlug = `ai-ws-${input.ownerUserId.slice(0, 8)}`;
+    let slug = baseSlug;
+    let seq = 1;
+    while (await this.repo.findOne({ where: { slug } })) {
+      seq += 1;
+      slug = `${baseSlug}-${seq}`;
+    }
+    const workspace = await this.repo.save(
+      this.repo.create({
+        ownerUserId: input.ownerUserId,
+        orgId: input.orgId ?? null,
+        name,
+        slug,
+        displayStatus: 'active',
+        receivePlatformPush: true,
+      }),
+    );
+    return { created: true, workspace };
   }
 
   findById(id: string): Promise<Workspace | null> {
@@ -148,6 +186,7 @@ export class WorkspacesService {
     }
     if (patch.bio !== undefined) ws.bio = patch.bio;
     if (patch.capabilityTags !== undefined) ws.capabilityTags = patch.capabilityTags;
+    if (patch.categoryIds !== undefined) ws.categoryIds = patch.categoryIds;
     if (patch.announcement !== undefined) ws.announcement = patch.announcement;
     if (patch.showcaseCases !== undefined) ws.showcaseCases = patch.showcaseCases;
     if (patch.displayStatus !== undefined) ws.displayStatus = patch.displayStatus;

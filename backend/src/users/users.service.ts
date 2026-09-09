@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import { User, KycStatus } from './entities/user.entity';
 import { AuthService } from '../auth/auth.service';
 import { AgentsService } from '../agents/agents.service';
+import { WorkspacesService } from '../longtask/workspaces/workspaces.service';
 import { hashSync, compareSync } from 'bcryptjs';
 import { randomBytes, randomUUID } from 'crypto';
 import {
@@ -45,6 +46,8 @@ export class UsersService {
     private readonly authService: AuthService,
     @Inject(forwardRef(() => AgentsService))
     private readonly agentsService: AgentsService,
+    @Inject(forwardRef(() => WorkspacesService))
+    private readonly workspacesService: WorkspacesService,
     private readonly smsVerificationService: SmsVerificationService,
   ) {}
 
@@ -144,6 +147,7 @@ export class UsersService {
     await this.ensureOrgId(user);
     const token = await this.authService.issueUserToken(user);
     await this.ensureDefaultAgent(user);
+    await this.ensureDefaultWorkspace(user);
 
     return {
       message: '登录成功',
@@ -214,6 +218,7 @@ export class UsersService {
 
     const token = await this.authService.issueUserToken(user);
     await this.ensureDefaultAgent(user);
+    await this.ensureDefaultWorkspace(user);
 
     return {
       message: isNewUser ? '登录并创建账号成功' : '登录成功',
@@ -323,6 +328,30 @@ export class UsersService {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Default agent assignment failed: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * 默认 Workspace 自动开通（PRD §4.1 step 3）：注册/登录后自动初始化默认工作室。
+   * 幂等（已有则跳过）；失败仅告警不阻断注册/登录主流程。
+   */
+  private async ensureDefaultWorkspace(user: User) {
+    try {
+      const { created, workspace } =
+        await this.workspacesService.ensureDefaultForOwner({
+          ownerUserId: user.id,
+          orgId: user.orgId,
+          displayName: user.displayName,
+        });
+      if (created) {
+        this.logger.log(
+          `默认工作室自动开通: user=${user.id} workspace=${workspace.id} slug=${workspace.slug}`,
+        );
+      }
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.warn(`Default workspace auto-create skipped: ${errorMessage}`);
     }
   }
 }

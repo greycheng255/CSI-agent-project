@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { Store } from 'lucide-react';
-import { getWorkspaceByOwner } from '../api/longtaskApi';
+import { Loader2, Store } from 'lucide-react';
+import { ensureDefaultWorkspace, getWorkspaceByOwner } from '../api/longtaskApi';
 import { useAuthStore } from '../store/authStore';
 
 type EntryState =
@@ -18,12 +18,18 @@ type EntryState =
  */
 export default function OwnerWorkspaceEntry() {
   const { ownerId } = useParams();
-  const user = useAuthStore((s) => s.user);
+  const { user, token } = useAuthStore();
   const [state, setState] = useState<EntryState>({
     status: 'loading',
     slug: null,
     error: '',
   });
+  const [provisioning, setProvisioning] = useState(false);
+  const [provisionError, setProvisionError] = useState('');
+
+  // 仅允许当前登录用户为自己的空态自动开通（他人主页不提供开通入口）
+  const isSelf = !ownerId || (!!user && ownerId === user.id);
+  const canProvision = isSelf && !!user && !!token && !provisioning;
 
   useEffect(() => {
     const target = ownerId || user?.id;
@@ -58,6 +64,22 @@ export default function OwnerWorkspaceEntry() {
     };
   }, [ownerId, user?.id]);
 
+  async function handleProvisionDefault() {
+    if (!token) return;
+    setProvisioning(true);
+    setProvisionError('');
+    try {
+      const result = await ensureDefaultWorkspace(token, user?.displayName ?? null);
+      setState({ status: 'ready', slug: result.workspace.slug, error: '' });
+    } catch (error) {
+      setProvisionError(
+        error instanceof Error ? error.message : '自动开通失败，请稍后重试',
+      );
+    } finally {
+      setProvisioning(false);
+    }
+  }
+
   if (state.status === 'ready') {
     return <Navigate to={`/longtask/workspaces/${state.slug}`} replace />;
   }
@@ -88,6 +110,28 @@ export default function OwnerWorkspaceEntry() {
           <Link to="/login" className="btn-cs btn-primary btn-sm mt-2">
             登录后查看
           </Link>
+        )}
+        {missing && canProvision && (
+          <>
+            <button
+              type="button"
+              disabled={provisioning}
+              onClick={handleProvisionDefault}
+              className="btn-cs btn-primary btn-sm mt-2 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {provisioning ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  开通中…
+                </>
+              ) : (
+                '一键开通默认工作室'
+              )}
+            </button>
+            {provisionError && (
+              <p className="text-sm text-[var(--state-error)]">{provisionError}</p>
+            )}
+          </>
         )}
         <Link to="/" className="btn-cs btn-ghost btn-sm">
           返回首页

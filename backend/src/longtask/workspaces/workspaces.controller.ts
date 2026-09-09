@@ -1,6 +1,8 @@
-import { Body, Controller, Get, Param, Post, Patch } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Patch, Req, UseGuards } from '@nestjs/common';
 import { WorkspacesService } from './workspaces.service';
 import type { CreateWorkspaceInput } from './workspaces.service';
+import { AuthGuard } from '../../auth/auth.guard';
+import type { RequestWithUser } from '../../auth/auth.guard';
 
 /**
  * Workspace 内部 REST（长任务线，供平台前端使用，不是跨版块 API）。
@@ -12,6 +14,27 @@ export class WorkspacesController {
   @Post()
   create(@Body() body: CreateWorkspaceInput) {
     return this.workspacesService.create(body);
+  }
+
+  /**
+   * 默认 Workspace 自动开通（PRD §4.1/§4.2）：Owner 登录态调用，无工作室时自动创建默认工作室，
+   * 已有则幂等返回。前端在「我的工作室」/ 手动参与竞标等无工作室场景引导调用。
+   */
+  @Post('ensure-default')
+  @UseGuards(AuthGuard)
+  ensureDefault(
+    @Req() req: RequestWithUser,
+    @Body() body: { displayName?: unknown },
+  ) {
+    const ownerId = req.user?.id;
+    if (!ownerId) {
+      throw new Error('owner is required');
+    }
+    return this.workspacesService.ensureDefaultForOwner({
+      ownerUserId: ownerId,
+      displayName:
+        typeof body.displayName === 'string' ? body.displayName : (req.user?.displayName ?? null),
+    });
   }
 
   /** 已入驻工作室画廊（公开档案白名单字段，仅 active） */
@@ -41,6 +64,9 @@ export class WorkspacesController {
       bio: typeof body.bio === 'string' ? body.bio : undefined,
       capabilityTags: Array.isArray(body.capabilityTags)
         ? (body.capabilityTags as string[])
+        : undefined,
+      categoryIds: Array.isArray(body.categoryIds)
+        ? (body.categoryIds as string[])
         : undefined,
       announcement:
         typeof body.announcement === 'string' ? body.announcement : undefined,
