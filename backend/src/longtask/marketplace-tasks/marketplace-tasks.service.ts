@@ -9,6 +9,7 @@ import {
   CONTRACT_ERROR_CODE,
   ContractError,
 } from '../contract/errors';
+import { CategoriesService } from '../categories/categories.service';
 
 export interface CreateMarketplaceTaskInput {
   employerUserId?: string | null;
@@ -39,6 +40,7 @@ export class MarketplaceTasksService {
   constructor(
     @InjectRepository(MarketplaceTask)
     private readonly repo: Repository<MarketplaceTask>,
+    private readonly categoriesService: CategoriesService,
   ) {}
 
   async create(
@@ -52,6 +54,8 @@ export class MarketplaceTasksService {
         'seat_limit must be a positive integer',
       );
     }
+    // PRD §4.5：类目为必填，必须从平台类目树中选择；校验存在+叶子+active
+    await this.categoriesService.validateLeafActive(input.categoryId, true);
     const entity = this.repo.create({
       employerUserId: input.employerUserId ?? null,
       title: input.title,

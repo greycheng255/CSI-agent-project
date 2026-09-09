@@ -7,6 +7,7 @@ import {
   ContractError,
 } from '../contract/errors';
 import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
+import { CategoriesService } from '../categories/categories.service';
 
 export const WORKSPACE_LIFECYCLE_EVENTS = [
   'workspace.created',
@@ -45,6 +46,7 @@ export class WorkspacesService {
     @InjectRepository(Workspace)
     private readonly repo: Repository<Workspace>,
     private readonly dispatcher: WebhookDispatcherService,
+    private readonly categoriesService: CategoriesService,
   ) {}
 
   /** 创建 Workspace；slug 唯一（前置校验 + DB 唯一约束兜底） */
@@ -59,6 +61,12 @@ export class WorkspacesService {
         `capability_tags must not exceed ${MAX_CAPABILITY_TAGS} items`,
       );
     }
+    // PRD §4.1：引导配置「从平台类目树中勾选」——校验每个元素存在+active
+    // （不强制叶子，Workspace 可经营父类目下的全树）
+    const validatedCategoryIds = await this.categoriesService.validateActiveBatch(
+      input.categoryIds,
+      { max: MAX_CAPABILITY_TAGS },
+    );
     const exists = await this.repo.findOne({ where: { slug: input.slug } });
     if (exists) {
       throw new ContractError(
@@ -74,7 +82,7 @@ export class WorkspacesService {
       slug: input.slug,
       logoUrl: input.logoUrl ?? null,
       bio: input.bio ?? null,
-      categoryIds: input.categoryIds ?? null,
+      categoryIds: validatedCategoryIds.length ? validatedCategoryIds : null,
       capabilityTags: input.capabilityTags ?? null,
       displayStatus: 'active',
     });

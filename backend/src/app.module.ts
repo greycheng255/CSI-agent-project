@@ -71,6 +71,7 @@ import {
   EntitlementPlanModel,
 } from './entitlement/entitlement-plan.entity';
 import { Workspace } from './longtask/workspaces/workspace.entity';
+import { Category } from './longtask/categories/category.entity';
 import { MarketplaceTask } from './longtask/marketplace-tasks/marketplace-task.entity';
 import { OpportunityDispatch } from './longtask/marketplace-tasks/opportunity-dispatch.entity';
 import { MarketplaceBid } from './longtask/marketplace-bids/marketplace-bid.entity';
@@ -218,6 +219,7 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
         RechargeOrder,
         // 长任务线实体
         Workspace,
+        Category,
         MarketplaceTask,
         OpportunityDispatch,
         MarketplaceBid,

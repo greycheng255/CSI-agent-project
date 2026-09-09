@@ -37,6 +37,7 @@ import { WorkspacesController } from './workspaces/workspaces.controller';
 import { WorkspacesService } from './workspaces/workspaces.service';
 import { WorkspaceSyncService } from './workspaces/workspace-sync.service';
 import { WorkspaceWebhookController } from './workspaces/workspace-webhook.controller';
+import { CategoriesModule } from './categories/categories.module';
 
 /**
  * 长任务域模块（阶段一 + 阶段二）。
@@ -44,6 +45,7 @@ import { WorkspaceWebhookController } from './workspaces/workspace-webhook.contr
  */
 @Module({
   imports: [
+    CategoriesModule,
     TypeOrmModule.forFeature([
       Workspace,
       MarketplaceTask,

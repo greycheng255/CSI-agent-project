@@ -4,6 +4,7 @@ import { WorkspacesService } from './workspaces.service';
 import { Workspace } from './workspace.entity';
 import { ContractError } from '../contract/errors';
 import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
+import { CategoriesService } from '../categories/categories.service';
 
 describe('WorkspacesService（T1：展示页/投递/竞标主体投影）', () => {
   let service: WorkspacesService;
@@ -17,9 +18,16 @@ describe('WorkspacesService（T1：展示页/投递/竞标主体投影）', () =
     createQueryBuilder: jest.fn(),
   };
 
+  const mockCategoriesService = {
+    validateActiveBatch: jest.fn(async (ids: string[] | null) => ids ?? []),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     dispatcherMock.recordInbound.mockResolvedValue(true);
+    mockCategoriesService.validateActiveBatch.mockImplementation(
+      async (ids: string[] | null) => ids ?? [],
+    );
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WorkspacesService,
@@ -28,6 +36,7 @@ describe('WorkspacesService（T1：展示页/投递/竞标主体投影）', () =
           provide: WebhookDispatcherService,
           useValue: dispatcherMock,
         },
+        { provide: CategoriesService, useValue: mockCategoriesService },
       ],
     }).compile();
     service = module.get(WorkspacesService);
@@ -42,11 +51,17 @@ describe('WorkspacesService（T1：展示页/投递/竞标主体投影）', () =
       ownerUserId: 'user-1',
       name: 'AI 工作室',
       slug: 'studio-a',
+      categoryIds: ['cat-1', 'cat-2'],
       capabilityTags: ['电商文案', 'SaaS 官网'],
     });
     expect(ws.slug).toBe('studio-a');
     expect(ws.displayStatus).toBe('active');
     expect(ws.ownerUserId).toBe('user-1'); // 归属既有用户（改造语义）
+    // PRD §4.1：类目经平台类目树校验后落库
+    expect(mockCategoriesService.validateActiveBatch).toHaveBeenCalledWith(
+      ['cat-1', 'cat-2'],
+      { max: 5 },
+    );
   });
 
   it('按归属用户查询工作室', async () => {
