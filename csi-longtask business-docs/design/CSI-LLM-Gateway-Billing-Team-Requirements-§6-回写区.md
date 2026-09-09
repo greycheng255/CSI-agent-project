@@ -115,6 +115,24 @@ K 族契约别名（`gateway-bridge.controller.ts:36-53`）：
 
 ---
 
+## 6.75 套餐内置 LLM 配置（联调期临时方案，DR-12 §4.6）
+
+> **背景**：原设计为 BYOK（Bring Your Own Key），用户自带网关地址 + API Key 存 `user_llm_configs`。联调期为打通 L1-L3 真实链路，把 OneLLM 平台 token 内置进 `beta-free` 套餐，Console 读套餐即得配置；后续生成多租户真值后切回 BYOK。
+
+| 项 | 定案 |
+|---|---|
+| 存储位置 | `entitlement_plans` 表新增三列：`llm_base_url` / `llm_api_key_enc`（AES-256-GCM 加密，与 `gateway-keys.service` `encryptKey` 同口径 `SHA256(LONGTASK_INBOUND_TOKEN|gateway-key-enc)` 派生密钥）/ `llm_key_prefix`（明文前缀掩码） |
+| E1 响应 | `GET /v1/entitlement/plans/:orgId` 返回时附 `llm_config: {base_url, key_prefix, source:"plan_builtin"}`（**仅 base_url + key_prefix，不含明文 key**） |
+| E7 响应 | `GET /v1/entitlement/llm-config/:orgId` 返 `{org_id, base_url, api_key, key_prefix, source}`，明文 key 经 HMAC 通道返回；`source` 取值 `byok` / `plan_builtin` |
+| L1/L2/L3 forward | `llm-proxy.service.ts` `forward()` 与 `runtimeEnv()` 统一调 `EntitlementService.resolveLlmConfig(orgId)`，返回 `{base_url, api_key, key_prefix, source}` |
+| 解析优先级 | ① `user_llm_configs`（BYOK 优先）→ ② 订阅 plan 内置（fallback）。两处都无 → E7 返 404 `LLM_CONFIG_MISSING`，L1/L2/L3 返 409 `LLM_CONFIG_MISSING` |
+| 预置 | `deploy-fix.sh` 5.55 步：`INSERT INTO entitlement_plans ... llm_base_url=... llm_api_key_enc=...`（`ON CONFLICT code` 幂等），默认值=OneLLM 联调期真值（`http://212.129.240.112:4200` + `sk-7cb9ef...`） |
+| 切换 BYOK | 后续生成多租户真值后，清空 plan 三列即自动切回 BYOK（`resolveLlmConfig` 检测 `plan.llmBaseUrl` 为空则跳过） |
+
+代码：`entitlement-plan.entity.ts` 三列定义；`entitlement.service.ts:resolveLlmConfig()` 优先级解析；`entitlement.controller.ts:E7` + `llm-proxy.service.ts:runtimeEnv/forward` 调用。
+
+---
+
 ## 6.8 错误结构与 code 清单
 
 **结构**：RFC 7807 兼容 problem+json（全局过滤器 `Rfc7807Filter` 渲染，**以此为准**）：
@@ -141,7 +159,7 @@ K 族契约别名（`gateway-bridge.controller.ts:36-53`）：
 | CONFLICT | `CONFLICT_SEAT_FULL` / `CONFLICT_SPEC_VERSION_CONFLICT` / `CONFLICT_DUPLICATE` / `CONFLICT_WORKSPACE_SLUG` / `CONFLICT_SETTLEMENT_ALREADY_TRIGGERED` | 409 |
 | STATE | `STATE_INVALID_TRANSITION` / `STATE_PROJECT_NOT_DELIVERABLE` / `COUNTER_PROPOSAL_UNSUPPORTED` | 422 |
 | ENTITLEMENT | `ENTITLEMENT_PLAN_NOT_FOUND` / `ENTITLEMENT_LIMIT_REACHED` / `ENTITLEMENT_CATALOG_DENIED` / `ENTITLEMENT_QUOTA_EXHAUSTED` | 404/403/403/402 |
-| LLM | `LLM_CONFIG_MISSING` / `LLM_CONFIG_INVALID` / `LLM_CONFIG_DECRYPT_FAILED` / `LLM_UPSTREAM_ERROR` | **404(E7 GET) / 409(L1/L2 调用路径)** / 422 / 502 / 502 |
+| LLM | `LLM_CONFIG_MISSING` / `LLM_CONFIG_INVALID` / `LLM_CONFIG_DECRYPT_FAILED` / `LLM_UPSTREAM_ERROR` | **404(E7 GET，BYOK 与 plan 内置均无) / 409(L1/L2/L3 forward，同前)** / 422 / 502 / 502 |
 | RATE_LIMIT | `RATE_LIMIT_TOO_MANY` | 429 |
 | UPSTREAM | `UPSTREAM_UNREACHABLE` | 502 |
 | INTERNAL | `INTERNAL_ERROR` | 500 |

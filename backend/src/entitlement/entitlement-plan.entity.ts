@@ -62,6 +62,24 @@ export class EntitlementPlan {
   @Column({ name: 'price_cents', type: 'bigint', default: 0 })
   priceCents: number;
 
+  /**
+   * 套餐内置 LLM 配置（联调期临时方案，DR-12 §4.6）。
+   * 联调期把 OneLLM 平台 token 内置进 beta-free 套餐，
+   * Console 读套餐时返回 base_url + key_prefix（明文 key 走 E7 取）。
+   * 后续生成多租户真值后切回 BYOK（user_llm_configs）。
+   * 为空表示该套餐无内置配置（走 BYOK）。
+   */
+  @Column({ name: 'llm_base_url', type: 'varchar', length: 255, nullable: true })
+  llmBaseUrl: string | null;
+
+  /** AES-256-GCM 加密（与 gateway-keys.service encryptKey 同口径） */
+  @Column({ name: 'llm_api_key_enc', type: 'text', nullable: true })
+  llmApiKeyEnc: string | null;
+
+  /** 明文 key 前缀（如 sk-7cb9ef），用于 E1 响应掩码展示 */
+  @Column({ name: 'llm_key_prefix', type: 'varchar', length: 16, nullable: true })
+  llmKeyPrefix: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

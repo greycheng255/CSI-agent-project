@@ -19,6 +19,8 @@ import {
   planNotFound,
   quotaExhausted,
 } from './entitlement-errors';
+import { decryptKey } from '../gateway/gateway-keys.service';
+import { UserLlmConfig } from './user-llm-config.entity';
 
 const UNLIMITED = -1;
 
@@ -69,7 +71,7 @@ export class EntitlementService {
     const { subscription, plan } = await this.getActiveSubscription(orgId);
     const freeGrant = await this.freeGrantRepo.findOne({ where: { orgId } });
     const freeRemaining = this.freeRemaining(freeGrant);
-    return {
+    const resp: Record<string, unknown> = {
       id: plan.id,
       code: plan.code,
       name: plan.name,
@@ -79,6 +81,64 @@ export class EntitlementService {
       period_end: subscription.periodEnd,
       reset_at: subscription.periodEnd,
     };
+    // 套餐内置 LLM 配置摘要（联调期，DR-12 §4.6）：仅 base_url + key_prefix，明文 key 走 E7 取
+    if (plan.llmBaseUrl) {
+      resp.llm_config = {
+        base_url: plan.llmBaseUrl,
+        key_prefix: plan.llmKeyPrefix ?? '',
+        source: 'plan_builtin',
+      };
+    }
+    return resp;
+  }
+
+  /**
+   * 取 org 的 LLM 凭证（联调期优先级：BYOK user_llm_configs → 订阅 plan 内置）。
+   * 返回明文 api_key + base_url + source（'byok' | 'plan_builtin'）。
+   * 用于 E7 GET /llm-config/:orgId 与 L1/L2/L3 forward 的统一 fallback。
+   * 两处都无 → 404/409 由调用方决定（E7=404, L1/L2/L3=409）。
+   */
+  async resolveLlmConfig(orgId: string): Promise<{
+    base_url: string;
+    api_key: string;
+    key_prefix: string;
+    source: 'byok' | 'plan_builtin';
+  } | null> {
+    // 1. BYOK 优先
+    const row = await this.dataSource
+      .getRepository(UserLlmConfig)
+      .findOne({ where: { orgId } });
+    if (row?.apiKeyEnc) {
+      let apiKey: string;
+      try {
+        apiKey = decryptKey(row.apiKeyEnc);
+      } catch (err) {
+        throw new ContractError(502, 'LLM_CONFIG_DECRYPT_FAILED', `failed to decrypt byok api key for org ${orgId}: ${(err as Error).message}`);
+      }
+      return {
+        base_url: row.baseUrl,
+        api_key: apiKey,
+        key_prefix: row.keyPrefix,
+        source: 'byok',
+      };
+    }
+    // 2. plan 内置 fallback（联调期，DR-12 §4.6）
+    const { plan } = await this.getActiveSubscription(orgId);
+    if (plan.llmBaseUrl && plan.llmApiKeyEnc) {
+      let apiKey: string;
+      try {
+        apiKey = decryptKey(plan.llmApiKeyEnc);
+      } catch (err) {
+        throw new ContractError(502, 'LLM_CONFIG_DECRYPT_FAILED', `failed to decrypt plan-builtin api key for org ${orgId}: ${(err as Error).message}`);
+      }
+      return {
+        base_url: plan.llmBaseUrl,
+        api_key: apiKey,
+        key_prefix: plan.llmKeyPrefix ?? '',
+        source: 'plan_builtin',
+      };
+    }
+    return null;
   }
 
   // ---------- E2：权益目录 ----------

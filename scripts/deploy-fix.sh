@@ -47,13 +47,23 @@ SELECT count(*) AS remaining_bids FROM marketplace_bids WHERE id::text LIKE 'dd8
 SELECT count(*) AS remaining_d104_subscriptions FROM org_subscriptions WHERE org_id = '00000000-0000-0000-0000-00000000d104';
 SQL
 
-echo "=== 5.5 预置 L 族 AI Token（test org，BYOK）==="
-# L1-L3 端到端需要 test org 的 user_llm_configs 行；用与 app 同口径 AES-256-GCM 加密。
+# 5.1 兜底加列（entitlement_plans 内置 LLM 配置，TypeORM synchronize 不开时也能跑）
+echo "=== 5.1 兜底 ALTER entitlement_plans 加 LLM 配置列（幂等）==="
+psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" <<'SQL'
+ALTER TABLE entitlement_plans ADD COLUMN IF NOT EXISTS llm_base_url varchar(255);
+ALTER TABLE entitlement_plans ADD COLUMN IF NOT EXISTS llm_api_key_enc text;
+ALTER TABLE entitlement_plans ADD COLUMN IF NOT EXISTS llm_key_prefix varchar(16);
+SQL
+
+echo "=== 5.5 预置 L 族 AI Token（套餐内置，联调期临时方案 DR-12 §4.6）==="
+# 联调期把 OneLLM 平台 token 内置进 beta-free 套餐，Console 读套餐时返回 base_url+key_prefix，
+# 明文 key 走 E7 取；L1/L2/L3 forward 走 plan 内置 fallback。
 # 真值由联调窗口线下注入：LLM_BASE_URL + LLM_API_KEY（OneLLM 方案二或自有网关方案一）。
-if [ -n "${LLM_API_KEY}" ]; then
-  LLM_BASE_URL="${LLM_BASE_URL:-https://onellm.opennotebook.chat/v1}"
-  KEY_PREFIX="${LLM_API_KEY:0:8}"
-  ENC_BLOB=$(cd "$PROJECT_DIR/backend" && node -e "
+# 默认值=OneLLM 联调期真值（用户提供，后续生成多租户真值后切 BYOK）。
+LLM_BASE_URL="${LLM_BASE_URL:-http://212.129.240.112:4200}"
+LLM_API_KEY="${LLM_API_KEY:-sk-7cb9efb16e5042be0fcfc8149b11efe116265d30bedafefe}"
+KEY_PREFIX="${LLM_API_KEY:0:8}"
+ENC_BLOB=$(cd "$PROJECT_DIR/backend" && LLM_API_KEY="$LLM_API_KEY" node -e "
 const crypto=require('crypto');
 const secret=process.env.LONGTASK_INBOUND_TOKEN||process.env.LONGTASK_SERVICE_TOKEN||'csi-gateway-dev';
 const key=crypto.createHash('sha256').update(secret+'|gateway-key-enc').digest();
@@ -62,23 +72,14 @@ const c=crypto.createCipheriv('aes-256-gcm',key,iv);
 const enc=Buffer.concat([c.update(process.env.LLM_API_KEY,'utf8'),c.final()]);
 process.stdout.write(Buffer.concat([iv,c.getAuthTag(),enc]).toString('base64'));
   ")
-  psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" <<SQL
-INSERT INTO user_llm_configs (org_id, base_url, api_key_enc, key_prefix, created_at, updated_at)
-VALUES ('${ORG_WITH_PLAN}', '${LLM_BASE_URL}', '${ENC_BLOB}', '${KEY_PREFIX}', now(), now())
-ON CONFLICT (org_id) DO UPDATE SET base_url=EXCLUDED.base_url, api_key_enc=EXCLUDED.api_key_enc, key_prefix=EXCLUDED.key_prefix, updated_at=now();
-SELECT org_id, base_url, key_prefix, updated_at FROM user_llm_configs WHERE org_id='${ORG_WITH_PLAN}';
-SQL
-  echo "✅ L 族 AI Token 已预置（key_prefix=${KEY_PREFIX}…）"
-else
-  echo "⚠️  LLM_API_KEY 未设置，跳过 L 族 AI Token 预置（L1-L3 端到端需先注入：LLM_API_KEY=sk-... LLM_BASE_URL=... bash scripts/deploy-fix.sh）"
-fi
+echo "LLM config: base_url=${LLM_BASE_URL} key_prefix=${KEY_PREFIX}…（AES-256-GCM 加密，与 app 同口径）"
 
-echo "=== 5.55 预置 beta-free 套餐（activate 前置，code unique 幂等）==="
-psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" << 'SQL'
-INSERT INTO entitlement_plans (code, name, status, period_days, total_tokens, total_credits, max_runtime_instances, runtime_profiles, price_cents, created_at, updated_at)
-VALUES ('beta-free', '公测免费套餐', 'active', 90, 1000000, 200, -1, '["*"]'::jsonb, 0, now(), now())
-ON CONFLICT (code) DO UPDATE SET status='active', updated_at=now()
-RETURNING id, code, status;
+echo "=== 5.55 预置 beta-free 套餐 + 内置 LLM 配置（activate 前置，code unique 幂等）==="
+psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" <<SQL
+INSERT INTO entitlement_plans (code, name, status, period_days, total_tokens, total_credits, max_runtime_instances, runtime_profiles, price_cents, llm_base_url, llm_api_key_enc, llm_key_prefix, created_at, updated_at)
+VALUES ('beta-free', '公测免费套餐', 'active', 90, 1000000, 200, -1, '["*"]'::jsonb, 0, '${LLM_BASE_URL}', '${ENC_BLOB}', '${KEY_PREFIX}', now(), now())
+ON CONFLICT (code) DO UPDATE SET status='active', llm_base_url=EXCLUDED.llm_base_url, llm_api_key_enc=EXCLUDED.llm_api_key_enc, llm_key_prefix=EXCLUDED.llm_key_prefix, updated_at=now()
+RETURNING id, code, status, llm_base_url, llm_key_prefix;
 SQL
 
 echo "=== 5.6 激活 test org 免费套餐（D1-D6 前置）==="
@@ -114,9 +115,17 @@ curl -s http://localhost:4001/v1/entitlement/plans/${ORG_WITH_PLAN} \
   -H "X-Request-Id: deploy-$(date +%s%N)" \
   -w "\nHTTP %{http_code}\n"
 
-# E7 LLM config（不存在 org → 404）
-echo "--- E7 GET /v1/entitlement/llm-config/:orgId ---"
+# E7 LLM config（不存在 org → 404 LLM_CONFIG_MISSING）
+echo "--- E7 GET /v1/entitlement/llm-config/:orgId（全零 org，期望 404）---"
 curl -s http://localhost:4001/v1/entitlement/llm-config/00000000-0000-0000-0000-000000000000 \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "X-Signature: $(sign '')" \
+  -H "X-Request-Id: deploy-$(date +%s%N)" \
+  -w "\nHTTP %{http_code}\n"
+
+# E7 LLM config（test org e001，plan 内置 fallback，期望 200 source=plan_builtin）
+echo "--- E7 GET /v1/entitlement/llm-config/${ORG_WITH_PLAN}（plan 内置 fallback，期望 200 source=plan_builtin）---"
+curl -s http://localhost:4001/v1/entitlement/llm-config/${ORG_WITH_PLAN} \
   -H "Authorization: Bearer ${TOKEN}" \
   -H "X-Signature: $(sign '')" \
   -H "X-Request-Id: deploy-$(date +%s%N)" \

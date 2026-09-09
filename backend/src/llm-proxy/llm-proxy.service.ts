@@ -1,10 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { ContractError } from '../longtask/contract/errors';
-import { decryptKey } from '../gateway/gateway-keys.service';
 import { EntitlementService, UsageIngestItem } from '../entitlement/entitlement.service';
-import { UserLlmConfig } from '../entitlement/user-llm-config.entity';
 
 const UPSTREAM_TIMEOUT_MS = 120_000;
 
@@ -55,8 +51,6 @@ export class LlmProxyService {
   private readonly logger = new Logger(LlmProxyService.name);
 
   constructor(
-    @InjectRepository(UserLlmConfig)
-    private readonly llmConfigRepo: Repository<UserLlmConfig>,
     private readonly entitlementService: EntitlementService,
   ) {}
 
@@ -66,20 +60,19 @@ export class LlmProxyService {
     base_url: string;
     api_key: string;
   }> {
-    const row = await this.llmConfigRepo.findOne({ where: { orgId } });
-    if (!row) {
+    const cfg = await this.entitlementService.resolveLlmConfig(orgId);
+    if (!cfg) {
       throw new ContractError(409, 'LLM_CONFIG_MISSING', '尚未配置 AI Token，请前往「配置 AI Token」页完成配置');
     }
-    const baseUrl = toOpenAiBaseUrl(row.baseUrl);
-    const apiKey = decryptKey(row.apiKeyEnc);
+    const baseUrl = toOpenAiBaseUrl(cfg.base_url);
     return {
       env: {
         OPENAI_BASE_URL: baseUrl,
-        OPENAI_API_KEY: apiKey,
-        LLM_PROXY_MODE: 'byok-global',
+        OPENAI_API_KEY: cfg.api_key,
+        LLM_PROXY_MODE: cfg.source === 'plan_builtin' ? 'plan-builtin' : 'byok-global',
       },
       base_url: baseUrl,
-      api_key: apiKey,
+      api_key: cfg.api_key,
     };
   }
 
@@ -90,12 +83,12 @@ export class LlmProxyService {
   ): Promise<{ status: number; body: unknown }> {
     const endpoint = (payload.endpoint as string) || 'chat/completions';
     const isGet = endpoint === 'models';
-    const row = await this.llmConfigRepo.findOne({ where: { orgId } });
-    if (!row) {
+    const cfg = await this.entitlementService.resolveLlmConfig(orgId);
+    if (!cfg) {
       throw new ContractError(409, 'LLM_CONFIG_MISSING', '尚未配置 AI Token，请前往「配置 AI Token」页完成配置');
     }
-    const apiKey = decryptKey(row.apiKeyEnc);
-    const url = endpointUrl(row.baseUrl, endpoint);
+    const apiKey = cfg.api_key;
+    const url = endpointUrl(cfg.base_url, endpoint);
 
     // 转发给上游的干净载荷：剔除内部路由字段
     const { endpoint: _ep, agent_run_id: _runId, ...upstreamPayload } = payload;

@@ -167,10 +167,10 @@ RESP=$(hmac_get "/v1/entitlement/llm-config/${ORG_NO_PLAN}")
 CODE=$(echo "$RESP" | tail -1)
 check "E7 llm-config (不存在 org)" "404" "${CODE}" "$(echo "$RESP" | head -n -1)"
 
-# E7 正常 config (如果有) → 200
+# E7 plan 内置 fallback (with-plan) → 200 source=plan_builtin
 RESP=$(hmac_get "/v1/entitlement/llm-config/${ORG_WITH_PLAN}")
 CODE=$(echo "$RESP" | tail -1)
-echo "ℹ️  E7 llm-config (with-plan) → HTTP ${CODE} (200=有配置, 404=无配置 — 均属正常)"
+check "E7 llm-config (plan 内置)" "200" "${CODE}" "$(echo "$RESP" | head -n -1)"
 
 # L2 计量上报
 RESP=$(hmac_post "/v1/entitlement/usage-records" "{\"org_id\":\"${ORG_WITH_PLAN}\",\"items\":[]}")

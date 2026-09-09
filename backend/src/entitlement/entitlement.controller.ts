@@ -1,11 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { HmacGuard } from '../longtask/contract/hmac.guard';
 import { ContractError } from '../longtask/contract/errors';
-import { decryptKey } from '../gateway/gateway-keys.service';
 import { EntitlementService, UsageIngestItem } from './entitlement.service';
-import { UserLlmConfig } from './user-llm-config.entity';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -39,8 +35,6 @@ function parseDate(value: string | undefined, field: string): Date {
 export class EntitlementController {
   constructor(
     private readonly service: EntitlementService,
-    @InjectRepository(UserLlmConfig)
-    private readonly llmConfigRepo: Repository<UserLlmConfig>,
   ) {}
 
   /** E1：当前订阅套餐（Console /settings/billing + Pre-dispatch） */
@@ -172,39 +166,37 @@ export class EntitlementController {
   }
 
   /**
-   * E7：用户 AI 网关凭证数据面（BYOK，服务级通道）。
-   * Console 执行引擎按 org 拉取用户配置的网关地址与 API Key（明文，仅 HMAC 通道可取）。
+   * E7：用户 AI 网关凭证数据面（联调期：BYOK 优先 → plan 内置 fallback）。
+   * Console 执行引擎按 org 拉取网关地址与 API Key（明文，仅 HMAC 通道可取）。
+   * 优先级：① user_llm_configs（BYOK）→ ② 订阅 plan 内置（联调期临时方案，DR-12 §4.6）。
    * 2026-09-07 加固：decryptKey 异常（脏数据/密钥轮换过渡期）→ 502 而非 500，便于 Console 重试。
    */
   @Get('llm-config/:orgId')
   async llmConfig(@Param('orgId') orgId: string) {
     const org = requireUuid(orgId);
-    const row = await this.llmConfigRepo.findOne({ where: { orgId: org } });
-    if (!row) {
-      throw new ContractError(404, 'LLM_CONFIG_MISSING', `no llm config for org ${orgId}`);
-    }
-    if (!row.apiKeyEnc) {
-      throw new ContractError(
-        422,
-        'LLM_CONFIG_INVALID',
-        `llm config for org ${orgId} has no encrypted api key`,
-      );
-    }
-    let apiKey: string;
+    let cfg: { base_url: string; api_key: string; key_prefix: string; source: string } | null = null;
     try {
-      apiKey = decryptKey(row.apiKeyEnc);
+      cfg = await this.service.resolveLlmConfig(org);
     } catch (err) {
-      throw new ContractError(
-        502,
-        'LLM_CONFIG_DECRYPT_FAILED',
-        `failed to decrypt api key for org ${orgId}: ${(err as Error).message}`,
-      );
+      // plan 内置解密失败（脏数据/密钥轮换过渡期）→ 502，便于 Console 重试
+      if (err instanceof ContractError && err.errorCode === 'LLM_CONFIG_DECRYPT_FAILED') {
+        throw err;
+      }
+      // 订阅缺失等 → 404（保持原有语义）
+      if (err instanceof ContractError && err.status === 404) {
+        throw new ContractError(404, 'LLM_CONFIG_MISSING', `no llm config for org ${orgId}`);
+      }
+      throw err;
+    }
+    if (!cfg) {
+      throw new ContractError(404, 'LLM_CONFIG_MISSING', `no llm config for org ${orgId}`);
     }
     return {
       org_id: orgId,
-      base_url: row.baseUrl,
-      api_key: apiKey,
-      key_prefix: row.keyPrefix,
+      base_url: cfg.base_url,
+      api_key: cfg.api_key,
+      key_prefix: cfg.key_prefix,
+      source: cfg.source,
     };
   }
 
