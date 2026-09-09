@@ -156,10 +156,12 @@ K 族契约别名（`gateway-bridge.controller.ts:36-53`）：
 
 | 项 | 定案 |
 |---|---|
-| 预置方 | **Marketplace 侧负责** |
-| 预置内容 | ① 激活测试 org：`POST /v1/entitlement/subscriptions {action:"activate",org_id:"org-with-plan",plan_code:"free"}`；② 预置 D1-D6 大厅任务 + bid 数据 |
-| 预置时间 | 2026-09-09 前 |
+| 预置方 | **Marketplace 侧负责**（test org 激活已脚本化进 `deploy-fix.sh` 5.55+5.6 步；D1-D6 大厅任务 + bid 数据由我方预置） |
+| 预置内容 | ① 预置 `beta-free` 套餐（`deploy-fix.sh` 5.55 步，`ON CONFLICT code` 幂等 INSERT）；② 激活 test org：`POST /v1/entitlement/subscriptions {action:"activate",org_id:"00000000-0000-4000-8000-00000000e001",plan_code:"beta-free"}`（或 `POST /v1/entitlement/free-quota/activate {org_id:"<e001 UUID>"}` 走 env 默认）；③ 预置 D1-D6 大厅任务 + bid 数据 |
+| 预置时间 | 2026-09-09 前（test org 激活已完成，服务端实测 subscription id `bab50ef2-…`，periodEnd 2026-10-09） |
 | workspace_id 格式 | 必须 UUID（E4 入参校验 `requireUuid()`） |
+
+> 修订记录（2026-09-09）：原回写用 `org_id:"org-with-plan"` + `plan_code:"free"`，与 §6.4 修订后的 UUID 测试值 `e001` 和实际 plan_code `beta-free` 矛盾，经 M 侧 §13 核验指出。现统一为 `org_id:"…e001"` + `plan_code:"beta-free"`；补 `beta-free` plan 预置步骤。
 
 代码：`entitlement.service.ts:558-592` `activate()` 入驻激活 + 免费额度即赠。
 
