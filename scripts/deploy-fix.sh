@@ -73,6 +73,14 @@ else
   echo "⚠️  LLM_API_KEY 未设置，跳过 L 族 AI Token 预置（L1-L3 端到端需先注入：LLM_API_KEY=sk-... LLM_BASE_URL=... bash scripts/deploy-fix.sh）"
 fi
 
+echo "=== 5.55 预置 beta-free 套餐（activate 前置，code unique 幂等）==="
+psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" << 'SQL'
+INSERT INTO entitlement_plans (code, name, status, period_days, total_tokens, total_credits, max_runtime_instances, runtime_profiles, price_cents, created_at, updated_at)
+VALUES ('beta-free', '公测免费套餐', 'active', 90, 1000000, 200, -1, '["*"]'::jsonb, 0, now(), now())
+ON CONFLICT (code) DO UPDATE SET status='active', updated_at=now()
+RETURNING id, code, status;
+SQL
+
 echo "=== 5.6 激活 test org 免费套餐（D1-D6 前置）==="
 sign() {
   local body="$1"; local ts=$(date +%s)
