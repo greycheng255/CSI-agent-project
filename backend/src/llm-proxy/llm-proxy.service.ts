@@ -14,6 +14,13 @@ function chatCompletionsUrl(baseUrl: string): string {
   return /\/v\d+$/.test(trimmed) ? `${trimmed}/chat/completions` : `${trimmed}/v1/chat/completions`;
 }
 
+/** 通用端点 URL 构造（chat/completions / embeddings / models） */
+function endpointUrl(baseUrl: string, endpoint: string): string {
+  const trimmed = baseUrl.replace(/\/+$/, '');
+  const v1 = /\/v\d+$/.test(trimmed) ? trimmed : `${trimmed}/v1`;
+  return `${v1}/${endpoint}`;
+}
+
 /** OpenAI SDK base_url 目录口径（到 /v1 为止，不含路径） */
 function toOpenAiBaseUrl(baseUrl: string): string {
   const trimmed = baseUrl.replace(/\/+$/, '');
@@ -81,21 +88,36 @@ export class LlmProxyService {
     workspaceId: string | undefined,
     payload: Record<string, unknown>,
   ): Promise<{ status: number; body: unknown }> {
+    const endpoint = (payload.endpoint as string) || 'chat/completions';
+    const isGet = endpoint === 'models';
     const row = await this.llmConfigRepo.findOne({ where: { orgId } });
     if (!row) {
       throw new ContractError(409, 'LLM_CONFIG_MISSING', '尚未配置 AI Token，请前往「配置 AI Token」页完成配置');
     }
     const apiKey = decryptKey(row.apiKeyEnc);
-    const url = chatCompletionsUrl(row.baseUrl);
+    const url = endpointUrl(row.baseUrl, endpoint);
+
+    // 转发给上游的干净载荷：剔除内部路由字段
+    const { endpoint: _ep, agent_run_id: _runId, ...upstreamPayload } = payload;
+    // 硬性计量要求：流式调用必须开启 include_usage，收尾帧携带完整 Usage/Cost
+    // （Console daemon 依赖最终帧计量；缺失即计量链断）
+    if (!isGet && endpoint === 'chat/completions' && upstreamPayload.stream === true) {
+      upstreamPayload.stream_options = {
+        ...((upstreamPayload.stream_options as Record<string, unknown>) ?? {}),
+        include_usage: true,
+      };
+    }
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
     let upstream: Response;
     try {
       upstream = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify(payload),
+        method: isGet ? 'GET' : 'POST',
+        headers: isGet
+          ? { Authorization: `Bearer ${apiKey}` }
+          : { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: isGet ? undefined : JSON.stringify(upstreamPayload),
         signal: controller.signal,
       });
     } catch (err) {

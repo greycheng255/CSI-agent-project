@@ -11,5 +11,6 @@ import { LlmProxyService } from './llm-proxy.service';
   imports: [TypeOrmModule.forFeature([UserLlmConfig]), AuthModule, EntitlementModule],
   controllers: [LlmProxyController],
   providers: [LlmProxyService],
+  exports: [LlmProxyService],
 })
 export class LlmProxyModule {}

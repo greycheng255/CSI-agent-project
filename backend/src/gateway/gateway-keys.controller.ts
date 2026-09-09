@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { HmacGuard } from '../longtask/contract/hmac.guard';
+import { ContractError } from '../longtask/contract/errors';
 import { GatewayKeysService, IssuedKey } from './gateway-keys.service';
 import { GatewayApiKey } from './gateway-key.entity';
 
@@ -34,6 +35,15 @@ export class GatewayKeysController {
   @Post(':keyId/revoke')
   revoke(@Param('keyId') keyId: string): Promise<{ key_id: string; status: string }> {
     return this.keys.revoke(keyId);
+  }
+
+  /** K3 吊销（body 形态：{key_id}，兼容 Console 契约 /v1/keys/revoke 与 /v1/gateway/keys/revoke） */
+  @Post('revoke')
+  revokeByBody(@Body() body: { key_id?: string }): Promise<{ key_id: string; status: string }> {
+    if (!body?.key_id) {
+      throw new ContractError(400, 'INVALID_ARGUMENT', 'key_id is required');
+    }
+    return this.keys.revoke(body.key_id);
   }
 
   /** K2 验签注入：daemon 代理换取 workspace/org 归集头 */

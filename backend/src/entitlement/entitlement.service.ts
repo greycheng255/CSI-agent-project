@@ -190,6 +190,94 @@ export class EntitlementService {
     };
   }
 
+  /**
+   * E4 org 级批量用量（§4.2）：一次拉取一个 org 下全部 workspace 用量，
+   * 含无活动 workspace（滥用检测高信噪比场景）。workspace→org 归属取自
+   * gateway_api_keys（K1 签发时建立的绑定）。返回 org 总计 + 每 workspace 分组。
+   */
+  async getUsageForOrg(
+    orgId: string,
+    periodStart: Date,
+    periodEnd: Date,
+  ): Promise<{
+    period: { start: Date; end: Date };
+    org_id: string;
+    totals: {
+      workspaces: number;
+      active_workspaces: number;
+      requests: number;
+      input_tokens: number;
+      output_tokens: number;
+      credits: number;
+      cost_cents: number;
+    };
+    workspaces: Array<{
+      workspace_id: string;
+      requests: number;
+      input_tokens: number;
+      output_tokens: number;
+      credits: number;
+      cost_cents: number;
+    }>;
+  }> {
+    // 该 org 绑定的全部 workspace（含 key 已吊销的，distinct）
+    const wsRows: Array<{ workspace_id: string }> = await this.dataSource.query(
+      `SELECT DISTINCT workspace_id::text AS workspace_id
+       FROM gateway_api_keys WHERE org_id = $1`,
+      [orgId],
+    );
+    const workspaceIds = wsRows.map((r) => r.workspace_id);
+
+    const records: Array<{
+      workspace_id: string;
+      input_tokens: string;
+      output_tokens: string;
+      credits: string;
+      cost_cents: string;
+      cnt: string;
+    }> = await this.dataSource.query(
+      `SELECT workspace_id::text AS workspace_id,
+              COALESCE(SUM(input_tokens),0)::text AS input_tokens,
+              COALESCE(SUM(output_tokens),0)::text AS output_tokens,
+              COALESCE(SUM(credits),0)::text AS credits,
+              COALESCE(SUM(cost_cents),0)::text AS cost_cents,
+              COUNT(*)::text AS cnt
+       FROM entitlement_usage_records
+       WHERE workspace_id = ANY($1::uuid[])
+         AND created_at >= $2 AND created_at < $3
+       GROUP BY workspace_id`,
+      [workspaceIds, periodStart, periodEnd],
+    );
+    const byWs = new Map(records.map((r) => [r.workspace_id, r]));
+
+    const workspaces = workspaceIds.map((wsId) => {
+      const r = byWs.get(wsId);
+      return {
+        workspace_id: wsId,
+        requests: r ? Number(r.cnt) : 0,
+        input_tokens: r ? Number(r.input_tokens) : 0,
+        output_tokens: r ? Number(r.output_tokens) : 0,
+        credits: r ? Number(r.credits) : 0,
+        cost_cents: r ? Number(r.cost_cents) : 0,
+      };
+    });
+
+    return {
+      period: { start: periodStart, end: periodEnd },
+      org_id: orgId,
+      totals: {
+        workspaces: workspaceIds.length,
+        active_workspaces: workspaces.filter((w) => w.requests > 0).length,
+        requests: workspaces.reduce((s, w) => s + w.requests, 0),
+        input_tokens: workspaces.reduce((s, w) => s + w.input_tokens, 0),
+        output_tokens: workspaces.reduce((s, w) => s + w.output_tokens, 0),
+        credits: workspaces.reduce((s, w) => s + w.credits, 0),
+        cost_cents: workspaces.reduce((s, w) => s + w.cost_cents, 0),
+      },
+      workspaces,
+    };
+  }
+
   // ---------- 计量上报：原子扣减（网关计量为权威，公测硬断） ----------
 
   async recordUsage(orgId: string, items: UsageIngestItem[]): Promise<{ recorded: number }> {
