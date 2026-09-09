@@ -20,27 +20,37 @@ import { formatShanghaiDateTime } from '../utils/date';
 
 type StatusGroup = 'all' | 'bidding' | 'executing' | 'completed' | 'abnormal';
 
+/** 任务大厅展示对象 = marketplace_tasks（长任务竞标池）字段投影 */
 interface Task {
   id: string;
   title: string;
-  description?: string;
-  budgetCny: number;
-  expectedDeliveryAt?: string;
-  status: string;
-  marketStatus?: string;
-  marketStatusLabel?: string;
-  isAcceptingBids?: boolean;
-  orderId?: string | null;
-  orderStatus?: string | null;
-  selectedAgent?: { id: string; name?: string | null } | null;
-  dealPriceCny?: number | null;
-  client?: { id: string; phone?: string };
+  description?: string | null;
+  categoryId?: string | null;
+  budgetMinCny?: number | null;
+  budgetMaxCny?: number | null;
+  expectedDeliveryAt?: string | null;
+  attachmentUrls?: string[] | null;
   tags?: string[] | null;
-  skillsRequired?: string[] | null;
-  bidsCount?: number;
-  totalBidsCount?: number;
-  latestBid?: number | null;
-  matchedAgents?: number;
+  status: string;
+  seatLimit: number;
+  seatTaken: number;
+  employerUserId?: string | null;
+  expiresAt?: string | null;
+  createdAt?: string;
+}
+
+/** 预算展示：区间 / 上限 / 面议 */
+function budgetRangeCny(task: Task) {
+  const { budgetMinCny: min, budgetMaxCny: max } = task;
+  if (min != null && max != null) return `¥${min.toLocaleString('zh-CN')} - ¥${max.toLocaleString('zh-CN')}`;
+  if (max != null) return `≤ ¥${max.toLocaleString('zh-CN')}`;
+  if (min != null) return `≥ ¥${min.toLocaleString('zh-CN')}`;
+  return '预算面议';
+}
+
+/** 预算排序键（无区间时用存在的一端，缺省为 0） */
+function budgetSortKey(task: Task) {
+  return task.budgetMaxCny ?? task.budgetMinCny ?? 0;
 }
 
 const statusTabs: Array<{ value: StatusGroup; label: string }> = [
@@ -51,20 +61,6 @@ const statusTabs: Array<{ value: StatusGroup; label: string }> = [
   { value: 'abnormal', label: '异常任务' },
 ];
 
-const statusTone: Record<string, string> = {
-  OPEN_FOR_BIDDING: 'bg-[color:var(--brand-50)] text-[color:var(--brand-700)]',
-  AWARDED_PENDING_PAYMENT: 'bg-[color:var(--state-warning-surface)] text-[color:var(--state-warning)]',
-  IN_PROGRESS: 'bg-[color:var(--state-success-surface)] text-[color:var(--state-success-text)]',
-  WAITING_ACCEPTANCE: 'bg-[#edf7ff] text-[#17658f]',
-  PENDING_RELEASE: 'bg-[#eaf8f4] text-[#1f745e]',
-  COMPLETED: 'bg-[color:var(--background-200)] text-[color:var(--text-600)]',
-  REJECTED: 'bg-[color:var(--state-error-surface)] text-[color:var(--state-error)]',
-  ARBITRATING: 'bg-[#f3efff] text-[#6544a5]',
-  REFUNDED: 'bg-[#fff1e5] text-[#9b4d12]',
-  CANCELED: 'bg-[color:var(--background-200)] text-[color:var(--text-500)]',
-  CLOSED_NO_AWARD: 'bg-[color:var(--background-200)] text-[color:var(--text-500)]',
-};
-
 const splitList = (value: string) =>
   value
     .split(/[,，\s]/)
@@ -72,7 +68,7 @@ const splitList = (value: string) =>
     .filter(Boolean);
 
 function taskTags(task: Task) {
-  return Array.from(new Set([...(task.tags || []), ...(task.skillsRequired || [])])).filter(Boolean);
+  return Array.from(new Set(task.tags || [])).filter(Boolean);
 }
 
 function TaskSkeleton() {
@@ -137,30 +133,56 @@ export default function Market() {
 
   const selectedTags = useMemo(() => splitList(tagFilter), [tagFilter]);
 
-  const queryString = useMemo(() => {
-    const params = new URLSearchParams();
-    if (keyword.trim()) params.set('keyword', keyword.trim());
-    if (selectedTags.length > 0) params.set('tags', selectedTags.join(','));
-    if (minBudget) params.set('minBudget', minBudget);
-    if (maxBudget) params.set('maxBudget', maxBudget);
-    if (sortBy) params.set('sortBy', sortBy);
-    params.set('statusGroup', statusGroup);
-    params.set('limit', '50');
-    const text = params.toString();
-    return text ? `?${text}` : '';
-  }, [keyword, maxBudget, minBudget, selectedTags, sortBy, statusGroup]);
-
   const fetchTasks = useCallback(() => {
     requestControllerRef.current?.abort();
     const controller = new AbortController();
     requestControllerRef.current = controller;
     setLoading(true);
     setError('');
-    requestTaskMarket(`${apiBase}/api/v1/tasks/market${queryString}`, controller.signal)
+
+    // 任务大厅读取 marketplace_tasks 公开任务池（雇主发布后在此可见）
+    requestTaskMarket(`${apiBase}/api/v1/longtask/marketplace-tasks`, controller.signal)
       .then((response) => {
-        const nextTasks = (Array.isArray(response.data) ? response.data : response) as Task[];
-        setTasks(nextTasks);
-        const nextTags = nextTasks.flatMap(taskTags);
+        const raw = (Array.isArray(response.data) ? response.data : response) as Task[];
+        const kw = keyword.trim().toLowerCase();
+        const minB = minBudget ? Number(minBudget) : null;
+        const maxB = maxBudget ? Number(maxBudget) : null;
+
+        let next = raw.filter((t) => {
+          if (kw && !`${t.title} ${t.description || ''}`.toLowerCase().includes(kw)) {
+            return false;
+          }
+          if (selectedTags.length > 0) {
+            const tags = taskTags(t);
+            if (!selectedTags.every((tag) => tags.includes(tag))) return false;
+          }
+          // 预算区间相交过滤
+          if (minB != null && (t.budgetMaxCny ?? Number.POSITIVE_INFINITY) < minB) return false;
+          if (maxB != null && (t.budgetMinCny ?? 0) > maxB) return false;
+          return true;
+        });
+
+        // marketplace 任务均为招标中；executing/completed/abnormal 暂不划分，结果为空
+        if (statusGroup !== 'all' && statusGroup !== 'bidding') {
+          next = [];
+        }
+
+        switch (sortBy) {
+          case 'budget_desc':
+            next = [...next].sort((a, b) => budgetSortKey(b) - budgetSortKey(a));
+            break;
+          case 'budget_asc':
+            next = [...next].sort((a, b) => budgetSortKey(a) - budgetSortKey(b));
+            break;
+          default:
+            next = [...next].sort(
+              (a, b) =>
+                new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+            );
+        }
+
+        setTasks(next);
+        const nextTags = next.flatMap(taskTags);
         setKnownTags((current) =>
           Array.from(new Set([...current, ...nextTags])).sort((left, right) =>
             left.localeCompare(right, 'zh-CN'),
@@ -178,7 +200,7 @@ export default function Market() {
           setLoading(false);
         }
       });
-  }, [apiBase, queryString]);
+  }, [apiBase, keyword, maxBudget, minBudget, selectedTags, sortBy, statusGroup]);
 
   useEffect(() => {
     const timer = window.setTimeout(fetchTasks, 300);
@@ -459,14 +481,9 @@ export default function Market() {
           ) : (
             <div className="space-y-4">
               {tasks.map((task) => {
-                const marketStatus = task.marketStatus || 'OPEN_FOR_BIDDING';
-                const statusClass =
-                  statusTone[marketStatus] ||
-                  'bg-[color:var(--background-200)] text-[color:var(--text-600)]';
-                const assignee =
-                  task.selectedAgent?.name || task.selectedAgent?.id?.slice(0, 8) || '待定';
                 const visibleTags = taskTags(task).slice(0, 5);
-                const budget = task.dealPriceCny ?? task.budgetCny ?? 0;
+                const seatLeft = Math.max(0, (task.seatLimit ?? 0) - (task.seatTaken ?? 0));
+                const openForBid = task.status === 'open';
 
                 return (
                   <article
@@ -476,8 +493,8 @@ export default function Market() {
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className={`inline-flex min-h-7 items-center rounded-full px-2.5 text-xs font-semibold ${statusClass}`}>
-                            {task.marketStatusLabel || task.status || '招标中'}
+                          <span className="inline-flex min-h-7 items-center rounded-full px-2.5 text-xs font-semibold bg-[color:var(--brand-50)] text-[color:var(--brand-700)]">
+                            {openForBid ? '招标中' : '已截止'}
                           </span>
                           <span className="font-mono text-xs text-[color:var(--text-500)]">
                             #{task.id.slice(0, 8)}
@@ -494,11 +511,11 @@ export default function Market() {
                       </div>
 
                       <div className="flex-shrink-0 sm:text-right">
-                        <div className="text-xl font-bold text-[color:var(--text-900)]">
-                          ¥{budget.toLocaleString('zh-CN')}
+                        <div className="text-sm font-bold text-[color:var(--text-900)]">
+                          {budgetRangeCny(task)}
                         </div>
                         <div className="mt-1 text-xs text-[color:var(--text-500)]">
-                          {task.dealPriceCny ? '成交价' : '任务预算'}
+                          预算区间
                         </div>
                       </div>
                     </div>
@@ -521,52 +538,49 @@ export default function Market() {
                     <div className="mt-5 grid gap-3 rounded-xl bg-[color:var(--background-100)] p-4 text-sm text-[color:var(--text-600)] sm:grid-cols-2 xl:grid-cols-3">
                       <div className="flex min-w-0 items-center gap-2">
                         <CalendarClock className="h-4 w-4 flex-shrink-0 text-[color:var(--brand-500)]" />
-                        <span className="truncate">交付：{formatShanghaiDateTime(task.expectedDeliveryAt)}</span>
-                      </div>
-                      <div className="flex min-w-0 items-center gap-2">
-                        <UserCircle2 className="h-4 w-4 flex-shrink-0 text-[color:var(--icon-500)]" />
-                        <span className="truncate">
-                          任务方：{task.client?.phone || task.client?.id?.slice(0, 8) || '未知'}
-                        </span>
+                        <span className="truncate">发布于 {formatShanghaiDateTime(task.createdAt)}</span>
                       </div>
                       <div className="flex min-w-0 items-center gap-2">
                         <Bot className="h-4 w-4 flex-shrink-0 text-[color:var(--icon-500)]" />
                         <span className="truncate">
-                          {task.isAcceptingBids
-                            ? `匹配 ${task.matchedAgents ?? 0} 个智能体`
-                            : `执行智能体：${assignee}`}
+                          类别：{task.categoryId || '不限'}
+                        </span>
+                      </div>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <UserCircle2 className="h-4 w-4 flex-shrink-0 text-[color:var(--icon-500)]" />
+                        <span className="truncate">
+                          竞标席位 {task.seatTaken ?? 0}/{task.seatLimit ?? 0} 已占
                         </span>
                       </div>
                     </div>
 
                     <div className="mt-5 flex flex-col gap-3 border-t border-[color:var(--border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
-                      {task.isAcceptingBids ? (
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-                          <span className="flex items-center gap-2 text-[color:var(--text-600)]">
-                            <CircleDollarSign className="h-4 w-4 text-[color:var(--brand-500)]" />
-                            已有 <strong className="text-[color:var(--text-800)]">{task.bidsCount || 0}</strong> 个报价
-                          </span>
-                          {task.latestBid !== null && task.latestBid !== undefined && (
-                            <span className="text-[color:var(--text-500)]">
-                              当前最低 ¥{task.latestBid.toLocaleString('zh-CN')}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                        {openForBid ? (
+                          <>
+                            <span className="flex items-center gap-2 text-[color:var(--text-600)]">
+                              <CircleDollarSign className="h-4 w-4 text-[color:var(--brand-500)]" />
+                              开放竞标，剩余 <strong className="text-[color:var(--text-800)]">{seatLeft}</strong> 席
                             </span>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap items-center gap-2 text-sm text-[color:var(--text-600)]">
-                          <CheckCircle2 className="h-4 w-4 text-[color:var(--state-success-text)]" />
-                          <span>执行智能体：{assignee}</span>
-                          {task.orderStatus && (
-                            <span className="text-[color:var(--text-500)]">· {task.orderStatus}</span>
-                          )}
-                        </div>
-                      )}
+                            <span className="text-[color:var(--text-500)]">
+                              {task.expiresAt
+                                ? `截止 ${formatShanghaiDateTime(task.expiresAt)}`
+                                : '长期开放'}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="flex items-center gap-2 text-[color:var(--text-500)]">
+                            <CheckCircle2 className="h-4 w-4 text-[color:var(--state-success-text)]" />
+                            该任务已截止竞标
+                          </span>
+                        )}
+                      </div>
 
                       <Link
-                        to={`/tasks/${task.id}`}
+                        to={`/longtask/tasks/${task.id}/seats`}
                         className="inline-flex min-h-11 items-center gap-1 self-start rounded-lg px-2 text-sm font-semibold text-[color:var(--brand-600)] transition-colors hover:bg-[color:var(--brand-50)] hover:text-[color:var(--brand-700)] sm:self-auto"
                       >
-                        查看详情
+                        查看竞标详情
                         <ChevronRight className="h-4 w-4" />
                       </Link>
                     </div>

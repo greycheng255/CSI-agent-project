@@ -120,10 +120,38 @@ export class LlmProxyService {
       clearTimeout(timer);
     }
 
-    const body: unknown = await upstream.json().catch(() => null);
+    let body: unknown = null;
+    const rawText: string | null = await upstream.text().catch(() => null);
+    if (rawText) {
+      try {
+        body = JSON.parse(rawText);
+      } catch {
+        body = null;
+      }
+    }
+
+    // 上游失败统一按契约错误结构映射为 5xx LLM_UPSTREAM_ERROR（RFC7807），
+    // 避免"HTTP 201 + error body"令调用方/对账无法按状态码判定成败。
+    if (!upstream.ok) {
+      const upstreamError =
+        body && typeof body === 'object'
+          ? (body as { error?: { message?: string }; message?: string })
+          : {};
+      const upstreamMsg =
+        upstreamError?.error?.message ||
+        upstreamError?.message ||
+        rawText ||
+        upstream.statusText;
+      throw new ContractError(
+        502,
+        'LLM_UPSTREAM_ERROR',
+        `upstream ${url} responded ${upstream.status}: ${String(upstreamMsg).slice(0, 300)}`,
+        { upstream_status: upstream.status },
+      );
+    }
 
     // best-effort 计量（BYOK 不拦截）：成功响应按 usage 字段上报；workspace 缺省/非法时跳过（uuid 归集键）
-    if (upstream.ok && body && typeof body === 'object') {
+    if (body && typeof body === 'object') {
       const usage = (body as { usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }).usage;
       const model = typeof payload.model === 'string' ? payload.model : 'unknown';
       if (usage && workspaceId && UUID_RE.test(workspaceId)) {

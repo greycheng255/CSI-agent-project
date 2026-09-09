@@ -25,6 +25,26 @@ function parseDate(value: string | undefined, field: string): Date {
   return d;
 }
 
+/** 增量游标：必须为非负整数（缺省/空 → undefined；非法 → 400，避免 PG 参数类型炸 500） */
+function parseCursor(value: string | undefined): number | undefined {
+  if (value === undefined || value === '') return undefined;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 0) {
+    throw new ContractError(400, 'INVALID_ARGUMENT', 'cursor must be a non-negative integer');
+  }
+  return n;
+}
+
+/** 分页 limit：1..1000，缺省 500 */
+function parseLimit(value: string | undefined): number {
+  if (value === undefined || value === '') return 500;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 1000) {
+    throw new ContractError(400, 'INVALID_ARGUMENT', 'limit must be an integer in 1..1000');
+  }
+  return n;
+}
+
 /**
  * AI 网关订阅权益计费 API（DR-12 平台侧）。
  * E1-E4 数据面 + 计量上报 + 权益校验 + 订阅生命周期（购买/升级/充值走平台侧界面）。
@@ -86,8 +106,8 @@ export class EntitlementController {
       requireUuid(workspaceId, 'workspace_id'),
       parseDate(periodStart, 'period_start'),
       parseDate(periodEnd, 'period_end'),
-      cursor ? Number(cursor) : undefined,
-      limit ? Number(limit) : 500,
+      parseCursor(cursor),
+      parseLimit(limit),
     );
   }
 
@@ -104,8 +124,8 @@ export class EntitlementController {
       requireUuid(workspaceId, 'workspace_id'),
       parseDate(periodStart, 'period_start'),
       parseDate(periodEnd, 'period_end'),
-      cursor ? Number(cursor) : undefined,
-      limit ? Number(limit) : 500,
+      parseCursor(cursor),
+      parseLimit(limit),
     );
   }
 
@@ -121,8 +141,8 @@ export class EntitlementController {
   ) {
     return this.service.getUsageForOrg(
       requireUuid(orgId),
-      new Date(periodStart),
-      new Date(periodEnd),
+      parseDate(periodStart, 'period_start'),
+      parseDate(periodEnd, 'period_end'),
     );
   }
 

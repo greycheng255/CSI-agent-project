@@ -169,7 +169,10 @@ export class MarketplaceTasksService {
 
   /** 招投标中任务列表（供 C→M Pull 与大厅展示；阶段二接入） */
   findOpen(): Promise<MarketplaceTask[]> {
-    return this.repo.find({ where: { status: 'open' as MarketplaceTaskStatus } });
+    return this.repo.find({
+      where: { status: 'open' as MarketplaceTaskStatus },
+      order: { createdAt: 'DESC' },
+    });
   }
 
   /**
