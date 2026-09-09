@@ -13,8 +13,6 @@ import {
 } from 'typeorm';
 import { ExecutionPhase } from './execution-phase.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 // 子任务状态
 export enum SubTaskStatus {
   PENDING = 'PENDING', // 待开始
@@ -47,7 +45,7 @@ export class ExecutionSubTask {
   description: string;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: SubTaskStatus,
     default: SubTaskStatus.PENDING,
   })
@@ -76,14 +74,14 @@ export class ExecutionSubTask {
 
   @Column({
     name: 'started_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   startedAt: Date | null;
 
   @Column({
     name: 'completed_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   completedAt: Date | null;

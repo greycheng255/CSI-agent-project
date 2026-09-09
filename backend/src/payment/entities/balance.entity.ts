@@ -10,8 +10,6 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 /**
  * 余额变动类型
  */
@@ -58,7 +56,7 @@ export class BalanceRecord {
 
   // 变动类型
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: BalanceChangeType,
   })
   changeType: BalanceChangeType;
@@ -163,7 +161,7 @@ export class Withdrawal {
 
   // 状态
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: WithdrawalStatus,
     default: WithdrawalStatus.PENDING,
   })
@@ -176,7 +174,7 @@ export class Withdrawal {
   // 审核时间
   @Column({
     name: 'reviewed_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   reviewedAt: Date | null;

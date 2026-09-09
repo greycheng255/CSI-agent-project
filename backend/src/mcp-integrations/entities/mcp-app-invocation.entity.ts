@@ -6,8 +6,6 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum MCPAppInvocationDirection {
   INBOUND = 'inbound',
   OUTBOUND = 'outbound',
@@ -25,7 +23,7 @@ export class MCPAppInvocation {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'app_id', type: isSqlite ? 'text' : 'uuid' })
+  @Column({ name: 'app_id', type: 'uuid' })
   appId: string;
 
   @Column({ type: 'varchar' })
@@ -36,14 +34,14 @@ export class MCPAppInvocation {
 
   @Column({
     name: 'request_json',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   requestJson: unknown;
 
   @Column({
     name: 'response_json',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   responseJson: unknown;
@@ -66,10 +64,10 @@ export class MCPAppInvocation {
   @Column({ name: 'idempotency_key', type: 'varchar', nullable: true })
   idempotencyKey: string | null;
 
-  @Column({ name: 'platform_task_id', type: isSqlite ? 'text' : 'uuid', nullable: true })
+  @Column({ name: 'platform_task_id', type: 'uuid', nullable: true })
   platformTaskId: string | null;
 
-  @Column({ name: 'platform_order_id', type: isSqlite ? 'text' : 'uuid', nullable: true })
+  @Column({ name: 'platform_order_id', type: 'uuid', nullable: true })
   platformOrderId: string | null;
 
   @Column({ name: 'external_task_id', type: 'varchar', nullable: true })

@@ -7,8 +7,6 @@ import {
 } from 'typeorm';
 import { PaymentProvider } from './payment.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum PaymentNotificationSource {
   CALLBACK = 'CALLBACK',
   QUERY = 'QUERY',
@@ -30,13 +28,13 @@ export class PaymentNotification {
   id: string;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: PaymentProvider,
   })
   provider: PaymentProvider;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: PaymentNotificationSource,
   })
   source: PaymentNotificationSource;
@@ -66,7 +64,7 @@ export class PaymentNotification {
 
   @Column({
     name: 'raw_payload',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
   })
   rawPayload: Record<string, string>;
 
@@ -75,7 +73,7 @@ export class PaymentNotification {
 
   @Column({
     name: 'processed_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   processedAt: Date | null;

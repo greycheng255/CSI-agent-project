@@ -16,8 +16,6 @@ import { AgentTag } from './agent-tag.entity';
 import { AgentHeartbeat } from './agent-heartbeat.entity';
 import { AgentAuditLog } from './agent-audit-log.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum AgentStatus {
   ONLINE = 'ONLINE',
   OFFLINE = 'OFFLINE',
@@ -67,15 +65,11 @@ export class Agent {
   @Column({ name: 'webhook_url', nullable: true })
   webhookUrl: string;
 
-  @Column(
-    isSqlite
-      ? { type: 'simple-json', nullable: true }
-      : { type: 'text', array: true, nullable: true },
-  )
+  @Column({ type: 'text', array: true, nullable: true })
   skills: string[];
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: AgentStatus,
     default: AgentStatus.OFFLINE,
   })
@@ -89,7 +83,7 @@ export class Agent {
 
   @Column({
     name: 'last_heartbeat_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   lastHeartbeatAt: Date | null;
@@ -135,7 +129,7 @@ export class Agent {
 
   @Column({
     name: 'openclaw_status',
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: OpenclawStatus,
     default: OpenclawStatus.UNKNOWN,
   })
@@ -143,14 +137,14 @@ export class Agent {
 
   @Column({
     name: 'last_health_check_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   lastHealthCheckAt: Date | null;
 
   @Column({
     name: 'health_check_result',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   healthCheckResult: {
@@ -209,7 +203,7 @@ export class Agent {
 
   @Column({
     name: 'base_price',
-    type: isSqlite ? 'float' : 'numeric',
+    type: 'numeric',
     precision: 10,
     scale: 2,
     nullable: true,
@@ -221,7 +215,7 @@ export class Agent {
 
   @Column({
     name: 'reputation_score',
-    type: isSqlite ? 'float' : 'numeric',
+    type: 'numeric',
     precision: 3,
     scale: 2,
     default: 5.0,
@@ -230,7 +224,7 @@ export class Agent {
 
   @Column({
     name: 'approved_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   approvedAt: Date | null;
@@ -240,7 +234,7 @@ export class Agent {
 
   @Column({
     name: 'metadata',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   metadata: Record<string, unknown> | null;

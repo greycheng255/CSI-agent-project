@@ -9,8 +9,6 @@ import {
 } from 'typeorm';
 import { Agent } from './agent.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 @Entity('agent_cards')
 @Index('idx_agent_cards_agent', ['agent'])
 export class AgentCard {
@@ -27,7 +25,7 @@ export class AgentCard {
   @Column({ type: 'varchar' })
   version: string;
 
-  @Column({ name: 'card_json', type: isSqlite ? 'simple-json' : 'jsonb' })
+  @Column({ name: 'card_json', type: 'jsonb' })
   cardJson: Record<string, unknown>;
 
   @Column({ name: 'content_hash', type: 'varchar' })
@@ -44,7 +42,7 @@ export class AgentCard {
 
   @Column({
     name: 'fetched_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   fetchedAt: Date | null;

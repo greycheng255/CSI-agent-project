@@ -105,7 +105,7 @@ export class HmacGuard implements CanActivate {
     }
   }
 
-  /** PG 23505 / SQLite SQLITE_CONSTRAINT 统一判定 */
+  /** PG 23505 唯一约束判定（含通用 message fallback） */
   private static isUniqueViolation(err: unknown): boolean {
     if (typeof err === 'object' && err !== null && (err as { code?: string }).code === '23505') {
       return true;

@@ -7,8 +7,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum MCPAppDirection {
   INBOUND = 'inbound',
   OUTBOUND = 'outbound',
@@ -68,7 +66,7 @@ export class MCPAppIntegration {
 
   @Column({
     name: 'mcp_token_issued_at',
-    type: isSqlite ? 'datetime' : 'timestamp',
+    type: 'timestamp',
     nullable: true,
   })
   mcpTokenIssuedAt: Date | null;
@@ -79,7 +77,7 @@ export class MCPAppIntegration {
   @Column({ name: 'default_tenant_id', type: 'varchar', nullable: true })
   defaultTenantId: string | null;
 
-  @Column({ type: isSqlite ? 'boolean' : 'bool', default: true })
+  @Column({ type: 'bool', default: true })
   enabled: boolean;
 
   @Column({
@@ -91,21 +89,21 @@ export class MCPAppIntegration {
 
   @Column({
     name: 'last_checked_at',
-    type: isSqlite ? 'datetime' : 'timestamp',
+    type: 'timestamp',
     nullable: true,
   })
   lastCheckedAt: Date | null;
 
   @Column({
     name: 'last_discovered_at',
-    type: isSqlite ? 'datetime' : 'timestamp',
+    type: 'timestamp',
     nullable: true,
   })
   lastDiscoveredAt: Date | null;
 
   @Column({
     name: 'last_synced_at',
-    type: isSqlite ? 'datetime' : 'timestamp',
+    type: 'timestamp',
     nullable: true,
   })
   lastSyncedAt: Date | null;

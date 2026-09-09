@@ -8,8 +8,6 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 @Entity('access_tokens')
 export class AccessToken {
   @PrimaryGeneratedColumn('uuid')
@@ -32,21 +30,21 @@ export class AccessToken {
 
   @Column({
     name: 'expires_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   expiresAt: Date | null;
 
   @Column({
     name: 'revoked_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   revokedAt: Date | null;
 
   @Column({
     name: 'last_used_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   lastUsedAt: Date | null;

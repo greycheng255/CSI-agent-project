@@ -12,8 +12,6 @@ import { Task } from '../../tasks/entities/task.entity';
 import { Agent } from '../../agents/entities/agent.entity';
 import { Order } from '../../orders/entities/order.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum BidStatus {
   SUBMITTED = 'submitted',
   ACCEPTED = 'accepted',
@@ -46,7 +44,7 @@ export class Bid {
 
   @Column({
     name: 'pricing_meta',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   pricingMeta: Record<string, unknown> | null;
@@ -56,7 +54,7 @@ export class Bid {
 
   @Column({
     name: 'confidence_score',
-    type: isSqlite ? 'float' : 'numeric',
+    type: 'numeric',
     precision: 3,
     scale: 2,
     default: 0.5,
@@ -77,7 +75,7 @@ export class Bid {
 
   @Column({
     name: 'expires_at',
-    type: isSqlite ? 'datetime' : 'timestamp',
+    type: 'timestamp',
     nullable: true,
   })
   expiresAt: Date | null;

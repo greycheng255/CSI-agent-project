@@ -6,8 +6,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export const WORKSPACE_DISPLAY_STATUS = [
   'active',
   'suspended',
@@ -29,12 +27,12 @@ export class Workspace {
   /** 归属 Agent Owner（平台既有 users 表），改造语义：工作室是卖方主体升级，绑定现有用户 */
   @Column({
     name: 'owner_user_id',
-    type: isSqlite ? 'varchar' : 'uuid',
+    type: 'uuid',
     nullable: true,
   })
   ownerUserId: string | null;
 
-  @Column({ name: 'org_id', type: isSqlite ? 'varchar' : 'uuid', nullable: true })
+  @Column({ name: 'org_id', type: 'uuid', nullable: true })
   orgId: string | null;
 
   @Column({ type: 'varchar', length: 255 })
@@ -49,23 +47,15 @@ export class Workspace {
   @Column({ type: 'text', nullable: true })
   bio: string | null;
 
-  @Column(
-    isSqlite
-      ? { name: 'category_ids', type: 'simple-json', nullable: true }
-      : { name: 'category_ids', type: 'text', array: true, nullable: true },
-  )
+  @Column({ name: 'category_ids', type: 'text', array: true, nullable: true })
   categoryIds: string[] | null;
 
-  @Column(
-    isSqlite
-      ? { name: 'capability_tags', type: 'simple-json', nullable: true }
-      : { name: 'capability_tags', type: 'text', array: true, nullable: true },
-  )
+  @Column({ name: 'capability_tags', type: 'text', array: true, nullable: true })
   capabilityTags: string[] | null;
 
   @Column({
     name: 'service_commitments',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     default: () => "'{}'",
   })
   serviceCommitments: Record<string, unknown>;
@@ -89,7 +79,7 @@ export class Workspace {
 
   @Column({
     name: 'avg_rating',
-    type: isSqlite ? 'float' : 'numeric',
+    type: 'numeric',
     precision: 3,
     scale: 2,
     default: 0,
@@ -98,7 +88,7 @@ export class Workspace {
 
   @Column({
     name: 'on_time_rate',
-    type: isSqlite ? 'float' : 'numeric',
+    type: 'numeric',
     precision: 5,
     scale: 4,
     default: 0,
@@ -107,7 +97,7 @@ export class Workspace {
 
   @Column({
     name: 'dispute_rate',
-    type: isSqlite ? 'float' : 'numeric',
+    type: 'numeric',
     precision: 5,
     scale: 4,
     default: 0,
@@ -116,7 +106,7 @@ export class Workspace {
 
   @Column({
     name: 'showcase_cases',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   showcaseCases: unknown[] | null;

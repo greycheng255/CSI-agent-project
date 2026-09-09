@@ -13,8 +13,6 @@ export class DatabaseWarmupService implements OnApplicationBootstrap {
   constructor(private readonly dataSource: DataSource) {}
 
   async onApplicationBootstrap() {
-    if (this.dataSource.options.type === 'better-sqlite3') return;
-
     const connectionCount = parsePoolMin();
     const startedAt = Date.now();
     try {

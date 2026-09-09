@@ -7,8 +7,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 @Entity('mcp_task_bindings')
 @Index('idx_mcp_task_bindings_app_external', ['appId', 'externalTaskId'])
 @Index('idx_mcp_task_bindings_platform_task', ['platformTaskId'])
@@ -17,13 +15,13 @@ export class MCPTaskBinding {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'app_id', type: isSqlite ? 'text' : 'uuid' })
+  @Column({ name: 'app_id', type: 'uuid' })
   appId: string;
 
-  @Column({ name: 'platform_task_id', type: isSqlite ? 'text' : 'uuid', nullable: true })
+  @Column({ name: 'platform_task_id', type: 'uuid', nullable: true })
   platformTaskId: string | null;
 
-  @Column({ name: 'platform_order_id', type: isSqlite ? 'text' : 'uuid', nullable: true })
+  @Column({ name: 'platform_order_id', type: 'uuid', nullable: true })
   platformOrderId: string | null;
 
   @Column({ name: 'external_task_id', type: 'varchar', nullable: true })
@@ -43,12 +41,12 @@ export class MCPTaskBinding {
 
   @Column({
     name: 'result_json',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   resultJson: unknown;
 
-  @Column({ type: isSqlite ? 'float' : 'numeric', nullable: true })
+  @Column({ type: 'numeric', nullable: true })
   cost: number | null;
 
   @Column({ name: 'error_message', type: 'text', nullable: true })
@@ -56,7 +54,7 @@ export class MCPTaskBinding {
 
   @Column({
     name: 'last_polled_at',
-    type: isSqlite ? 'datetime' : 'timestamp',
+    type: 'timestamp',
     nullable: true,
   })
   lastPolledAt: Date | null;

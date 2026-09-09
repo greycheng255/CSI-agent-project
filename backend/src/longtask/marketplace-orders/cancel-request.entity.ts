@@ -6,8 +6,6 @@ import {
   Unique,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export const CANCEL_REQUEST_STATUS = [
   'open',
   'accepted',
@@ -30,7 +28,7 @@ export class MarketplaceCancelRequest {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'order_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'order_id', type: 'uuid' })
   orderId: string;
 
   @Column({ name: 'cancel_proposal_seq', type: 'int', default: 1 })

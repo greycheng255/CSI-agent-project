@@ -9,8 +9,6 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum PaymentCodeType {
   ALIPAY = 'ALIPAY',
   WECHAT = 'WECHAT',
@@ -29,7 +27,7 @@ export class UserPaymentCode {
   userId: string;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: PaymentCodeType,
   })
   type: PaymentCodeType;

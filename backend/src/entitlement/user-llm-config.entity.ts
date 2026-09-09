@@ -1,7 +1,5 @@
 import { Column, CreateDateColumn, Entity, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 /**
  * 用户 AI 网关配置（BYOK：Bring Your Own Key）。
  * 平台不卖套餐/不收支付，用户自带网关地址 + API Key：
@@ -24,9 +22,9 @@ export class UserLlmConfig {
   @Column({ name: 'key_prefix', type: 'varchar', length: 16 })
   keyPrefix: string;
 
-  @CreateDateColumn({ name: 'created_at', type: isSqlite ? 'datetime' : 'timestamptz' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: isSqlite ? 'datetime' : 'timestamptz' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt: Date;
 }

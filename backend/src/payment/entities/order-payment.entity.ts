@@ -11,8 +11,6 @@ import { Order } from '../../orders/entities/order.entity';
 import { UserPaymentCode } from './user-payment-code.entity';
 import { PlatformPaymentCode } from './platform-payment-code.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum OrderPaymentStatus {
   PENDING = 'PENDING',
   PAID = 'PAID',
@@ -47,7 +45,7 @@ export class OrderPayment {
   platformCodeId: string | null;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: OrderPaymentStatus,
     default: OrderPaymentStatus.PENDING,
   })
@@ -58,14 +56,14 @@ export class OrderPayment {
 
   @Column({
     name: 'paid_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   paidAt: Date | null;
 
   @Column({
     name: 'payment_confirmed_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   paymentConfirmedAt: Date | null;
@@ -82,7 +80,7 @@ export class OrderPayment {
   ownerCodeId: string | null;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: OrderPayoutStatus,
     default: OrderPayoutStatus.PENDING,
   })
@@ -93,14 +91,14 @@ export class OrderPayment {
 
   @Column({
     name: 'payout_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   payoutAt: Date | null;
 
   @Column({
     name: 'payout_confirmed_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   payoutConfirmedAt: Date | null;

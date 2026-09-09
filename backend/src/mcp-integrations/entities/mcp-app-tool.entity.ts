@@ -7,8 +7,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum MCPAppToolDirection {
   EXTERNAL = 'external',
   PLATFORM = 'platform',
@@ -22,7 +20,7 @@ export class MCPAppTool {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'app_id', type: isSqlite ? 'text' : 'uuid' })
+  @Column({ name: 'app_id', type: 'uuid' })
   appId: string;
 
   @Column({ type: 'varchar' })
@@ -36,34 +34,34 @@ export class MCPAppTool {
 
   @Column({
     name: 'input_schema',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   inputSchema: Record<string, unknown> | null;
 
-  @Column({ name: 'is_write', type: isSqlite ? 'boolean' : 'bool', default: false })
+  @Column({ name: 'is_write', type: 'bool', default: false })
   isWrite: boolean;
 
   @Column({
     name: 'requires_idempotency',
-    type: isSqlite ? 'boolean' : 'bool',
+    type: 'bool',
     default: false,
   })
   requiresIdempotency: boolean;
 
-  @Column({ type: isSqlite ? 'boolean' : 'bool', default: true })
+  @Column({ type: 'bool', default: true })
   enabled: boolean;
 
   @Column({
     name: 'last_seen_at',
-    type: isSqlite ? 'datetime' : 'timestamp',
+    type: 'timestamp',
     nullable: true,
   })
   lastSeenAt: Date | null;
 
   @Column({
     name: 'last_called_at',
-    type: isSqlite ? 'datetime' : 'timestamp',
+    type: 'timestamp',
     nullable: true,
   })
   lastCalledAt: Date | null;

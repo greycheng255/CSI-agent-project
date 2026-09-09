@@ -9,8 +9,6 @@ import {
 } from 'typeorm';
 import { Order } from '../../orders/entities/order.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum PaymentStatus {
   INIT = 'INIT',
   PAID = 'PAID',
@@ -46,7 +44,7 @@ export class Payment {
   orderId: string | null;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: PaymentProvider,
     default: PaymentProvider.ALIPAY,
   })
@@ -56,7 +54,7 @@ export class Payment {
   outTradeNo: string;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: PaymentPurpose,
     default: PaymentPurpose.ORDER,
   })
@@ -73,18 +71,18 @@ export class Payment {
   amountCny: number;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: PaymentStatus,
     default: PaymentStatus.INIT,
   })
   status: PaymentStatus;
 
-  @Column({ type: isSqlite ? 'simple-json' : 'jsonb', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   rawNotify: Record<string, unknown> | null;
 
   @Column({
     name: 'paid_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   paidAt: Date | null;

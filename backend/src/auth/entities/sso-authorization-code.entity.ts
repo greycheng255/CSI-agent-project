@@ -9,8 +9,6 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 /**
  * SSO 一次性授权码（10 分钟有效，使用后立即作废）
  */
@@ -38,13 +36,13 @@ export class SsoAuthorizationCode {
 
   @Column({
     name: 'expires_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
   })
   expiresAt: Date;
 
   @Column({
     name: 'used_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   usedAt: Date | null;

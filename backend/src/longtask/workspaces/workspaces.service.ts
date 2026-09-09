@@ -164,12 +164,7 @@ export class WorkspacesService {
       .createQueryBuilder('ws')
       .where('ws.display_status = :status', { status: 'active' })
       .andWhere('ws.receive_platform_push = :receive', { receive: true })
-      .andWhere(
-        isSqliteArrayColumn()
-          ? "ws.category_ids LIKE :cat"
-          : ':cat = ANY(ws.category_ids)',
-        { cat: `%${categoryId}%` },
-      )
+      .andWhere(':cat = ANY(ws.category_ids)', { cat: categoryId })
       .getMany();
   }
 
@@ -243,8 +238,4 @@ export class WorkspacesService {
     const workspace = await this.repo.save(ws);
     return { duplicate: false, workspace };
   }
-}
-
-function isSqliteArrayColumn(): boolean {
-  return process.env.DB_TYPE === 'sqlite';
 }

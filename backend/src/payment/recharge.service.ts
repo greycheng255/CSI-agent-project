@@ -144,14 +144,11 @@ export class RechargeService {
     const paidFen = yuanStringToFen(input.totalAmount);
     if (paidFen == null) throw new Error('invalid_total_amount');
 
-    const usePessimisticLock = this.dataSource.options.type !== 'sqlite';
     let rechargedUserId: string | null = null;
     await this.dataSource.transaction(async (manager) => {
       const recharge = await manager.findOne(RechargeOrder, {
         where: { outTradeNo: input.outTradeNo },
-        ...(usePessimisticLock
-          ? { lock: { mode: 'pessimistic_write' as const } }
-          : {}),
+        lock: { mode: 'pessimistic_write' as const },
       });
       if (!recharge) throw new Error('recharge_not_found');
       if (recharge.amountCny !== paidFen) throw new Error('amount_mismatch');

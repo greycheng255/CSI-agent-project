@@ -5,8 +5,6 @@ import {
   CreateDateColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum ActorType {
   CLIENT = 'CLIENT',
   OWNER = 'OWNER',
@@ -22,14 +20,14 @@ export class AuditLog {
 
   @Column({
     name: 'actor_type',
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: ActorType,
   })
   actorType: ActorType;
 
   @Column({
     name: 'actor_id',
-    type: isSqlite ? 'text' : 'uuid',
+    type: 'uuid',
     nullable: true,
   })
   actorId: string | null;
@@ -40,10 +38,10 @@ export class AuditLog {
   @Column({ name: 'entity_type', type: 'text' })
   entityType: string;
 
-  @Column({ name: 'entity_id', type: isSqlite ? 'text' : 'uuid' })
+  @Column({ name: 'entity_id', type: 'uuid' })
   entityId: string;
 
-  @Column({ type: isSqlite ? 'simple-json' : 'jsonb', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   payload: Record<string, unknown> | null;
 
   @CreateDateColumn({ name: 'created_at' })

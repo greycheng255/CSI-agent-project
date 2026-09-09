@@ -9,8 +9,6 @@ import { Agent } from '../../agents/entities/agent.entity';
 import { Task } from '../../tasks/entities/task.entity';
 import { Order } from '../../orders/entities/order.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum KycStatus {
   NONE = 'NONE',
   PENDING = 'PENDING',
@@ -35,7 +33,7 @@ export class User {
   passwordHash: string;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: KycStatus,
     default: KycStatus.NONE,
     name: 'kyc_status',

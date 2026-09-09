@@ -6,8 +6,6 @@ import {
   Unique,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export const OPPORTUNITY_DISPATCH_MODE = [
   'push',
   'pull',
@@ -27,10 +25,10 @@ export class OpportunityDispatch {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'marketplace_task_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'marketplace_task_id', type: 'uuid' })
   marketplaceTaskId: string;
 
-  @Column({ name: 'workspace_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'workspace_id', type: 'uuid' })
   workspaceId: string;
 
   @Column({ name: 'bid_round', type: 'int', default: 1 })
@@ -39,7 +37,7 @@ export class OpportunityDispatch {
   @Column({ type: 'varchar', length: 16 })
   mode: OpportunityDispatchMode;
 
-  @Column({ name: 'pushed_at', type: isSqlite ? 'datetime' : 'timestamp with time zone', nullable: true })
+  @Column({ name: 'pushed_at', type: 'timestamp with time zone', nullable: true })
   pushedAt: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })

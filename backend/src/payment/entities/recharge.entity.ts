@@ -6,8 +6,6 @@ import {
   Index,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 /**
  * 余额充值单（复用支付宝电脑网站支付链路，与订单支付 payments 表分离）。
  * 金额单位：分。outTradeNo 前缀 RCH（订单支付为 CSI），回调按前缀分流。
@@ -40,12 +38,12 @@ export class RechargeOrder {
   @Column({ type: 'varchar', length: 16, default: RechargeStatus.INIT })
   status: RechargeStatus;
 
-  @Column({ name: 'raw_notify', type: isSqlite ? 'simple-json' : 'jsonb', nullable: true })
+  @Column({ name: 'raw_notify', type: 'jsonb', nullable: true })
   rawNotify: Record<string, unknown> | null;
 
   @Column({
     name: 'paid_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   paidAt: Date | null;

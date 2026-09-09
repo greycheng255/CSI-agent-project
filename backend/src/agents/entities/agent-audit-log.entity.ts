@@ -10,8 +10,6 @@ import {
 import { Agent } from './agent.entity';
 import { User } from '../../users/entities/user.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 @Entity('agent_audit_logs')
 @Index('idx_agent_audit_logs_agent', ['agent'])
 @Index('idx_agent_audit_logs_action', ['action'])
@@ -35,14 +33,14 @@ export class AgentAuditLog {
 
   @Column({
     name: 'before_value',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   beforeValue: Record<string, unknown> | null;
 
   @Column({
     name: 'after_value',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   afterValue: Record<string, unknown> | null;

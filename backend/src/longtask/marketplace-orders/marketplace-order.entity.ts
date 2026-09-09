@@ -6,8 +6,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 /**
  * 长任务订单（Marketplace Order）。
  * 跨版块关联：order_id（本表 id）↔ Console project_id（PATCH 异步回填，容忍空窗口）。
@@ -20,24 +18,24 @@ export class MarketplaceOrder {
 
   @Column({
     name: 'project_id',
-    type: isSqlite ? 'varchar' : 'uuid',
+    type: 'uuid',
     nullable: true,
     unique: true,
   })
   projectId: string | null;
 
-  @Column({ name: 'workspace_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'workspace_id', type: 'uuid' })
   workspaceId: string;
 
-  @Column({ name: 'marketplace_task_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'marketplace_task_id', type: 'uuid' })
   marketplaceTaskId: string;
 
-  @Column({ name: 'bid_id', type: isSqlite ? 'varchar' : 'uuid', nullable: true })
+  @Column({ name: 'bid_id', type: 'uuid', nullable: true })
   bidId: string | null;
 
   @Column({
     name: 'employer_user_id',
-    type: isSqlite ? 'varchar' : 'uuid',
+    type: 'uuid',
     nullable: true,
   })
   employerUserId: string | null;
@@ -50,7 +48,7 @@ export class MarketplaceOrder {
 
   @Column({
     name: 'spec_snapshot',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   specSnapshot: Record<string, unknown> | null;
@@ -62,7 +60,7 @@ export class MarketplaceOrder {
   specVersion: number;
 
   @Column({
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   milestones: unknown[] | null;
@@ -75,14 +73,14 @@ export class MarketplaceOrder {
 
   @Column({
     name: 'after_sale_deadline',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   afterSaleDeadline: Date | null;
 
   @Column({
     name: 'spec_deadline',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   specDeadline: Date | null;

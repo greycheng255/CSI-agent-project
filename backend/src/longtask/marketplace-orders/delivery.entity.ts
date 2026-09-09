@@ -6,8 +6,6 @@ import {
   Unique,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export const DELIVERY_STATUS = [
   'submitted',
   'accepted',
@@ -28,21 +26,21 @@ export class MarketplaceDelivery {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'order_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'order_id', type: 'uuid' })
   orderId: string;
 
   @Column({ name: 'submission_seq', type: 'int', default: 1 })
   submissionSeq: number;
 
   @Column({
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   metadata: Record<string, unknown> | null;
 
   @Column({
     name: 'artifact_urls',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   artifactUrls: string[] | null;
@@ -55,14 +53,14 @@ export class MarketplaceDelivery {
 
   @Column({
     name: 'submitted_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   submittedAt: Date | null;
 
   @Column({
     name: 'accept_deadline',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   acceptDeadline: Date | null;

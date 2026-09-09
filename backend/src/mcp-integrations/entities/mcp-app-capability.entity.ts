@@ -7,8 +7,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum MCPAppCapabilityType {
   WORKFLOW = 'workflow',
   MODEL = 'model',
@@ -23,7 +21,7 @@ export class MCPAppCapability {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'app_id', type: isSqlite ? 'text' : 'uuid' })
+  @Column({ name: 'app_id', type: 'uuid' })
   appId: string;
 
   @Column({ name: 'capability_type', type: 'varchar' })
@@ -40,24 +38,24 @@ export class MCPAppCapability {
 
   @Column({
     name: 'schema_json',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   schemaJson: Record<string, unknown> | null;
 
   @Column({
     name: 'raw_json',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   rawJson: Record<string, unknown> | null;
 
-  @Column({ type: isSqlite ? 'boolean' : 'bool', default: true })
+  @Column({ type: 'bool', default: true })
   enabled: boolean;
 
   @Column({
     name: 'last_synced_at',
-    type: isSqlite ? 'datetime' : 'timestamp',
+    type: 'timestamp',
     nullable: true,
   })
   lastSyncedAt: Date | null;

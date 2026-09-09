@@ -6,8 +6,6 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum MCPInvocationStatus {
   SUCCESS = 'success',
   FAILED = 'failed',
@@ -18,7 +16,7 @@ export enum MCPInvocationStatus {
 @Index('idx_mcp_invocations_time', ['createdAt'])
 @Index('idx_mcp_idempotency', ['idempotencyKey'], {
   unique: true,
-  where: isSqlite ? undefined : 'idempotency_key IS NOT NULL',
+  where: 'idempotency_key IS NOT NULL',
 })
 export class MCPToolInvocation {
   @PrimaryGeneratedColumn('uuid')
@@ -36,10 +34,10 @@ export class MCPToolInvocation {
   @Column({ name: 'idempotency_key', type: 'varchar', nullable: true })
   idempotencyKey: string | null;
 
-  @Column({ name: 'input_json', type: isSqlite ? 'simple-json' : 'jsonb', nullable: true })
+  @Column({ name: 'input_json', type: 'jsonb', nullable: true })
   inputJson: Record<string, unknown> | null;
 
-  @Column({ name: 'output_json', type: isSqlite ? 'simple-json' : 'jsonb', nullable: true })
+  @Column({ name: 'output_json', type: 'jsonb', nullable: true })
   outputJson: unknown;
 
   @Column({ type: 'varchar', default: MCPInvocationStatus.SUCCESS })
