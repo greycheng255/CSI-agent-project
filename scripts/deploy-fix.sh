@@ -35,18 +35,53 @@ echo ""
 
 echo "=== 5. DB 残留清理 ==="
 export PGPASSWORD="${DB_PASSWORD:-WHcWmDaySF3NXjtf}"
-psql -h "${DB_HOST:-122.51.51.177}" -p "${DB_PORT:-15435}" -U "${DB_USER:-genesis_db}" -d "${DB_NAME:-genesis_db}" << 'SQL'
+DBH="${DB_HOST:-122.51.51.177}"; DBP="${DB_PORT:-15435}"; DBU="${DB_USER:-genesis_db}"; DBN="${DB_NAME:-genesis_db}"
+psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" << 'SQL'
 DELETE FROM marketplace_revision_negotiations WHERE id = '033b4135-b1a3-4ddc-9215-59db87ff17fc';
 DELETE FROM marketplace_bids WHERE id::text LIKE 'dd8730b0-%';
 SELECT count(*) AS remaining_negotiations FROM marketplace_revision_negotiations WHERE id = '033b4135-b1a3-4ddc-9215-59db87ff17fc';
 SELECT count(*) AS remaining_bids FROM marketplace_bids WHERE id::text LIKE 'dd8730b0-%';
 SQL
 
-echo "=== 6. 冒烟验证 ==="
+echo "=== 5.5 预置 L 族 AI Token（test org，BYOK）==="
+# L1-L3 端到端需要 test org 的 user_llm_configs 行；用与 app 同口径 AES-256-GCM 加密。
+# 真值由联调窗口线下注入：LLM_BASE_URL + LLM_API_KEY（OneLLM 方案二或自有网关方案一）。
+if [ -n "${LLM_API_KEY}" ]; then
+  LLM_BASE_URL="${LLM_BASE_URL:-https://onellm.opennotebook.chat/v1}"
+  KEY_PREFIX="${LLM_API_KEY:0:8}"
+  ENC_BLOB=$(cd "$PROJECT_DIR/backend" && node -e "
+const crypto=require('crypto');
+const secret=process.env.LONGTASK_INBOUND_TOKEN||process.env.LONGTASK_SERVICE_TOKEN||'csi-gateway-dev';
+const key=crypto.createHash('sha256').update(secret+'|gateway-key-enc').digest();
+const iv=crypto.randomBytes(12);
+const c=crypto.createCipheriv('aes-256-gcm',key,iv);
+const enc=Buffer.concat([c.update(process.env.LLM_API_KEY,'utf8'),c.final()]);
+process.stdout.write(Buffer.concat([iv,c.getAuthTag(),enc]).toString('base64'));
+  ")
+  psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" <<SQL
+INSERT INTO user_llm_configs (org_id, base_url, api_key_enc, key_prefix, created_at, updated_at)
+VALUES ('${ORG_WITH_PLAN}', '${LLM_BASE_URL}', '${ENC_BLOB}', '${KEY_PREFIX}', now(), now())
+ON CONFLICT (org_id) DO UPDATE SET base_url=EXCLUDED.base_url, api_key_enc=EXCLUDED.api_key_enc, key_prefix=EXCLUDED.key_prefix, updated_at=now();
+SELECT org_id, base_url, key_prefix, updated_at FROM user_llm_configs WHERE org_id='${ORG_WITH_PLAN}';
+SQL
+  echo "✅ L 族 AI Token 已预置（key_prefix=${KEY_PREFIX}…）"
+else
+  echo "⚠️  LLM_API_KEY 未设置，跳过 L 族 AI Token 预置（L1-L3 端到端需先注入：LLM_API_KEY=sk-... LLM_BASE_URL=... bash scripts/deploy-fix.sh）"
+fi
+
+echo "=== 5.6 激活 test org 免费套餐（D1-D6 前置）==="
 sign() {
   local body="$1"; local ts=$(date +%s)
   printf 't=%s,v1=%s' "$ts" "$(printf '%s%s' "$body" "$ts" | openssl dgst -sha256 -hmac "$TOKEN" -hex | sed 's/.*= //')"
 }
+ACT_BODY='{"action":"activate","org_id":"'${ORG_WITH_PLAN}'","plan_code":"free"}'
+curl -s -X POST http://localhost:4001/v1/entitlement/subscriptions \
+  -H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json" \
+  -H "X-Signature: $(sign "$ACT_BODY")" -H "X-Request-Id: deploy-act-$(date +%s%N)" \
+  -d "$ACT_BODY" -w "\nHTTP %{http_code}\n" || echo "(activation 跳过 — 可能已激活)"
+
+echo "=== 6. 冒烟验证 ==="
+# sign() 已在 5.6 定义；此处复用
 
 # K1 签发
 echo "--- K1 POST /v1/gateway/keys ---"
@@ -74,5 +109,18 @@ curl -s http://localhost:4001/v1/entitlement/llm-config/00000000-0000-0000-0000-
   -H "X-Signature: $(sign '')" \
   -H "X-Request-Id: deploy-$(date +%s%N)" \
   -w "\nHTTP %{http_code}\n"
+
+echo "=== 7. 全量契约验证（post-deploy-verify.sh）==="
+# 跑完整 K/E/L/S15/D1-D3 + DB 残留确认；ENV_FILE 沿用本脚本头部
+ENV_FILE="${ENV_FILE:-${PROJECT_DIR}/.env}" bash "$PROJECT_DIR/scripts/post-deploy-verify.sh" || echo "⚠️  全量验证有失败项，见上行明细"
+
+echo ""
+echo "=== E4 修复专项验证（缺参 → 400 INVALID_ARGUMENT，此前为 500）==="
+E4_WS=$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid)
+E4_RESP=$(curl -s -w "\n__HTTP__%{http_code}" http://localhost:4001/v1/entitlement/workspaces/${E4_WS}/usage \
+  -H "Authorization: Bearer ${TOKEN}" -H "X-Signature: $(sign '')" -H "X-Request-Id: e4-$(date +%s%N)")
+echo "$E4_RESP"
+E4_CODE=$(echo "$E4_RESP" | tail -1 | sed 's/.*__HTTP__//')
+if [ "$E4_CODE" = "400" ]; then echo "✅ E4 修复生效（400 INVALID_ARGUMENT）"; else echo "❌ E4 仍异常 → HTTP ${E4_CODE}"; fi
 
 echo "=== 完成 ==="
