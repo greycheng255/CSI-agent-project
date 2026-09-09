@@ -40,9 +40,10 @@
 | **E3** 额度 | GET | `/v1/entitlement/quotas/:orgId` | `entitlement.controller.ts:60` | ✅ |
 | **E4** 用量 | GET | `/v1/entitlement/workspaces/:workspaceId/usage?period_start&period_end&cursor&limit` | `entitlement.controller.ts:82` | ✅（已修复 500） |
 | **E4** 别名 | GET | `/v1/entitlement/usage?workspace_id=&period_start=&period_end=` | `entitlement.controller.ts:100` | ✅ |
-| **E5** capabilities | GET | `/v1/entitlement/capabilities` | `entitlement.controller.ts` | ✅ |
-| **E6** 订阅生命周期 | POST | `/v1/entitlement/subscriptions`（body: `action`/`org_id`/`plan_code`） | `entitlement.controller.ts:190` | ✅ |
-| **E7** LLM 凭证 | GET | `/v1/entitlement/llm-config/:orgId` | `entitlement.controller.ts:167` | ✅ |
+| **E5** capabilities | GET | `/v1/entitlement/capabilities` | `entitlement.controller.ts:135` | ✅（返 `{version,features:{incremental_usage_cursor,run_level_usage,free_quota_activation,workspace_level_keys,byok}}`） |
+| **E6** 订阅生命周期 | POST | `/v1/entitlement/subscriptions`（body: `action`/`org_id`/`plan_code`） | `entitlement.controller.ts:279` | ✅ |
+| **E6'** 免费额度激活 | POST | `/v1/entitlement/free-quota/activate`（body: `org_id`，幂等） | `entitlement.controller.ts:151` | ✅（不传 plan_code，走 env `ENTITLEMENT_DEFAULT_PLAN=beta-free`） |
+| **E7** LLM 凭证 | GET | `/v1/entitlement/llm-config/:orgId` | `entitlement.controller.ts:179` | ✅ |
 | **K1** 签发 | POST | `/v1/gateway/keys`（body: `org_id`/`workspace_id`） | `gateway-keys.controller.ts:16` | ✅ |
 | **K2** 验签 | POST | `/v1/gateway/keys/validate`（body: `key`） | `gateway-keys.controller.ts:40` | ✅ |
 | **K3** 吊销 | POST | `/v1/gateway/keys/:keyId/revoke` | `gateway-keys.controller.ts:34` | ✅ |
@@ -50,9 +51,14 @@
 | **L1** 聊天 | POST | `/v1/chat/completions`（头: `X-Workspace-Key`/`X-Agent-Run-Id`） | `gateway-bridge.controller.ts:75` | ✅ |
 | **L2** 向量化 | POST | `/v1/embeddings`（头: `X-Workspace-Key`） | `gateway-bridge.controller.ts:90` | ✅ |
 | **L3** 模型目录 | GET | `/v1/models`（头: `X-Workspace-Key`） | `gateway-bridge.controller.ts:104` | ✅ |
-| **L2'** 计量上报 | POST | `/v1/entitlement/usage-records`（body: `org_id`/`items[]`） | `entitlement.controller.ts:72` | ✅ |
+| **L2'** 计量上报 | POST | `/v1/entitlement/usage-records`（body: `org_id`/`items[]`） | `entitlement.controller.ts:169` | ✅ |
 
-K 族契约别名：`POST /v1/keys/issue`、`POST /v1/keys/revoke`、`POST /v1/keys/:keyId/rotate`（`gateway-bridge.controller.ts:36-53`），与主路径等效。
+K 族契约别名（`gateway-bridge.controller.ts:36-53`）：
+- **K1 别名** `POST /v1/keys/issue`（body: `org_id`/`workspace_id`）
+- **K3 别名** `POST /v1/keys/revoke`（body: `key_id`，**非 path 形态**；M 侧实测 `POST /v1/keys/:id/revoke` 返 404 Cannot POST 属预期——revoke 走 body）
+- **K4 别名** `POST /v1/keys/:keyId/rotate`（path 形态）
+
+> 修订记录（2026-09-09）：①E4 旧 `from`/`to` 形态已废弃——当前 query 别名仅认 `period_start`/`period_end`，缺参 → 400（edcf4ca 修复，重部署后生效，旧 `from`/`to` 不再 500）；②E5 已登记返能力对象（原 spec 标"⏳"系版本差）；③E6 补 `free-quota/activate` 形态 + plan_code=`beta-free`（env 驱动）；④K3 别名澄清为 body 形态。
 
 ---
 
@@ -60,9 +66,12 @@ K 族契约别名：`POST /v1/keys/issue`、`POST /v1/keys/revoke`、`POST /v1/k
 
 | 项 | 定案 |
 |---|---|
-| org_id 测试值 | **同意贵方草案**：`org-with-plan`（含套餐，正常链路）/ `org-no-plan`（无套餐，触发 `ENTITLEMENT_PLAN_NOT_FOUND` 404）。需先经 `POST /v1/entitlement/subscriptions {action:"activate",org_id:"org-with-plan",plan_code:"free"}` 激活。 |
+| org_id 类型 | **UUID（硬约束）**。所有 E 族路由入参经 `requireUuid()` 校验，非 UUID → 400 `INVALID_ARGUMENT`（避免 PG uuid 列解析炸成 500）。DB 列 `org_id` 为 `uuid` 类型。 |
+| 测试值（方案②） | `00000000-0000-4000-8000-00000000e001`（含套餐，正常链路）/ `00000000-0000-4000-8000-00000000e002`（无套餐，触发 `ENTITLEMENT_PLAN_NOT_FOUND` 404） |
+| 激活 | `POST /v1/entitlement/free-quota/activate {"org_id":"<e1 UUID>"}`（幂等，入驻即赠免费额度） |
+| plan_code | 实际套餐 code 为 **`beta-free`**（由 env `ENTITLEMENT_DEFAULT_PLAN` 设定，非字面 `free`）；`free-quota/activate` 不传 plan_code 走默认，`subscriptions` 形态需传 `plan_code:"beta-free"` |
 
-> `org_id` 为 varchar 类型（非 UUID 硬约束），但 E4 的 `workspace_id` 必须是 UUID 格式（`requireUuid()` 校验）。
+> 修订记录（2026-09-09）：原回写声明 org_id 为 varchar/无 UUID 约束与线上 `requireUuid()` 校验矛盾，经 M 侧实测指出。现改为方案② UUID 测试值，代码不变。
 
 ---
 
@@ -108,11 +117,11 @@ K 族契约别名：`POST /v1/keys/issue`、`POST /v1/keys/revoke`、`POST /v1/k
 
 ## 6.8 错误结构与 code 清单
 
-**结构**：RFC 7807 兼容 problem+json：
+**结构**：RFC 7807 兼容 problem+json（全局过滤器 `Rfc7807Filter` 渲染，**以此为准**）：
 ```json
 {
   "type": "about:blank",
-  "title": "<error_code>",
+  "title": "<message>",
   "status": <int>,
   "detail": "<message>",
   "instance": "<request_path>",
@@ -120,23 +129,26 @@ K 族契约别名：`POST /v1/keys/issue`、`POST /v1/keys/revoke`、`POST /v1/k
   "error_code": "<CODE>"
 }
 ```
+> 修订记录（2026-09-09）：M 侧所引原始契约 spec 声明 `{status, code, message, details?, retry_after_seconds?}` 系旧稿；线上实际由 `Rfc7807Filter`（`longtask/contract/rfc7807.filter.ts`，`APP_FILTER` 全局注册）统一输出 RFC 7807 形态，字段名为 `error_code`/`title`/`detail`。客户端错误映射请按 `error_code` 字段工作。`details`/`retry_after_seconds` 为可选字段（仅当 `ContractError` 构造时传入才出现）。
 
 **可重试判定**：`RATE_LIMIT_` / `UPSTREAM_` / `INTERNAL_` 前缀可重试；其余不可重试。
 
 | 前缀 | code | HTTP |
 |---|---|---|
 | AUTH | `AUTH_TOKEN_INVALID` / `AUTH_HMAC_SIGNATURE_MISMATCH` / `AUTH_TIMESTAMP_EXPIRED` / `AUTH_NONCE_MISSING` | 401 |
-| VALIDATION | `VALIDATION_INVALID_PAYLOAD` / `VALIDATION_GATE_NOT_PASSED` / `INVALID_ARGUMENT` | 400 |
+| VALIDATION | `VALIDATION_INVALID_PAYLOAD` / `VALIDATION_GATE_NOT_PASSED` / **`INVALID_ARGUMENT`** | 400 |
 | NOT_FOUND | `NOT_FOUND_TASK` / `NOT_FOUND_ORDER` / `NOT_FOUND_WORKSPACE` | 404 |
 | CONFLICT | `CONFLICT_SEAT_FULL` / `CONFLICT_SPEC_VERSION_CONFLICT` / `CONFLICT_DUPLICATE` / `CONFLICT_WORKSPACE_SLUG` / `CONFLICT_SETTLEMENT_ALREADY_TRIGGERED` | 409 |
 | STATE | `STATE_INVALID_TRANSITION` / `STATE_PROJECT_NOT_DELIVERABLE` / `COUNTER_PROPOSAL_UNSUPPORTED` | 422 |
 | ENTITLEMENT | `ENTITLEMENT_PLAN_NOT_FOUND` / `ENTITLEMENT_LIMIT_REACHED` / `ENTITLEMENT_CATALOG_DENIED` / `ENTITLEMENT_QUOTA_EXHAUSTED` | 404/403/403/402 |
-| LLM | `LLM_CONFIG_MISSING` / `LLM_CONFIG_INVALID` / `LLM_CONFIG_DECRYPT_FAILED` / `LLM_UPSTREAM_ERROR` | 404/422/502/502 |
+| LLM | `LLM_CONFIG_MISSING` / `LLM_CONFIG_INVALID` / `LLM_CONFIG_DECRYPT_FAILED` / `LLM_UPSTREAM_ERROR` | **404(E7 GET) / 409(L1/L2 调用路径)** / 422 / 502 / 502 |
 | RATE_LIMIT | `RATE_LIMIT_TOO_MANY` | 429 |
 | UPSTREAM | `UPSTREAM_UNREACHABLE` | 502 |
 | INTERNAL | `INTERNAL_ERROR` | 500 |
 
-代码：`errors.ts` 契约错误码全量定义；`entitlement-errors.ts` 权益错误码。
+> 修订记录（2026-09-09）：①`LLM_CONFIG_MISSING` 双状态码——E7 GET `/llm-config/:orgId` 返 404（`entitlement.controller.ts:184`），L1/L2 调用路径返 409（`llm-proxy.service.ts:71,95`，提示"尚未配置 AI Token"）；原清单只标 404 漏了 409；②`INVALID_ARGUMENT` 已在 VALIDATION 族（400），M 侧所引原稿缺漏。
+
+代码：`errors.ts` 契约错误码全量定义；`entitlement-errors.ts` 权益错误码；`rfc7807.filter.ts` 全局渲染。
 
 ---
 

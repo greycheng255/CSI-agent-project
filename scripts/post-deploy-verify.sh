@@ -8,9 +8,9 @@ BASE=http://122.51.51.177:4001
 # 从 .env 读取真实入站 token
 ENV_FILE="${ENV_FILE:-/home/ubuntu/csi-agent-project-new/CSI-agent-project/.env}"
 TOKEN=$(grep '^LONGTASK_INBOUND_TOKEN=' "$ENV_FILE" | cut -d= -f2 | tr -d '[:space:]')
-# 测试 org（有套餐）/ 无套餐 org（触发 PLAN_NOT_FOUND）
-ORG_WITH_PLAN="29803cbb-10b0-49c1-ac49-1eb296cf9f36"
-ORG_NO_PLAN="00000000-0000-0000-0000-000000000000"
+# 测试 org（有套餐）/ 无套餐 org（触发 PLAN_NOT_FOUND）— §6.4 约定 UUID 测试值
+ORG_WITH_PLAN="00000000-0000-4000-8000-00000000e001"
+ORG_NO_PLAN="00000000-0000-4000-8000-00000000e002"
 
 hmac_get() {
   local path="$1"

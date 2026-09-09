@@ -6,7 +6,7 @@ set -e
 PROJECT_DIR="${PROJECT_DIR:-/home/ubuntu/csi-agent-project-new/CSI-agent-project}"
 ENV_FILE="${ENV_FILE:-${PROJECT_DIR}/.env}"
 TOKEN=$(grep '^LONGTASK_INBOUND_TOKEN=' "$ENV_FILE" | cut -d= -f2 | tr -d '[:space:]')
-ORG_WITH_PLAN="29803cbb-10b0-49c1-ac49-1eb296cf9f36"
+ORG_WITH_PLAN="00000000-0000-4000-8000-00000000e001"  # §6.4 约定 UUID 测试值
 
 echo "=== 1. 拉取最新代码 ==="
 cd "$PROJECT_DIR"
