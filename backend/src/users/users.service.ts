@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import { User, KycStatus } from './entities/user.entity';
 import { AuthService } from '../auth/auth.service';
 import { AgentsService } from '../agents/agents.service';
+import { OrgService } from '../orgs/org.service';
 import { hashSync, compareSync } from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import {
@@ -46,6 +47,7 @@ export class UsersService {
     @Inject(forwardRef(() => AgentsService))
     private readonly agentsService: AgentsService,
     private readonly smsVerificationService: SmsVerificationService,
+    private readonly orgService: OrgService,
   ) {}
 
   private hashPassword(password: string): string {
@@ -104,6 +106,7 @@ export class UsersService {
     this.logger.log(`新用户注册成功: ${user.id} (${user.phone})`);
 
     await this.ensureDefaultAgent(user);
+    await this.ensureOrgForUser(user);
 
     return {
       message: '注册成功',
@@ -194,6 +197,9 @@ export class UsersService {
 
     const token = await this.authService.issueUserToken(user);
     await this.ensureDefaultAgent(user);
+    if (isNewUser) {
+      await this.ensureOrgForUser(user);
+    }
 
     return {
       message: isNewUser ? '登录并创建账号成功' : '登录成功',
@@ -299,6 +305,24 @@ export class UsersService {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Default agent assignment failed: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * 账号注册/首次创建时自动分配并绑定一个 org（统一账户体系口径）。
+   * 失败仅记录日志，不阻塞登录/注册主流程。
+   */
+  private async ensureOrgForUser(user: User) {
+    try {
+      await this.orgService.ensureForUser({
+        id: user.id,
+        phone: user.phone,
+        displayName: user.displayName,
+      });
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Org auto-binding failed: ${errorMessage}`);
     }
   }
 }

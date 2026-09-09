@@ -14,6 +14,8 @@ import { AuthGuard, type RequestWithUser } from './auth.guard';
 import { SuperAdminGuard } from '../admin/admin.guard';
 import { SsoService } from './sso.service';
 import { AuthService } from './auth.service';
+import { OidcService } from './oidc.service';
+import { OrgService } from '../orgs/org.service';
 
 interface AuthorizeQueryDto {
   client_id?: string;
@@ -21,6 +23,10 @@ interface AuthorizeQueryDto {
   state?: string;
   code_challenge?: string;
   code_challenge_method?: string;
+  /** OIDC：空格分隔 scope（含 openid 时签发 id_token） */
+  scope?: string;
+  /** OIDC：客户端 nonce */
+  nonce?: string;
 }
 
 interface TokenRequestDto {
@@ -40,17 +46,21 @@ interface CreateClientDto {
 }
 
 /**
- * SSO 控制器（Marketplace 作为 IdP）
+ * SSO 控制器（Marketplace 作为 IdP / OIDC Provider）
  * - GET  authorize：浏览器入口，校验后 302 到前端授权页
  * - POST authorize：已登录用户签发授权码（前端授权页调用）
- * - POST token：授权码换 access_token（子应用服务端调用）
- * - GET  userinfo：access_token 换用户信息
+ * - POST token：授权码换 access_token（子应用服务端调用）；scope 含 openid 时
+ *   一并签发 id_token（HS256），携带 org_id claim
+ * - GET  userinfo：access_token 换用户信息（含 org_id）
+ * - POST logout：单点登出
  */
 @Controller('api/v1/sso')
 export class SsoController {
   constructor(
     private readonly ssoService: SsoService,
     private readonly authService: AuthService,
+    private readonly oidcService: OidcService,
+    private readonly orgService: OrgService,
   ) {}
 
   private toAuthorizeRequest(query: AuthorizeQueryDto) {
@@ -60,6 +70,8 @@ export class SsoController {
       state: query.state,
       codeChallenge: query.code_challenge,
       codeChallengeMethod: query.code_challenge_method,
+      scope: query.scope,
+      nonce: query.nonce,
     };
   }
 
@@ -89,6 +101,8 @@ export class SsoController {
       if (query.code_challenge_method) {
         params.set('code_challenge_method', query.code_challenge_method);
       }
+      if (query.scope) params.set('scope', query.scope);
+      if (query.nonce) params.set('nonce', query.nonce);
       res.redirect(
         302,
         `${webUrl.replace(/\/$/, '')}/sso/authorize?${params.toString()}`,
@@ -116,6 +130,8 @@ export class SsoController {
       state: body.state,
       codeChallenge: body.code_challenge,
       codeChallengeMethod: body.code_challenge_method,
+      scope: body.scope,
+      nonce: body.nonce,
     });
     return {
       code: result.code,
@@ -125,12 +141,12 @@ export class SsoController {
   }
 
   /**
-   * 授权码换 access_token
+   * 授权码换 access_token（scope 含 openid 时附带 id_token）
    * POST /api/v1/sso/token
    */
   @Post('token')
   async token(@Body() body: TokenRequestDto) {
-    return this.ssoService.exchangeCode({
+    const result = await this.ssoService.exchangeCode({
       grantType: body.grant_type || 'authorization_code',
       code: body.code || '',
       clientId: body.client_id || '',
@@ -138,22 +154,47 @@ export class SsoController {
       codeVerifier: body.code_verifier,
       redirectUri: body.redirect_uri || '',
     });
+
+    const scopes = this.oidcService.parseScopes(result.scope);
+    if (scopes.includes('openid')) {
+      const idToken = await this.oidcService.issueIdToken(
+        {
+          id: result.user.id,
+          phone: result.user.phone,
+          email: result.user.email,
+          displayName: result.user.displayName,
+        },
+        result.clientId,
+        result.nonce,
+        scopes,
+      );
+      return {
+        ...result,
+        id_token: idToken,
+        scope: result.scope || 'openid',
+        token_type: 'Bearer',
+      };
+    }
+
+    return result;
   }
 
   /**
-   * 获取用户信息（Bearer access_token）
+   * 获取用户信息（Bearer access_token）；含 org_id（登录态 claim 的等价来源）
    * GET /api/v1/sso/userinfo
    */
   @Get('userinfo')
   @UseGuards(AuthGuard)
-  userinfo(@Req() req: RequestWithUser) {
+  async userinfo(@Req() req: RequestWithUser) {
     const user = req.user;
+    const orgId = await this.orgService.getOrgIdForUser(user.id);
     return {
       id: user.id,
       phone: user.phone,
       email: user.email,
       displayName: user.displayName,
       kycStatus: user.kycStatus,
+      org_id: orgId,
     };
   }
 

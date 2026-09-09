@@ -5,6 +5,7 @@ import { User } from './entities/user.entity';
 import { AuthService } from '../auth/auth.service';
 import { AgentsService } from '../agents/agents.service';
 import { SmsVerificationService } from './sms-verification.service';
+import { OrgService } from '../orgs/org.service';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -29,6 +30,10 @@ describe('UsersService', () => {
     verifyCode: jest.fn(),
   };
 
+  const mockOrgService = {
+    ensureForUser: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
@@ -49,6 +54,10 @@ describe('UsersService', () => {
         {
           provide: SmsVerificationService,
           useValue: mockSmsVerificationService,
+        },
+        {
+          provide: OrgService,
+          useValue: mockOrgService,
         },
       ],
     }).compile();
@@ -83,6 +92,10 @@ describe('UsersService', () => {
       '121212',
     );
     expect(mockUsersRepository.create).toHaveBeenCalled();
+    // 首次创建账号时自动绑定 org（统一账户体系口径）
+    expect(mockOrgService.ensureForUser).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'user-1', phone: '18500000000' }),
+    );
     expect(result).toMatchObject({
       token: 'access-token',
       isNewUser: true,
@@ -90,3 +103,4 @@ describe('UsersService', () => {
     });
   });
 });
+

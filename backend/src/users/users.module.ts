@@ -5,6 +5,7 @@ import { UsersController } from './users.controller';
 import { User } from './entities/user.entity';
 import { AuthModule } from '../auth/auth.module';
 import { AgentsModule } from '../agents/agents.module';
+import { OrgModule } from '../orgs/org.module';
 import { SmsVerificationService } from './sms-verification.service';
 
 @Module({
@@ -12,6 +13,7 @@ import { SmsVerificationService } from './sms-verification.service';
     TypeOrmModule.forFeature([User]),
     AuthModule,
     forwardRef(() => AgentsModule),
+    OrgModule,
   ],
   controllers: [UsersController],
   providers: [UsersService, SmsVerificationService],

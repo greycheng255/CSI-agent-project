@@ -5,3 +5,6 @@
 process.env.DATABASE_PATH = `/tmp/sso-e2e-jest-${process.pid}-${Date.now()}.db`;
 process.env.DB_SYNC = 'true';
 process.env.SSO_WEB_URL = 'http://localhost:5173';
+// OIDC 测试固定 issuer + 签名密钥，便于 e2e 解码 id_token 校验 claim
+process.env.SSO_OIDC_ISSUER = 'https://idp.e2e.test';
+process.env.SSO_OIDC_SIGNING_SECRET = 'e2e-oidc-signing-secret';

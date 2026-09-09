@@ -15,6 +15,10 @@ export type AuthorizeRequest = {
   state?: string;
   codeChallenge?: string;
   codeChallengeMethod?: string;
+  /** OIDC：空格分隔的 scope（如 "openid profile"），未携带时为纯 OAuth2 流程 */
+  scope?: string;
+  /** OIDC：客户端 nonce，原样回填至 id_token */
+  nonce?: string;
 };
 
 export type TokenExchangeRequest = {
@@ -168,6 +172,8 @@ export class SsoService implements OnModuleInit {
         clientId: client.clientId,
         redirectUri: req.redirectUri,
         codeChallenge: req.codeChallenge || null,
+        scope: req.scope || null,
+        nonce: req.nonce || null,
         expiresAt: new Date(Date.now() + AUTH_CODE_TTL_MS),
         usedAt: null,
       }),
@@ -247,9 +253,14 @@ export class SsoService implements OnModuleInit {
       access_token: accessToken,
       token_type: 'Bearer',
       expires_in: null,
+      // OIDC：透传给控制器以决定是否签发 id_token
+      scope: codeRow.scope,
+      nonce: codeRow.nonce,
+      clientId: client.clientId,
       user: {
         id: codeRow.user.id,
         phone: codeRow.user.phone,
+        email: codeRow.user.email,
         displayName: codeRow.user.displayName,
         kycStatus: codeRow.user.kycStatus,
       },

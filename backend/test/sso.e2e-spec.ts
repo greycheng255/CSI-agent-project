@@ -4,8 +4,31 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, createHmac, randomBytes } from 'crypto';
 import { unlinkSync } from 'fs';
+
+/**
+ * 解码 HS256 JWT 的 payload（仅用于 e2e 校验 claim；签名由后端验签保证）。
+ */
+function decodeJwtPayload(token: string): Record<string, unknown> {
+  const parts = token.split('.');
+  if (parts.length !== 3) throw new Error('not a JWT');
+  return JSON.parse(
+    Buffer.from(parts[1], 'base64url').toString('utf8'),
+  ) as Record<string, unknown>;
+}
+
+/** 用 e2e 固定密钥复算 HS256 签名，验证 id_token 签名一致性。 */
+function verifyIdTokenSignature(token: string): boolean {
+  const parts = token.split('.');
+  if (parts.length !== 3) return false;
+  const [header, payload, signature] = parts;
+  const signingInput = `${header}.${payload}`;
+  const expected = createHmac('sha256', 'e2e-oidc-signing-secret')
+    .update(signingInput)
+    .digest('base64url');
+  return expected === signature;
+}
 
 jest.setTimeout(180000); // 完整 AppModule 启动较慢
 
@@ -438,5 +461,148 @@ describe('SsoController 超管接入方管理 (e2e)', () => {
       .get(`${API}/sso/clients`)
       .set('Authorization', 'Bearer invalid-token')
       .expect(401);
+  });
+});
+
+/**
+ * OIDC 完整流程 e2e：授权码 + scope=openid → id_token（HS256）→ org_id claim。
+ * 覆盖 §3.4 AuthPort CSIAdapter 的 IDP SSO（OIDC）能力：
+ * - id_token 签名可由 Console 用同一 SSO_OIDC_SIGNING_SECRET 验签
+ * - id_token 携带 sub/aud/iss/nonce/org_id 等标准 + 平台自定义 claim
+ * - userinfo 暴露的 org_id 与 id_token.org_id 一致（登录态 claim 与解析 API 同源）
+ */
+describe('SsoController OIDC id_token 流程 (e2e)', () => {
+  let app: INestApplication<App>;
+  const dbPath = process.env.DATABASE_PATH!;
+  const phone = `138${String(Date.now()).slice(-8)}`;
+  const redirectUri = 'http://127.0.0.1:53742/callback';
+  const clientId = 'openclaw-cli';
+
+  let userToken: string;
+  let userId: string;
+
+  beforeAll(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    await app.init();
+    userToken = await smsLogin(app.getHttpServer(), phone);
+    // 通过 userinfo 取到 userId 与 org_id（同源校验基线）
+    const me = await request(app.getHttpServer())
+      .get(`${API}/sso/userinfo`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .expect(200);
+    userId = me.body.id;
+  });
+
+  afterAll(async () => {
+    await app.close();
+    try {
+      unlinkSync(dbPath);
+    } catch {
+      // 临时库清理失败不影响测试结果
+    }
+  });
+
+  /** 完整跑一遍 OIDC 授权码 → id_token 流程，返回 id_token 与 userinfo */
+  async function runOidcExchange(
+    scope: string,
+    nonce: string | null,
+  ): Promise<{
+    idToken: string | undefined;
+    accessToken: string;
+    userinfo: Record<string, unknown>;
+  }> {
+    const verifier = randomBytes(48).toString('base64url');
+    const challenge = createHash('sha256').update(verifier).digest('base64url');
+
+    const issueBody: Record<string, unknown> = {
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      state: 'oidc-state',
+      code_challenge: challenge,
+      scope,
+    };
+    if (nonce) issueBody.nonce = nonce;
+
+    const { body } = await request(app.getHttpServer())
+      .post(`${API}/sso/authorize`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send(issueBody)
+      .expect(201);
+
+    const exchange = await request(app.getHttpServer())
+      .post(`${API}/sso/token`)
+      .send({
+        grant_type: 'authorization_code',
+        code: body.code,
+        client_id: clientId,
+        code_verifier: verifier,
+        redirect_uri: redirectUri,
+      })
+      .expect(201);
+
+    const userinfo = await request(app.getHttpServer())
+      .get(`${API}/sso/userinfo`)
+      .set('Authorization', `Bearer ${exchange.body.access_token}`)
+      .expect(200);
+
+    return {
+      idToken: exchange.body.id_token,
+      accessToken: exchange.body.access_token,
+      userinfo: userinfo.body,
+    };
+  }
+
+  it('scope=openid profile 且 nonce 时签发 id_token，claim 与签名均正确', async () => {
+    const { idToken, userinfo } = await runOidcExchange(
+      'openid profile',
+      'e2e-nonce-xyz',
+    );
+
+    expect(idToken).toBeTruthy();
+    const payload = decodeJwtPayload(idToken!);
+    expect(payload.sub).toBe(userId);
+    expect(payload.aud).toBe(clientId);
+    expect(payload.iss).toBe('https://idp.e2e.test');
+    expect(payload.nonce).toBe('e2e-nonce-xyz');
+    expect(payload.exp as number).toBeGreaterThan(payload.iat as number);
+    expect(payload.org_id).toBeTruthy();
+    // userinfo 与 id_token 的 org_id 必须同源（登录态 claim 与解析 API 兜底一致）
+    expect(userinfo.org_id).toBe(payload.org_id);
+    expect(verifyIdTokenSignature(idToken!)).toBe(true);
+  });
+
+  it('不带 nonce 时 id_token 不写入 nonce claim', async () => {
+    const { idToken } = await runOidcExchange('openid', null);
+    expect(idToken).toBeTruthy();
+    const payload = decodeJwtPayload(idToken!);
+    expect(payload).not.toHaveProperty('nonce');
+    expect(payload.org_id).toBeTruthy();
+  });
+
+  it('scope 不含 openid 时不签发 id_token（纯 OAuth2）', async () => {
+    const { idToken } = await runOidcExchange('profile', 'n');
+    expect(idToken).toBeUndefined();
+  });
+
+  it('GET /.well-known/openid-configuration 暴露 discovery 文档', async () => {
+    const { body } = await request(app.getHttpServer())
+      .get('/.well-known/openid-configuration')
+      .expect(200);
+    expect(body.issuer).toBe('https://idp.e2e.test');
+    expect(body.authorization_endpoint).toBe(
+      'https://idp.e2e.test/api/v1/sso/authorize',
+    );
+    expect(body.token_endpoint).toBe('https://idp.e2e.test/api/v1/sso/token');
+    expect(body.userinfo_endpoint).toBe(
+      'https://idp.e2e.test/api/v1/sso/userinfo',
+    );
+    expect(body.id_token_signing_alg_values_supported).toEqual(['HS256']);
+    expect(body.claims_supported).toContain('org_id');
+    // HS256 对称签名不暴露 jwks_uri
+    expect(body).not.toHaveProperty('jwks_uri');
   });
 });

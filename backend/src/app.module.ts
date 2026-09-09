@@ -55,6 +55,8 @@ import { LongtaskModule } from './longtask/longtask.module';
 import { EntitlementModule } from './entitlement/entitlement.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { LlmProxyModule } from './llm-proxy/llm-proxy.module';
+import { OrgModule } from './orgs/org.module';
+import { Org } from './orgs/entities/org.entity';
 import { GatewayApiKey } from './gateway/gateway-key.entity';
 import {
   EntitlementCreditHold,
@@ -239,6 +241,8 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
         EntitlementPaymentOrder,
         // 网关 workspace key 签发/轮换/吊销（K1-K4）
         GatewayApiKey,
+        // 统一账户体系 Org 模型（2026-08-28 Owner 裁决归属）
+        Org,
       ],
       synchronize: process.env.DB_SYNC === 'true',
     }),
@@ -263,6 +267,7 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
     EntitlementModule, // AI 网关订阅权益计费（DR-12）
     GatewayModule, // 网关 workspace key 签发/轮换/吊销（K1-K4）
     LlmProxyModule, // AI 网关直连代理（BYOK 按用户配置转发并计量）
+    OrgModule, // 统一账户体系 Org 模型（org_id 计费主体键 + OIDC claim 源）
   ],
   controllers: [AppController],
   providers: [AppService, DatabaseWarmupService],

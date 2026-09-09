@@ -327,6 +327,70 @@ describe('SsoService', () => {
       expect(result.user.id).toBe('user-uuid');
     });
 
+    it('OIDC scope/nonce 持久化到授权码并在 exchangeCode 原样返回', async () => {
+      clientsRepository.findOne.mockResolvedValue(makeClient());
+
+      // 签发阶段：携带 scope + nonce
+      const issued = await service.issueAuthorizationCode(makeUser(), {
+        clientId: 'test-client',
+        redirectUri: 'https://app.example.com/callback',
+        scope: 'openid profile',
+        nonce: 'client-nonce-abc',
+      });
+
+      // 入库行包含 scope/nonce
+      expect(authCodesRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scope: 'openid profile',
+          nonce: 'client-nonce-abc',
+        }),
+      );
+
+      // 换码阶段：用同一 verifier 校验 scope/nonce 原样回传
+      const verifier = randomBytes(32).toString('base64url');
+      const challenge = createHash('sha256')
+        .update(verifier)
+        .digest('base64url');
+      authCodesRepository.findOne.mockResolvedValue(
+        codeRow({
+          codeChallenge: challenge,
+          scope: 'openid profile',
+          nonce: 'client-nonce-abc',
+        }),
+      );
+
+      const result = await service.exchangeCode({
+        ...baseRequest,
+        codeVerifier: verifier,
+      });
+
+      expect(result.scope).toBe('openid profile');
+      expect(result.nonce).toBe('client-nonce-abc');
+      // clientId 与 user 摘要一并回传，供控制器签发 id_token
+      expect(result.clientId).toBe('test-client');
+      expect(result.user.id).toBe('user-uuid');
+      expect(issued.code).toBeTruthy();
+    });
+
+    it('纯 OAuth2（无 scope/nonce）时 exchangeCode 返回 null scope/nonce', async () => {
+      clientsRepository.findOne.mockResolvedValue(makeClient());
+      const verifier = randomBytes(32).toString('base64url');
+      const challenge = createHash('sha256')
+        .update(verifier)
+        .digest('base64url');
+      authCodesRepository.findOne.mockResolvedValue(
+        codeRow({ codeChallenge: challenge, scope: null, nonce: null }),
+      );
+
+      const result = await service.exchangeCode({
+        ...baseRequest,
+        codeVerifier: verifier,
+      });
+
+      expect(result.scope).toBeNull();
+      expect(result.nonce).toBeNull();
+    });
+
     it('机密客户端 secret 错误时拒绝', async () => {
       clientsRepository.findOne.mockResolvedValue(
         makeClient({ clientSecretHash: sha256('correct-secret') }),

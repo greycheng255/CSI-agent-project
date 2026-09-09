@@ -22,6 +22,9 @@ export default function SsoAuthorize() {
   const state = searchParams.get('state');
   const codeChallenge = searchParams.get('code_challenge');
   const codeChallengeMethod = searchParams.get('code_challenge_method') || 'S256';
+  // OIDC：透传 scope（含 openid 时后端签发 id_token）与 nonce（回填 id_token）
+  const scope = searchParams.get('scope');
+  const nonce = searchParams.get('nonce');
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -55,6 +58,8 @@ export default function SsoAuthorize() {
             state,
             code_challenge: codeChallenge,
             code_challenge_method: codeChallengeMethod,
+            scope: scope || undefined,
+            nonce: nonce || undefined,
           }),
         });
 
@@ -82,7 +87,7 @@ export default function SsoAuthorize() {
     };
 
     void run();
-  }, [clientId, redirectUri, state, codeChallenge, codeChallengeMethod, navigate]);
+  }, [clientId, redirectUri, state, codeChallenge, codeChallengeMethod, scope, nonce, navigate]);
 
   return (
     <div className="mx-auto flex min-h-[calc(100vh-12rem)] max-w-md items-center px-4 py-10">

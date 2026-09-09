@@ -36,6 +36,20 @@ export class SsoAuthorizationCode {
   @Column({ name: 'code_challenge', type: 'text', nullable: true })
   codeChallenge: string | null;
 
+  /**
+   * OIDC：授权时请求的 scope（空格分隔，如 "openid profile"）。
+   * 未携带 scope 时为 null（向后兼容纯 OAuth2 流程，不签发 id_token）。
+   */
+  @Column({ name: 'scope', type: 'text', nullable: true })
+  scope: string | null;
+
+  /**
+   * OIDC：客户端在 authorize 传入的 nonce，原样回填至 id_token。
+   * 纯 OAuth2 流程下为 null。
+   */
+  @Column({ name: 'nonce', type: 'text', nullable: true })
+  nonce: string | null;
+
   @Column({
     name: 'expires_at',
     type: isSqlite ? 'datetime' : 'timestamp with time zone',
