@@ -17,6 +17,18 @@ function requireUuid(value: string, field = 'org_id'): string {
   return value;
 }
 
+/** 日期参数校验：缺失或非法 → 400（避免 new Date(undefined) → Invalid Date → TypeORM 500） */
+function parseDate(value: string | undefined, field: string): Date {
+  if (!value) {
+    throw new ContractError(400, 'INVALID_ARGUMENT', `${field} is required (ISO 8601)`);
+  }
+  const d = new Date(value);
+  if (isNaN(d.getTime())) {
+    throw new ContractError(400, 'INVALID_ARGUMENT', `${field} must be a valid ISO 8601 date`);
+  }
+  return d;
+}
+
 /**
  * AI 网关订阅权益计费 API（DR-12 平台侧）。
  * E1-E4 数据面 + 计量上报 + 权益校验 + 订阅生命周期（购买/升级/充值走平台侧界面）。
@@ -78,8 +90,8 @@ export class EntitlementController {
   ) {
     return this.service.getUsage(
       requireUuid(workspaceId, 'workspace_id'),
-      new Date(periodStart),
-      new Date(periodEnd),
+      parseDate(periodStart, 'period_start'),
+      parseDate(periodEnd, 'period_end'),
       cursor ? Number(cursor) : undefined,
       limit ? Number(limit) : 500,
     );
@@ -96,8 +108,8 @@ export class EntitlementController {
   ) {
     return this.service.getUsage(
       requireUuid(workspaceId, 'workspace_id'),
-      new Date(periodStart),
-      new Date(periodEnd),
+      parseDate(periodStart, 'period_start'),
+      parseDate(periodEnd, 'period_end'),
       cursor ? Number(cursor) : undefined,
       limit ? Number(limit) : 500,
     );
