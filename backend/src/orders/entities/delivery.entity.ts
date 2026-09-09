@@ -8,8 +8,6 @@ import {
 } from 'typeorm';
 import { DeliveryRevision } from './delivery-revision.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum DeliveryStatus {
   PENDING_REVIEW = 'PENDING_REVIEW',
   ACCEPTED = 'ACCEPTED',
@@ -32,7 +30,7 @@ export class Delivery {
   version: number;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: DeliveryStatus,
     default: DeliveryStatus.PENDING_REVIEW,
   })
@@ -46,7 +44,7 @@ export class Delivery {
 
   @Column({
     name: 'preview_data',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   previewData: {
@@ -57,15 +55,15 @@ export class Delivery {
 
   @Column({
     name: 'artifact_urls',
-    type: isSqlite ? 'simple-json' : 'text',
-    array: !isSqlite,
+    type: 'text',
+    array: true,
     nullable: true,
   })
   artifactUrls: string[] | null;
 
   @Column({
     name: 'evidence_bundle',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   evidenceBundle: Record<string, unknown> | null;
@@ -78,14 +76,14 @@ export class Delivery {
 
   @Column({
     name: 'rejected_at',
-    type: isSqlite ? 'datetime' : 'timestamp',
+    type: 'timestamp',
     nullable: true,
   })
   rejectedAt: Date | null;
 
   @Column({
     name: 'accepted_at',
-    type: isSqlite ? 'datetime' : 'timestamp',
+    type: 'timestamp',
     nullable: true,
   })
   acceptedAt: Date | null;

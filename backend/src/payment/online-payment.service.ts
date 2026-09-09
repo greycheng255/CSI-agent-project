@@ -86,15 +86,12 @@ export class OnlinePaymentService {
   }
 
   async createAlipayPayment(orderId: string, userId: string) {
-    const usePessimisticLock = this.dataSource.options.type !== 'sqlite';
     const { order, payment } = await this.dataSource.transaction(
       async (manager) => {
         const order = await manager.findOne(Order, {
           where: { id: orderId },
           relations: ['task', 'client', 'owner'],
-          ...(usePessimisticLock
-            ? { lock: { mode: 'pessimistic_write' as const } }
-            : {}),
+          lock: { mode: 'pessimistic_write' as const },
         });
         if (!order) throw new NotFoundException('订单不存在');
         const clientId = order.client?.id || order.clientUserId;
@@ -109,9 +106,7 @@ export class OnlinePaymentService {
           },
           relations: ['order'],
           order: { createdAt: 'DESC' },
-          ...(usePessimisticLock
-            ? { lock: { mode: 'pessimistic_write' as const } }
-            : {}),
+          lock: { mode: 'pessimistic_write' as const },
         });
         if (order.status !== OrderStatus.PENDING_PAYMENT) {
           if (payment?.status === PaymentStatus.PAID) {
@@ -511,7 +506,6 @@ export class OnlinePaymentService {
       throw new BadRequestException('单笔充值不超过 50000 元');
     }
 
-    const usePessimisticLock = this.dataSource.options.type !== 'sqlite';
     const payment = await this.dataSource.transaction(async (manager) => {
       // 复用未过期的 INIT 单，避免短时间重复发起
       let existing = await manager.findOne(Payment, {
@@ -522,9 +516,7 @@ export class OnlinePaymentService {
           status: PaymentStatus.INIT,
         },
         order: { createdAt: 'DESC' },
-        ...(usePessimisticLock
-          ? { lock: { mode: 'pessimistic_write' as const } }
-          : {}),
+        lock: { mode: 'pessimistic_write' as const },
       });
       if (existing && this.isExpired(existing)) {
         existing.status = PaymentStatus.FAILED;
@@ -636,7 +628,6 @@ export class OnlinePaymentService {
 
     let activatedOrder: Order | null = null;
     let rechargeTarget: { userId: string; paymentId: string; amountCny: number } | null = null;
-    const usePessimisticLock = this.dataSource.options.type !== 'sqlite';
     await this.dataSource.transaction(async (manager) => {
       // 注意：不能在这里对 Payment 同时使用 relations:['order'] + pessimistic_write，
       // 因为 RECHARGE 单的 order_id 为 null，LEFT JOIN 出来的 orders 行落到 nullable 侧，
@@ -647,18 +638,14 @@ export class OnlinePaymentService {
           outTradeNo: input.outTradeNo,
           provider: PaymentProvider.ALIPAY,
         },
-        ...(usePessimisticLock
-          ? { lock: { mode: 'pessimistic_write' as const } }
-          : {}),
+        lock: { mode: 'pessimistic_write' as const },
       });
       if (!payment) throw new Error('payment_not_found');
       if (payment.amountCny !== paidFen) throw new Error('amount_mismatch');
 
       const notification = await manager.findOne(PaymentNotification, {
         where: { id: input.logId },
-        ...(usePessimisticLock
-          ? { lock: { mode: 'pessimistic_write' as const } }
-          : {}),
+        lock: { mode: 'pessimistic_write' as const },
       });
       if (!notification) throw new Error('notification_log_not_found');
 
@@ -687,16 +674,12 @@ export class OnlinePaymentService {
         const order = await manager.findOne(Order, {
           where: { id: payment.orderId || '' },
           relations: ['task', 'client', 'owner'],
-          ...(usePessimisticLock
-            ? { lock: { mode: 'pessimistic_write' as const } }
-            : {}),
+          lock: { mode: 'pessimistic_write' as const },
         });
         if (!order) throw new Error('payment_order_not_found');
         let orderPayment = await manager.findOne(OrderPayment, {
           where: { orderId: order.id },
-          ...(usePessimisticLock
-            ? { lock: { mode: 'pessimistic_write' as const } }
-            : {}),
+          lock: { mode: 'pessimistic_write' as const },
         });
         if (!orderPayment) {
           orderPayment = manager.create(OrderPayment, {

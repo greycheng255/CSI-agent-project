@@ -5,8 +5,6 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export const WEBHOOK_OUTBOX_STATUS = ['pending', 'success', 'dead'] as const;
 export type WebhookOutboxStatus = (typeof WEBHOOK_OUTBOX_STATUS)[number];
 
@@ -28,7 +26,7 @@ export class WebhookOutbox {
   @Column({ name: 'target_url', type: 'text' })
   targetUrl: string;
 
-  @Column({ type: isSqlite ? 'simple-json' : 'jsonb' })
+  @Column({ type: 'jsonb' })
   payload: Record<string, unknown>;
 
   @Column({ type: 'varchar', length: 16, default: 'pending' })
@@ -39,7 +37,7 @@ export class WebhookOutbox {
 
   @Column({
     name: 'next_attempt_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   nextAttemptAt: Date | null;

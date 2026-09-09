@@ -127,14 +127,9 @@ export class MetricsService {
     };
   }
 
-  /** 本地开发库为 SQLite（app.module 启动时按 DATABASE_PATH/DB_HOST 设置 DB_TYPE） */
-  private readonly isSqlite = process.env.DB_TYPE === 'sqlite';
-
-  /** 按天分组的日期表达式：PG 用 DATE_TRUNC，SQLite 用 strftime（本地开发库兼容） */
+  /** 按天分组的日期表达式：PG 用 DATE_TRUNC */
   private dayExpr(column: string): string {
-    return this.isSqlite
-      ? `strftime('%Y-%m-%d', ${column})`
-      : `DATE_TRUNC('day', ${column})`;
+    return `DATE_TRUNC('day', ${column})`;
   }
 
   /**

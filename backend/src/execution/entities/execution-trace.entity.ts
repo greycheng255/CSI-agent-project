@@ -6,8 +6,6 @@ import {
 } from 'typeorm';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 // 执行追踪记录（用于时间线）
 @Entity('execution_traces')
 export class ExecutionTrace {

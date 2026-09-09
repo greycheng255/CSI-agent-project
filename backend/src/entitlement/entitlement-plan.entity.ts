@@ -7,8 +7,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 /**
  * 订阅套餐（DR-12 / PRD §4.6）。
  * LLM token 额度按订阅周期滚动重置；-1 = 无限（Local 语义）。
@@ -33,7 +31,7 @@ export class EntitlementPlan {
   periodDays: number;
 
   /** 周期总量 token 额度（-1 = 无限） */
-  @Column({ name: 'total_tokens', type: isSqlite ? 'bigint' : 'bigint', default: -1 })
+  @Column({ name: 'total_tokens', type: 'bigint', default: -1 })
   totalTokens: number;
 
   /**
@@ -54,7 +52,7 @@ export class EntitlementPlan {
   /** 可部署 RuntimeProfile/Version 范围（"*" = 通配） */
   @Column({
     name: 'runtime_profiles',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     default: () => "'[\"*\"]'",
   })
   runtimeProfiles: string[];
@@ -76,7 +74,7 @@ export class EntitlementPlanModel {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'plan_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'plan_id', type: 'uuid' })
   planId: string;
 
   /** 平台模型标识（与 L1 chat 的 model 参数同一命名空间） */

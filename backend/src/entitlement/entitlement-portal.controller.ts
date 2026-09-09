@@ -89,11 +89,8 @@ export class EntitlementPortalController {
     }
   }
 
-  /** 按天聚合表达式：SQLite 用 date(col,'localtime')，PG 用 AT TIME ZONE 转 date */
   private readonly usageDayExpr =
-    process.env.DB_TYPE === 'sqlite'
-      ? "date(r.created_at, 'localtime')"
-      : "(r.created_at AT TIME ZONE 'Asia/Shanghai')::date";
+    "(r.created_at AT TIME ZONE 'Asia/Shanghai')::date";
 
   /** 我的用量账单（近 N 天滚动，按天聚合 + 汇总） */
   @Get('my/usage')

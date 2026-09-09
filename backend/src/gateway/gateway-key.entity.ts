@@ -7,8 +7,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export const GATEWAY_KEY_STATUS = ['active', 'rotated', 'revoked'] as const;
 export type GatewayKeyStatus = (typeof GATEWAY_KEY_STATUS)[number];
 
@@ -27,10 +25,10 @@ export class GatewayApiKey {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'org_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'org_id', type: 'uuid' })
   orgId: string;
 
-  @Column({ name: 'workspace_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'workspace_id', type: 'uuid' })
   workspaceId: string;
 
   /** 公开短标识（wk_ + 8 hex），供管理面/日志引用，不用于鉴权 */
@@ -55,7 +53,7 @@ export class GatewayApiKey {
   @Column({ name: 'rotated_from_id', type: 'varchar', length: 64, nullable: true })
   rotatedFromId: string | null;
 
-  @Column({ name: 'revoked_at', type: isSqlite ? 'datetime' : 'timestamp with time zone', nullable: true })
+  @Column({ name: 'revoked_at', type: 'timestamp with time zone', nullable: true })
   revokedAt: Date | null;
 
   @CreateDateColumn({ name: 'issued_at' })

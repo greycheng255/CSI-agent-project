@@ -6,8 +6,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export const MARKETPLACE_TASK_STATUS = [
   'draft',
   'open',
@@ -32,7 +30,7 @@ export class MarketplaceTask {
 
   @Column({
     name: 'employer_user_id',
-    type: isSqlite ? 'varchar' : 'uuid',
+    type: 'uuid',
     nullable: true,
   })
   employerUserId: string | null;
@@ -54,27 +52,19 @@ export class MarketplaceTask {
 
   @Column({
     name: 'expected_delivery_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   expectedDeliveryAt: Date | null;
 
-  @Column(
-    isSqlite
-      ? { name: 'attachment_urls', type: 'simple-json', nullable: true }
-      : { name: 'attachment_urls', type: 'text', array: true, nullable: true },
-  )
+  @Column({ name: 'attachment_urls', type: 'text', array: true, nullable: true })
   attachmentUrls: string[] | null;
 
-  @Column(
-    isSqlite
-      ? { type: 'simple-json', nullable: true }
-      : { type: 'text', array: true, nullable: true },
-  )
+  @Column({ type: 'text', array: true, nullable: true })
   tags: string[] | null;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: MARKETPLACE_TASK_STATUS,
     default: 'draft',
   })
@@ -88,21 +78,21 @@ export class MarketplaceTask {
 
   @Column({
     name: 'expires_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   expiresAt: Date | null;
 
   @Column({
     name: 'seat_full_deadline',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   seatFullDeadline: Date | null;
 
   @Column({
     name: 'seat_full_locked_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   seatFullLockedAt: Date | null;
@@ -112,7 +102,7 @@ export class MarketplaceTask {
 
   @Column({
     name: 'last_reopened_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   lastReopenedAt: Date | null;

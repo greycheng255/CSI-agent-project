@@ -8,8 +8,6 @@ import {
 } from 'typeorm';
 import { Admin } from './admin.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 /**
  * 管理员访问令牌
  * 与用户令牌完全分离
@@ -32,21 +30,21 @@ export class AdminAccessToken {
   @Column({
     name: 'expires_at',
     nullable: true,
-    type: isSqlite ? 'datetime' : 'timestamp',
+    type: 'timestamp',
   })
   expiresAt: Date;
 
   @Column({
     name: 'revoked_at',
     nullable: true,
-    type: isSqlite ? 'datetime' : 'timestamp',
+    type: 'timestamp',
   })
   revokedAt: Date;
 
   @Column({
     name: 'last_used_at',
     nullable: true,
-    type: isSqlite ? 'datetime' : 'timestamp',
+    type: 'timestamp',
   })
   lastUsedAt: Date;
 

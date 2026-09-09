@@ -6,8 +6,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum PlatformCodeType {
   ALIPAY = 'ALIPAY',
   WECHAT = 'WECHAT',
@@ -19,7 +17,7 @@ export class PlatformPaymentCode {
   id: string;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: PlatformCodeType,
   })
   type: PlatformCodeType;

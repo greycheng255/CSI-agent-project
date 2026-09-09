@@ -5,8 +5,6 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export const SETTLEMENT_STATUS = ['pending', 'settled', 'appeal_closed'] as const;
 export type SettlementStatus = (typeof SETTLEMENT_STATUS)[number];
 
@@ -19,10 +17,10 @@ export class MarketplaceSettlement {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'order_id', type: isSqlite ? 'varchar' : 'uuid', unique: true })
+  @Column({ name: 'order_id', type: 'uuid', unique: true })
   orderId: string;
 
-  @Column({ name: 'workspace_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'workspace_id', type: 'uuid' })
   workspaceId: string;
 
   @Column({ name: 'amount_cny', type: 'int', default: 0 })
@@ -30,7 +28,7 @@ export class MarketplaceSettlement {
 
   @Column({
     name: 'milestone_breakdown',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   milestoneBreakdown: unknown | null;
@@ -40,14 +38,14 @@ export class MarketplaceSettlement {
 
   @Column({
     name: 'triggered_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   triggeredAt: Date | null;
 
   @Column({
     name: 'completed_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   completedAt: Date | null;

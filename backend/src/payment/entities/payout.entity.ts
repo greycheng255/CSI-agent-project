@@ -8,8 +8,6 @@ import {
 } from 'typeorm';
 import { Order } from '../../orders/entities/order.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum PayoutStatus {
   INIT = 'INIT',
   SUCCESS = 'SUCCESS',
@@ -35,7 +33,7 @@ export class Payout {
   providerRef: string | null;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: PayoutStatus,
     default: PayoutStatus.INIT,
   })
@@ -49,7 +47,7 @@ export class Payout {
 
   @Column({
     name: 'completed_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   completedAt: Date | null;

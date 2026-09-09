@@ -6,8 +6,6 @@ import {
   Unique,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export const MARKETPLACE_BID_STATUS = [
   'submitted',
   'won',
@@ -30,13 +28,13 @@ export class MarketplaceBid {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'marketplace_task_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'marketplace_task_id', type: 'uuid' })
   marketplaceTaskId: string;
 
   @Column({ name: 'bid_round', type: 'int' })
   bidRound: number;
 
-  @Column({ name: 'workspace_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'workspace_id', type: 'uuid' })
   workspaceId: string;
 
   /** 竞标席位快照（提交时从 workspace 档案取，席位页免逐条查询） */
@@ -54,7 +52,7 @@ export class MarketplaceBid {
 
   @Column({
     name: 'estimated_delivery_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   estimatedDeliveryAt: Date | null;

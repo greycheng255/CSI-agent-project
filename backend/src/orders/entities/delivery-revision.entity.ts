@@ -8,8 +8,6 @@ import {
 } from 'typeorm';
 import { Delivery } from './delivery.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum RevisionType {
   SUBMIT = 'SUBMIT',           // 初始提交
   MODIFY = 'MODIFY',           // 修改后重新提交
@@ -26,7 +24,7 @@ export class DeliveryRevision {
   deliveryId: string;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: RevisionType,
   })
   type: RevisionType;
@@ -42,15 +40,15 @@ export class DeliveryRevision {
 
   @Column({
     name: 'artifact_urls',
-    type: process.env.DB_TYPE === 'sqlite' ? 'simple-json' : 'text',
-    array: process.env.DB_TYPE !== 'sqlite',
+    type: 'text',
+    array: true,
     nullable: true,
   })
   artifactUrls: string[] | null;
 
   @Column({
     name: 'evidence_bundle',
-    type: process.env.DB_TYPE === 'sqlite' ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   evidenceBundle: Record<string, unknown> | null;

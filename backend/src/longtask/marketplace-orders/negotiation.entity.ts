@@ -5,8 +5,6 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export const NEGOTIATION_STATUS = ['open', 'resolved'] as const;
 export type NegotiationStatus = (typeof NEGOTIATION_STATUS)[number];
 
@@ -20,7 +18,7 @@ export class MarketplaceRevisionNegotiation {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'order_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'order_id', type: 'uuid' })
   orderId: string;
 
   @Column({ type: 'varchar', length: 16, default: 'open' })
@@ -31,7 +29,7 @@ export class MarketplaceRevisionNegotiation {
 
   @Column({
     name: 'deadline',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   deadline: Date | null;

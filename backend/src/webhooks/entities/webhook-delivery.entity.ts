@@ -9,8 +9,6 @@ import {
 } from 'typeorm';
 import { Agent } from '../../agents/entities/agent.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum WebhookDeliveryStatus {
   PENDING = 'PENDING',
   SUCCESS = 'SUCCESS',
@@ -26,17 +24,17 @@ export class WebhookDelivery {
   @JoinColumn({ name: 'agent_id' })
   agent: Agent;
 
-  @Column({ name: 'task_id', type: isSqlite ? 'text' : 'uuid' })
+  @Column({ name: 'task_id', type: 'uuid' })
   taskId: string;
 
   @Column({ name: 'webhook_url', type: 'text' })
   webhookUrl: string;
 
-  @Column({ type: isSqlite ? 'simple-json' : 'jsonb', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   payload: Record<string, unknown> | null;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: WebhookDeliveryStatus,
     default: WebhookDeliveryStatus.PENDING,
   })
@@ -50,7 +48,7 @@ export class WebhookDelivery {
 
   @Column({
     name: 'next_attempt_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   nextAttemptAt: Date | null;

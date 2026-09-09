@@ -7,8 +7,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export const SUBSCRIPTION_STATUSES = [
   'active',
   'trial',
@@ -27,23 +25,23 @@ export class OrgSubscription {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'org_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'org_id', type: 'uuid' })
   orgId: string;
 
-  @Column({ name: 'plan_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'plan_id', type: 'uuid' })
   planId: string;
 
   @Column({ type: 'varchar', length: 32, default: 'active' })
   status: SubscriptionStatus;
 
-  @Column({ name: 'period_start', type: isSqlite ? 'datetime' : 'timestamptz' })
+  @Column({ name: 'period_start', type: 'timestamptz' })
   periodStart: Date;
 
-  @Column({ name: 'period_end', type: isSqlite ? 'datetime' : 'timestamptz' })
+  @Column({ name: 'period_end', type: 'timestamptz' })
   periodEnd: Date;
 
   /** 降级目标套餐（下个计费周期生效） */
-  @Column({ name: 'pending_plan_id', type: isSqlite ? 'varchar' : 'uuid', nullable: true })
+  @Column({ name: 'pending_plan_id', type: 'uuid', nullable: true })
   pendingPlanId: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
@@ -60,16 +58,16 @@ export class EntitlementQuotaPeriod {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'org_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'org_id', type: 'uuid' })
   orgId: string;
 
-  @Column({ name: 'subscription_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'subscription_id', type: 'uuid' })
   subscriptionId: string;
 
-  @Column({ name: 'period_start', type: isSqlite ? 'datetime' : 'timestamptz' })
+  @Column({ name: 'period_start', type: 'timestamptz' })
   periodStart: Date;
 
-  @Column({ name: 'period_end', type: isSqlite ? 'datetime' : 'timestamptz' })
+  @Column({ name: 'period_end', type: 'timestamptz' })
   periodEnd: Date;
 
   /** 周期总量额度（-1 = 无限） */
@@ -97,7 +95,7 @@ export class EntitlementFreeGrant {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'org_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'org_id', type: 'uuid' })
   orgId: string;
 
   @Column({ name: 'total_tokens', type: 'bigint' })
@@ -113,7 +111,7 @@ export class EntitlementFreeGrant {
   @Column({ name: 'used_credits', type: 'bigint', default: 0 })
   usedCredits: number;
 
-  @Column({ name: 'valid_until', type: isSqlite ? 'datetime' : 'timestamptz' })
+  @Column({ name: 'valid_until', type: 'timestamptz' })
   validUntil: Date;
 
   @CreateDateColumn({ name: 'created_at' })
@@ -133,10 +131,10 @@ export class EntitlementUsageRecord {
   @PrimaryGeneratedColumn('increment')
   id: number;
 
-  @Column({ name: 'org_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'org_id', type: 'uuid' })
   orgId: string;
 
-  @Column({ name: 'workspace_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'workspace_id', type: 'uuid' })
   workspaceId: string;
 
   /** 关联 agent_task_queue run id（空 = 无法归属 run，滥用检测信号） */
@@ -181,10 +179,10 @@ export class EntitlementPaymentOrder {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'org_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'org_id', type: 'uuid' })
   orgId: string;
 
-  @Column({ name: 'plan_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'plan_id', type: 'uuid' })
   planId: string;
 
   /** 支付金额（整数分） */
@@ -203,7 +201,7 @@ export class EntitlementPaymentOrder {
   @Column({ name: 'channel_trade_no', type: 'varchar', length: 64, nullable: true })
   channelTradeNo: string | null;
 
-  @Column({ name: 'paid_at', type: isSqlite ? 'datetime' : 'timestamptz', nullable: true })
+  @Column({ name: 'paid_at', type: 'timestamptz', nullable: true })
   paidAt: Date | null;
 
   @CreateDateColumn({ name: 'created_at' })
@@ -224,14 +222,14 @@ export class EntitlementCreditHold {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'org_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'org_id', type: 'uuid' })
   orgId: string;
 
   /** OneLLM 媒体任务 task_id，幂等键 */
   @Column({ name: 'task_id', type: 'varchar', length: 64, unique: true })
   taskId: string;
 
-  @Column({ name: 'workspace_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'workspace_id', type: 'uuid' })
   workspaceId: string;
 
   @Column({ name: 'agent_run_id', type: 'varchar', length: 64, nullable: true })

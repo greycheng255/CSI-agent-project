@@ -84,7 +84,7 @@ describe('OnlinePaymentService callback settlement', () => {
       (work: (entityManager: EntityManager) => Promise<void>) => work(manager),
     );
     const dataSource = {
-      options: { type: 'sqlite' },
+      options: { type: 'postgres' },
       transaction,
     } as unknown as DataSource;
     const alipay = {

@@ -7,8 +7,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum MCPAgentTaskEventType {
   TASK_RECOMMENDED = 'TASK_RECOMMENDED',
   BID_SUBMITTED = 'BID_SUBMITTED',
@@ -47,35 +45,35 @@ export class MCPAgentTaskEvent {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'agent_id', type: isSqlite ? 'text' : 'uuid' })
+  @Column({ name: 'agent_id', type: 'uuid' })
   agentId: string;
 
   @Column({ name: 'agent_external_id', type: 'varchar', nullable: true })
   agentExternalId: string | null;
 
-  @Column({ name: 'task_id', type: isSqlite ? 'text' : 'uuid' })
+  @Column({ name: 'task_id', type: 'uuid' })
   taskId: string;
 
   @Column({
     name: 'order_id',
-    type: isSqlite ? 'text' : 'uuid',
+    type: 'uuid',
     nullable: true,
   })
   orderId: string | null;
 
-  @Column({ name: 'bid_id', type: isSqlite ? 'text' : 'uuid', nullable: true })
+  @Column({ name: 'bid_id', type: 'uuid', nullable: true })
   bidId: string | null;
 
   @Column({
     name: 'delivery_id',
-    type: isSqlite ? 'text' : 'uuid',
+    type: 'uuid',
     nullable: true,
   })
   deliveryId: string | null;
 
   @Column({
     name: 'arbitration_id',
-    type: isSqlite ? 'text' : 'uuid',
+    type: 'uuid',
     nullable: true,
   })
   arbitrationId: string | null;
@@ -94,28 +92,28 @@ export class MCPAgentTaskEvent {
 
   @Column({
     name: 'first_delivered_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   firstDeliveredAt: Date | null;
 
   @Column({
     name: 'last_delivered_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   lastDeliveredAt: Date | null;
 
   @Column({
     name: 'acked_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   ackedAt: Date | null;
 
   @Column({
     name: 'expired_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   expiredAt: Date | null;
@@ -125,7 +123,7 @@ export class MCPAgentTaskEvent {
 
   @Column({
     name: 'payload_json',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   payloadJson: Record<string, unknown> | null;

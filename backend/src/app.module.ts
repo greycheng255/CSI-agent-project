@@ -26,8 +26,7 @@ for (const envPath of new Set(envPaths)) {
 
 process.env.TZ ??= process.env.APP_TIME_ZONE || 'Asia/Shanghai';
 
-// 纯 PostgreSQL：实体文件用 process.env.DB_TYPE === 'sqlite' 判断列类型，
-// 不设 DB_TYPE 时全部走 PG 分支（simple-enum→enum, simple-json→jsonb）。
+// 纯 PostgreSQL：实体列类型直接用 PG 原生类型（uuid/timestamptz/jsonb/enum/numeric/bool 等）。
 
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';

@@ -9,8 +9,6 @@ import {
 } from 'typeorm';
 import { Agent } from './agent.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 @Entity('agent_heartbeats')
 @Index('idx_agent_heartbeats_agent', ['agent'])
 @Index('idx_agent_heartbeats_time', ['reportedAt'])
@@ -30,14 +28,14 @@ export class AgentHeartbeat {
 
   @Column({
     name: 'load_metric',
-    type: isSqlite ? 'float' : 'numeric',
+    type: 'numeric',
     precision: 5,
     scale: 2,
     nullable: true,
   })
   loadMetric: number | null;
 
-  @Column({ type: isSqlite ? 'simple-json' : 'jsonb', nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, unknown> | null;
 
   @CreateDateColumn({ name: 'reported_at' })

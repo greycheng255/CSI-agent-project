@@ -10,8 +10,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 /**
  * 管理员权限级别
  */
@@ -52,14 +50,14 @@ export class Admin {
   passwordHash: string;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: AdminLevel,
     default: AdminLevel.ADMIN,
   })
   level: AdminLevel;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: AdminStatus,
     default: AdminStatus.ACTIVE,
   })
@@ -71,7 +69,7 @@ export class Admin {
   @Column({
     name: 'last_login_at',
     nullable: true,
-    type: isSqlite ? 'datetime' : 'timestamp',
+    type: 'timestamp',
   })
   lastLoginAt: Date;
 

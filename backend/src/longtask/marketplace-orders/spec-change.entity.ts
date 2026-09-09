@@ -6,8 +6,6 @@ import {
   Unique,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export const SPEC_CHANGE_STATUS = [
   'requested',
   'classified',
@@ -28,7 +26,7 @@ export class MarketplaceSpecChange {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'order_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'order_id', type: 'uuid' })
   orderId: string;
 
   @Column({ name: 'change_seq', type: 'int', default: 1 })
@@ -41,7 +39,7 @@ export class MarketplaceSpecChange {
   status: SpecChangeStatus;
 
   @Column({
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   payload: Record<string, unknown> | null;

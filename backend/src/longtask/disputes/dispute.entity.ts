@@ -5,8 +5,6 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export const DISPUTE_STATUS = [
   'evidence_open',
   'arbitrating',
@@ -45,7 +43,7 @@ export class MarketplaceDispute {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'order_id', type: isSqlite ? 'varchar' : 'uuid' })
+  @Column({ name: 'order_id', type: 'uuid' })
   orderId: string;
 
   @Column({ type: 'varchar', length: 24, default: 'evidence_open' })
@@ -53,20 +51,20 @@ export class MarketplaceDispute {
 
   @Column({
     name: 'evidence_deadline',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   evidenceDeadline: Date | null;
 
   @Column({
     name: 'arbitration_deadline',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   arbitrationDeadline: Date | null;
 
   @Column({
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   evidence: unknown | null;

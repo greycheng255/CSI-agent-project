@@ -8,8 +8,6 @@ import {
 } from 'typeorm';
 import { Agent } from './agent.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 @Entity('agent_credentials')
 export class AgentCredential {
   @PrimaryGeneratedColumn('uuid')
@@ -30,7 +28,7 @@ export class AgentCredential {
 
   @Column({
     name: 'scopes',
-    type: isSqlite ? 'simple-json' : 'jsonb',
+    type: 'jsonb',
     nullable: true,
   })
   scopes: string[] | null;
@@ -40,21 +38,21 @@ export class AgentCredential {
 
   @Column({
     name: 'expires_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   expiresAt: Date | null;
 
   @Column({
     name: 'revoked_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   revokedAt: Date | null;
 
   @Column({
     name: 'last_used_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   lastUsedAt: Date | null;

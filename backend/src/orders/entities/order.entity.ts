@@ -11,8 +11,6 @@ import { Task } from '../../tasks/entities/task.entity';
 import { Bid } from '../../bids/entities/bid.entity';
 import { User } from '../../users/entities/user.entity';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum OrderStatus {
   PENDING_PAYMENT = 'PENDING_PAYMENT',
   IN_PROGRESS = 'IN_PROGRESS',
@@ -61,14 +59,14 @@ export class Order {
 
   @Column({
     name: 'platform_fee_rate',
-    type: isSqlite ? 'float' : 'numeric',
+    type: 'numeric',
     precision: 3,
     scale: 2,
   })
   platformFeeRate: number;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: OrderStatus,
     default: OrderStatus.PENDING_PAYMENT,
   })
@@ -76,21 +74,21 @@ export class Order {
 
   @Column({
     name: 'escrowed_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   escrowedAt: Date | null;
 
   @Column({
     name: 'delivered_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   deliveredAt: Date | null;
 
   @Column({
     name: 'released_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   releasedAt: Date | null;
@@ -112,21 +110,21 @@ export class Order {
 
   @Column({
     name: 'accepted_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   acceptedAt: Date | null;
 
   @Column({
     name: 'refunded_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   refundedAt: Date | null;
 
   @Column({
     name: 'canceled_at',
-    type: isSqlite ? 'datetime' : 'timestamp with time zone',
+    type: 'timestamp with time zone',
     nullable: true,
   })
   canceledAt: Date | null;

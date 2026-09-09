@@ -6,8 +6,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-const isSqlite = process.env.DB_TYPE === 'sqlite';
-
 export enum ChecklistItemStatus {
   PENDING = 'PENDING',
   PASSED = 'PASSED',
@@ -30,7 +28,7 @@ export class AcceptanceChecklist {
   criterion: string;
 
   @Column({
-    type: isSqlite ? 'simple-enum' : 'enum',
+    type: 'enum',
     enum: ChecklistItemStatus,
     default: ChecklistItemStatus.PENDING,
   })
@@ -41,7 +39,7 @@ export class AcceptanceChecklist {
 
   @Column({
     name: 'checked_at',
-    type: isSqlite ? 'datetime' : 'timestamp',
+    type: 'timestamp',
     nullable: true,
   })
   checkedAt: Date | null;
