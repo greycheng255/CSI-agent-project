@@ -29,6 +29,7 @@ describe('RevisionNegotiationService（T18：2 天窗口 + 4 选项默认 C）',
   });
 
   it('启动 2 天协商窗口并投递 started 事件', async () => {
+    mockOrdersRepo.findOne.mockResolvedValueOnce({ id: 'o1' });
     mockNegotiationRepo.create.mockImplementation((v) => v);
     mockNegotiationRepo.save.mockImplementation((v) => ({ ...v, id: 'n1' }));
 

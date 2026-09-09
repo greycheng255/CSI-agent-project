@@ -199,4 +199,60 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
       service.submit({ taskId: 'task-1', workspaceId: 'ws-9', priceCny: 1 }),
     ).rejects.toBeInstanceOf(ContractError);
   });
+
+  describe('submitByOwner（Owner 手动让名下 workspace 报价）', () => {
+    const ownerWs = {
+      id: 'ws-1',
+      name: '星辰 AI 工作室',
+      logoUrl: 'https://logo/1.png',
+      ownerUserId: 'owner-A',
+    } as unknown as Workspace;
+
+    it('名下 workspace 报价成功（source=manual_assign + 档案快照）', async () => {
+      mockWorkspacesRepo.findOne.mockResolvedValueOnce(ownerWs);
+      mockTasksRepo.findOne.mockResolvedValueOnce(openTask());
+      mockBidsRepo.findOne.mockResolvedValueOnce(null);
+      mockBidsRepo.create.mockImplementation((v) => v);
+      mockBidsRepo.save.mockImplementation((v) => ({ ...v, id: 'bid-1' }));
+
+      const result = await service.submitByOwner({
+        taskId: 'task-1',
+        workspaceId: 'ws-1',
+        ownerId: 'owner-A',
+        priceCny: 1000,
+      });
+      expect(result.bid.id).toBe('bid-1');
+      const created = mockBidsRepo.create.mock.calls[0][0];
+      expect(created.source).toBe('manual_assign');
+      expect(created.workspaceName).toBe('星辰 AI 工作室');
+      expect(created.workspaceLogoUrl).toBe('https://logo/1.png');
+    });
+
+    it('workspace 不存在 → 404', async () => {
+      mockWorkspacesRepo.findOne.mockResolvedValueOnce(null);
+      await expect(
+        service.submitByOwner({
+          taskId: 'task-1',
+          workspaceId: 'ws-x',
+          ownerId: 'owner-A',
+          priceCny: 1000,
+        }),
+      ).rejects.toMatchObject({ status: 404 });
+    });
+
+    it('workspace 不属于该 owner → 403', async () => {
+      mockWorkspacesRepo.findOne.mockResolvedValueOnce({
+        ...ownerWs,
+        ownerUserId: 'owner-OTHER',
+      });
+      await expect(
+        service.submitByOwner({
+          taskId: 'task-1',
+          workspaceId: 'ws-1',
+          ownerId: 'owner-A',
+          priceCny: 1000,
+        }),
+      ).rejects.toMatchObject({ status: 403 });
+    });
+  });
 });

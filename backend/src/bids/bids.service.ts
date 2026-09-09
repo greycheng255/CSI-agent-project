@@ -63,15 +63,17 @@ export class BidsService {
     return expired.length;
   }
 
-  private assertAgentCanBid(agent: Agent) {
+  private assertAgentCanBid(agent: Agent, opts?: { allowOffline?: boolean }) {
     if (agent.approvalStatus !== AgentApprovalStatus.APPROVED || agent.isActive === false) {
       throw new BadRequestException('Agent is not approved or active');
     }
-    if (
-      agent.runtimeStatus !== AgentRuntimeStatus.ONLINE &&
-      agent.runtimeStatus !== AgentRuntimeStatus.DEGRADED
-    ) {
-      throw new BadRequestException('Agent is not online or degraded');
+    if (!opts?.allowOffline) {
+      if (
+        agent.runtimeStatus !== AgentRuntimeStatus.ONLINE &&
+        agent.runtimeStatus !== AgentRuntimeStatus.DEGRADED
+      ) {
+        throw new BadRequestException('Agent is not online or degraded');
+      }
     }
   }
 
@@ -88,7 +90,10 @@ export class BidsService {
     if (data.riskNotes !== undefined) bid.riskNotes = data.riskNotes;
   }
 
-  async create(data: CreateBidDto) {
+  async create(
+    data: CreateBidDto,
+    opts?: { allowOffline?: boolean },
+  ) {
     const task = await this.tasksRepository.findOne({
       where: { id: data.taskId },
     });
@@ -104,7 +109,7 @@ export class BidsService {
       where: { id: data.agentId },
     });
     if (!agent) throw new NotFoundException('Agent not found');
-    this.assertAgentCanBid(agent);
+    this.assertAgentCanBid(agent, opts);
 
     const expiresAt =
       data.expiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -144,6 +149,25 @@ export class BidsService {
     });
 
     return this.bidsRepository.save(bid);
+  }
+
+  /**
+   * Owner 手动让名下 agent 参与报价（不等自动轮询/派单窗口）。
+   * 归属校验：agent 必须属于该 owner；手动 = 显式意图，允许 agent 离线（已审核+启用即可）。
+   */
+  async createByOwner(ownerId: string, data: CreateBidDto) {
+    if (!data.agentId) {
+      throw new BadRequestException('agentId is required');
+    }
+    const agent = await this.agentsRepository.findOne({
+      where: { id: data.agentId },
+      relations: ['owner'],
+    });
+    if (!agent) throw new NotFoundException('Agent not found');
+    if (!agent.owner || agent.owner.id !== ownerId) {
+      throw new BadRequestException('Agent does not belong to this owner');
+    }
+    return this.create(data, { allowOffline: true });
   }
 
   async findByTask(taskId: string) {

@@ -15,6 +15,7 @@ import { MarketplaceSettlement } from './settlements/settlement.entity';
 import { SettlementsService } from './settlements/settlements.service';
 import { MarketplaceBid } from './marketplace-bids/marketplace-bid.entity';
 import { MarketplaceBidsService } from './marketplace-bids/marketplace-bids.service';
+import { OwnerMarketplaceBidsController } from './marketplace-bids/owner-marketplace-bids.controller';
 import { SelectionService } from './marketplace-bids/selection.service';
 import { MarketplaceCancelRequest } from './marketplace-orders/cancel-request.entity';
 import { CancelSkeletonService } from './marketplace-orders/cancel-skeleton.service';
@@ -37,6 +38,7 @@ import { WorkspacesController } from './workspaces/workspaces.controller';
 import { WorkspacesService } from './workspaces/workspaces.service';
 import { WorkspaceSyncService } from './workspaces/workspace-sync.service';
 import { WorkspaceWebhookController } from './workspaces/workspace-webhook.controller';
+import { AuthModule } from '../auth/auth.module';
 
 /**
  * 长任务域模块（阶段一 + 阶段二）。
@@ -44,6 +46,7 @@ import { WorkspaceWebhookController } from './workspaces/workspace-webhook.contr
  */
 @Module({
   imports: [
+    AuthModule,
     TypeOrmModule.forFeature([
       Workspace,
       MarketplaceTask,
@@ -66,6 +69,7 @@ import { WorkspaceWebhookController } from './workspaces/workspace-webhook.contr
     WorkspaceWebhookController,
     MarketplaceTasksController,
     MarketplaceContractController,
+    OwnerMarketplaceBidsController,
   ],
   providers: [
     WorkspacesService,

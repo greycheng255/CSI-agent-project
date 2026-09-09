@@ -151,6 +151,47 @@ export class MarketplaceBidsService {
     };
   }
 
+  /**
+   * Owner 手动报价（平台前端，不等 Console 5min pull / 自动派单窗口）：
+   * 校验 workspace 归属当前登录 owner，再走标准 submit（source=manual_assign）占席位。
+   */
+  async submitByOwner(input: {
+    taskId: string;
+    workspaceId: string;
+    ownerId: string;
+    priceCny: number;
+    planSummary?: string | null;
+    estimatedDeliveryAt?: Date | string | null;
+  }): Promise<SubmitBidResult> {
+    const ws = await this.workspacesRepo.findOne({
+      where: { id: input.workspaceId },
+    });
+    if (!ws) {
+      throw new ContractError(
+        404,
+        CONTRACT_ERROR_CODE.NOT_FOUND_WORKSPACE,
+        `workspace not found: ${input.workspaceId}`,
+      );
+    }
+    if (!ws.ownerUserId || ws.ownerUserId !== input.ownerId) {
+      throw new ContractError(
+        403,
+        CONTRACT_ERROR_CODE.FORBIDDEN,
+        'workspace does not belong to this owner',
+      );
+    }
+    return this.submit({
+      taskId: input.taskId,
+      workspaceId: input.workspaceId,
+      priceCny: input.priceCny,
+      planSummary: input.planSummary ?? null,
+      estimatedDeliveryAt: input.estimatedDeliveryAt ?? null,
+      source: 'manual_assign',
+      workspaceName: ws.name,
+      workspaceAvatarUrl: ws.logoUrl ?? undefined,
+    });
+  }
+
   /** 当前轮已提交竞标（供选标/驳回/大厅展示） */
   async listSubmitted(taskId: string): Promise<MarketplaceBid[]> {
     const task = await this.tasksRepo.findOne({ where: { id: taskId } });
