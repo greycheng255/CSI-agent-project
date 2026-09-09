@@ -19,6 +19,15 @@ export class MarketplaceTasksController {
     return this.marketplaceTasksService.create(body);
   }
 
+  /** 一步创建并发布：draft → open（前端单次调用，避免 draft 中间态） */
+  @Post('create-and-publish')
+  createAndPublish(
+    @Body() body: CreateMarketplaceTaskInput & { ttlDays?: number },
+  ) {
+    const { ttlDays, ...input } = body;
+    return this.marketplaceTasksService.createAndPublish(input, ttlDays);
+  }
+
   @Post(':id/publish')
   publish(@Param('id') id: string, @Body() body: { ttlDays?: number }) {
     return this.marketplaceTasksService.publish(id, body.ttlDays);

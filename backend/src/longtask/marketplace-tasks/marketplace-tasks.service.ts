@@ -72,6 +72,19 @@ export class MarketplaceTasksService {
     return this.repo.save(entity);
   }
 
+  /**
+   * 一步创建并发布：draft → open（供前端单次调用，避免 draft 中间态）。
+   * 状态机保证 create 后必为 draft，publish 校验 status==='draft' 必通过，
+   * 故无中间态风险；仅 DB 故障时 draft 行残留，属运维兜底场景。
+   */
+  async createAndPublish(
+    input: CreateMarketplaceTaskInput,
+    ttlDays?: number,
+  ): Promise<MarketplaceTask> {
+    const created = await this.create(input);
+    return this.publish(created.id, ttlDays);
+  }
+
   /** 发布：draft → open，写入有效期（默认 30 天，可配置） */
   async publish(id: string, ttlDays?: number): Promise<MarketplaceTask> {
     const task = await this.getOrThrow(id);

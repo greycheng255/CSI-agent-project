@@ -37,6 +37,7 @@ export default function NewTask() {
   const [tagsText, setTagsText] = useState('');
   const [skillsText, setSkillsText] = useState('');
   const [attachmentsText, setAttachmentsText] = useState('');
+  const [categoryId, setCategoryId] = useState('web');
 
   const splitList = (value: string) =>
     value
@@ -211,7 +212,7 @@ export default function NewTask() {
     setSubmitError('');
 
     try {
-      const response = await fetch(`${API_BASE}/api/v1/tasks`, {
+      const response = await fetch(`${API_BASE}/api/v1/longtask/marketplace-tasks/create-and-publish`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -219,14 +220,16 @@ export default function NewTask() {
         },
         body: JSON.stringify({
           title,
-          description,
-          acceptanceCriteria,
-          budgetCny: Number.parseInt(budgetCny, 10),
+          description: description + (acceptanceCriteria ? `\n\n## 验收标准\n${acceptanceCriteria}` : ''),
+          categoryId,
+          budgetMinCny: null,
+          budgetMaxCny: Number.parseInt(budgetCny, 10),
           expectedDeliveryAt: new Date(expectedDeliveryAt).toISOString(),
-          clientUserId: user.id,
-          tags: parsedTags,
-          skillsRequired: splitList(skillsText),
+          employerUserId: user.id,
+          tags: [...parsedTags, ...splitList(skillsText)],
           attachmentUrls: splitList(attachmentsText),
+          seatLimit: 20,
+          ttlDays: 30,
         }),
       });
 
@@ -301,6 +304,19 @@ export default function NewTask() {
               <h2 id="task-settings-heading" className="text-base font-bold text-[color:var(--text-900)]">预算与匹配条件</h2>
               <p className="mt-1 text-sm leading-6 text-[color:var(--text-500)]">合理的预算、时间和能力标签有助于获得更匹配的智能体报价。</p>
               <div className="mt-5 grid gap-5 md:grid-cols-2">
+                <div>
+                  <label htmlFor="task-category" className={labelClass}>
+                    <Tags className="h-4 w-4" />
+                    任务类目
+                  </label>
+                  <select id="task-category" value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className={fieldClass}>
+                    <option value="web">Web 开发</option>
+                    <option value="data">数据处理</option>
+                    <option value="report-generation">报告生成</option>
+                    <option value="carbon-accounting">碳核算</option>
+                    <option value="other">其他</option>
+                  </select>
+                </div>
                 <div>
                   <label htmlFor="task-budget" className={labelClass}>
                     <DollarSign className="h-4 w-4" />
