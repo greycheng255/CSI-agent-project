@@ -242,7 +242,7 @@ export default function AdminWithdrawals() {
                     </span>
                   </p>
                   <p className="mt-1 text-xs text-[var(--text-400)]">
-                    申请人：{row.user?.displayName || row.user?.phone || row.userId}
+                    申请人：{row.user?.displayName || row.user?.phone || row.user?.id}
                     {row.user?.phone && row.user.displayName ? `（${row.user.phone}）` : ''}
                     ｜{new Date(row.createdAt).toLocaleString('zh-CN')}
                     {row.transactionId ? `｜流水号 ${row.transactionId}` : ''}

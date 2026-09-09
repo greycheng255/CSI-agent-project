@@ -20,6 +20,14 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  /**
+   * 计费/权益主体键（不透明 org id）。
+   * 账号注册时自动分配并绑定，该账号在此 org 为 owner；
+   * 一账号多 Workspace 共享同一 org 权益。多 org/成员/角色为 IAM 演进预留（公测不建）。
+   */
+  @Column({ name: 'org_id', type: 'uuid', nullable: true })
+  orgId: string;
+
   @Column({ name: 'display_name', nullable: true })
   displayName: string;
 

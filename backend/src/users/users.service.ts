@@ -11,7 +11,7 @@ import { User, KycStatus } from './entities/user.entity';
 import { AuthService } from '../auth/auth.service';
 import { AgentsService } from '../agents/agents.service';
 import { hashSync, compareSync } from 'bcryptjs';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import {
   SmsVerificationService,
   type SmsVerificationScene,
@@ -92,16 +92,17 @@ export class UsersService {
       data.verificationCode,
     );
 
-    // 创建新用户
+    // 创建新用户：注册即分配计费 org（该账号为 owner）
     const user = this.usersRepository.create({
       phone: data.phone,
       passwordHash: this.hashPassword(data.password),
       displayName: data.displayName || `用户${data.phone.slice(-4)}`,
       kycStatus: KycStatus.NONE,
+      orgId: randomUUID(),
     });
 
     await this.usersRepository.save(user);
-    this.logger.log(`新用户注册成功: ${user.id} (${user.phone})`);
+    this.logger.log(`新用户注册成功: ${user.id} (${user.phone}) org=${user.orgId}`);
 
     await this.ensureDefaultAgent(user);
 
@@ -109,6 +110,7 @@ export class UsersService {
       message: '注册成功',
       user: {
         id: user.id,
+        orgId: user.orgId,
         phone: user.phone,
         displayName: user.displayName,
       },
@@ -139,6 +141,7 @@ export class UsersService {
     }
 
     // 签发令牌
+    await this.ensureOrgId(user);
     const token = await this.authService.issueUserToken(user);
     await this.ensureDefaultAgent(user);
 
@@ -147,11 +150,25 @@ export class UsersService {
       token,
       user: {
         id: user.id,
+        orgId: user.orgId,
         phone: user.phone,
         displayName: user.displayName,
         kycStatus: user.kycStatus,
       },
     };
+  }
+
+  /**
+   * 确保账号已绑定计费 org。
+   * 历史账号（org_id 列为空）首次登录/鉴权时惰性补分配，幂等。
+   */
+  async ensureOrgId(user: User): Promise<User> {
+    if (!user.orgId) {
+      user.orgId = randomUUID();
+      await this.usersRepository.save(user);
+      this.logger.log(`历史账号补分配 org: user=${user.id} org=${user.orgId}`);
+    }
+    return user;
   }
 
   async requestSmsCode(phone: string, scene: SmsVerificationScene) {
@@ -186,10 +203,13 @@ export class UsersService {
         passwordHash: this.hashPassword(randomBytes(32).toString('hex')),
         displayName: `用户${data.phone.slice(-4)}`,
         kycStatus: KycStatus.NONE,
+        orgId: randomUUID(),
       });
       await this.usersRepository.save(user);
       isNewUser = true;
-      this.logger.log(`短信登录创建用户成功: ${user.id}`);
+      this.logger.log(`短信登录创建用户成功: ${user.id} org=${user.orgId}`);
+    } else {
+      await this.ensureOrgId(user);
     }
 
     const token = await this.authService.issueUserToken(user);
@@ -201,6 +221,7 @@ export class UsersService {
       isNewUser,
       user: {
         id: user.id,
+        orgId: user.orgId,
         phone: user.phone,
         displayName: user.displayName,
         kycStatus: user.kycStatus,
@@ -220,8 +241,11 @@ export class UsersService {
       throw new UnauthorizedException('用户不存在');
     }
 
+    await this.ensureOrgId(user);
+
     return {
       id: user.id,
+      orgId: user.orgId,
       phone: user.phone,
       email: user.email,
       displayName: user.displayName,

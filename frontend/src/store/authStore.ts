@@ -12,6 +12,7 @@ export type KycStatus = 'NONE' | 'PENDING' | 'VERIFIED';
  */
 export interface User {
   id: string;
+  orgId?: string;
   phone: string;
   displayName?: string;
   email?: string;

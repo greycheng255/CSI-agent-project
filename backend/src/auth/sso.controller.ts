@@ -143,6 +143,7 @@ export class SsoController {
   /**
    * 获取用户信息（Bearer access_token）
    * GET /api/v1/sso/userinfo
+   * 含 org_id：接入方（Console）以此作为计费主体键（OIDC claim 首选口径）。
    */
   @Get('userinfo')
   @UseGuards(AuthGuard)
@@ -150,10 +151,27 @@ export class SsoController {
     const user = req.user;
     return {
       id: user.id,
+      org_id: user.orgId ?? null,
+      org_role: 'owner',
       phone: user.phone,
       email: user.email,
       displayName: user.displayName,
       kycStatus: user.kycStatus,
+    };
+  }
+
+  /**
+   * 账号 → org 解析兜底（§3.4 统一账户体系）：
+   * 接入方未从 OIDC 登录态 claim 取到 org_id 时，用 access_token 调本端点换取。
+   * GET /api/v1/sso/resolve-org
+   */
+  @Get('resolve-org')
+  @UseGuards(AuthGuard)
+  resolveOrg(@Req() req: RequestWithUser) {
+    return {
+      user_id: req.user.id,
+      org_id: req.user.orgId ?? null,
+      org_role: 'owner',
     };
   }
 

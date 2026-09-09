@@ -249,6 +249,8 @@ export class SsoService implements OnModuleInit {
       expires_in: null,
       user: {
         id: codeRow.user.id,
+        org_id: codeRow.user.orgId ?? null,
+        org_role: 'owner',
         phone: codeRow.user.phone,
         displayName: codeRow.user.displayName,
         kycStatus: codeRow.user.kycStatus,

@@ -528,6 +528,16 @@ export default function Profile() {
                 </div>
               </dl>
 
+              {user.orgId && (
+                <div className="flex gap-3 border-t border-[color:var(--border)] px-5 py-4 sm:px-6">
+                  <Shield className="mt-0.5 h-4 w-4 shrink-0 text-[var(--text-400)]" />
+                  <div>
+                    <dt className="text-xs text-[var(--text-500)]">组织 ID（计费主体）</dt>
+                    <dd className="mt-1 break-all font-mono text-xs text-[var(--text-700)]">{user.orgId}</dd>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-col gap-3 border-t border-[color:var(--border)] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                 <div className="flex gap-3">
                   <Shield className="mt-0.5 h-4 w-4 shrink-0 text-[var(--text-400)]" />
