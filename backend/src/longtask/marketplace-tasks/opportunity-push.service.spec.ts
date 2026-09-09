@@ -5,6 +5,7 @@ import { MarketplaceTask } from './marketplace-task.entity';
 import { OpportunityDispatch } from './opportunity-dispatch.entity';
 import { Workspace } from '../workspaces/workspace.entity';
 import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
+import { MatchScoreService } from '../categories/match-score.service';
 
 describe('OpportunityPushService（T8：Push 模式 + 投递幂等）', () => {
   let service: OpportunityPushService;
@@ -17,6 +18,11 @@ describe('OpportunityPushService（T8：Push 模式 + 投递幂等）', () => {
   };
   const mockWorkspacesRepo = { find: jest.fn() };
   const mockDispatcher = { enqueue: jest.fn() };
+  // MatchScoreService mock：默认返回高分通过阈值
+  const mockMatchScoreService = {
+    evaluate: jest.fn(() => ({ score: 80, deliver: true })),
+    getThreshold: jest.fn(() => 60),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -33,6 +39,7 @@ describe('OpportunityPushService（T8：Push 模式 + 投递幂等）', () => {
           provide: WebhookDispatcherService,
           useValue: mockDispatcher,
         },
+        { provide: MatchScoreService, useValue: mockMatchScoreService },
       ],
     }).compile();
     service = module.get(OpportunityPushService);
@@ -74,6 +81,8 @@ describe('OpportunityPushService（T8：Push 模式 + 投递幂等）', () => {
     expect(payload.data.workspace_id).toBe('ws-1');
     expect(payload.data.opportunity_id).toBe('log-ws-1');
     expect(payload.data.source_type).toBe('platform_push');
+    // PRD §5.1：匹配度评分写入 payload（不再硬编码 100）
+    expect(payload.data.match_score).toBe(80);
     expect(payload.data.task_brief.title).toBe('企业官网');
     expect(payload.data.task_brief.budget_range).toEqual({ min: 0, max: 10000 });
     expect(eventId).toBe('log-ws-1'); // 投递日志行 id 作为稳定 event_id（payload.event_id 同值）
@@ -114,5 +123,25 @@ describe('OpportunityPushService（T8：Push 模式 + 投递幂等）', () => {
     await expect(service.pushTask('missing')).rejects.toMatchObject({
       status: 404,
     });
+  });
+
+  it('匹配度低于阈值且非冷启动 → 跳过投递', async () => {
+    mockTasksRepo.findOne.mockResolvedValue({
+      id: 'task-1',
+      status: 'open',
+      bidRound: 1,
+      categoryId: 'cat-web',
+      title: 't',
+    } as MarketplaceTask);
+    mockWorkspacesRepo.find.mockResolvedValue([
+      { id: 'ws-1', categoryIds: ['cat-web'], displayStatus: 'active', receivePlatformPush: true },
+    ] as Workspace[]);
+    // 模拟评分低 + 不投递
+    mockMatchScoreService.evaluate.mockReturnValueOnce({ score: 40, deliver: false });
+
+    const pushed = await service.pushTask('task-1');
+    expect(pushed).toBe(0);
+    expect(mockDispatcher.enqueue).not.toHaveBeenCalled();
+    expect(mockDispatchRepo.save).not.toHaveBeenCalled();
   });
 });

@@ -39,6 +39,20 @@ export class OpportunityDispatch {
   @Column({ type: 'varchar', length: 16 })
   mode: OpportunityDispatchMode;
 
+  /**
+   * 匹配度分数（PRD §5.1 模式一 Push 时由 MatchScoreService 写入）。
+   * 仅 platform_push 模式有值；pull/manual_assign 模式为 null。
+   * 评分仅用于投递决策与审计，不对雇主展示（PRD §413）。
+   */
+  @Column({
+    name: 'match_score',
+    type: isSqlite ? 'float' : 'numeric',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+  })
+  matchScore: number | null;
+
   @Column({ name: 'pushed_at', type: isSqlite ? 'datetime' : 'timestamp with time zone', nullable: true })
   pushedAt: Date | null;
 

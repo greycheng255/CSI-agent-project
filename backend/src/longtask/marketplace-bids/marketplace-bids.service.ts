@@ -24,6 +24,12 @@ export interface SubmitBidInput {
   planSummary?: string | null;
   estimatedDeliveryAt?: Date | string | null;
   source?: 'push' | 'pull' | 'manual_assign';
+  /**
+   * 匹配度分数（PRD §5.1 §1775）：仅 platform_push 投递后由 Console 回传，
+   * 来自 OpportunityDispatch.matchScore；pull/manual_assign 为 null。
+   * 平台仅持久化，不在雇主侧展示（PRD §413）。
+   */
+  matchScore?: number | null;
   /** §21.4 W3：投标时点快照（Console 传入优先，缺省回退本地投影） */
   workspaceName?: string;
   workspaceAvatarUrl?: string;
@@ -139,6 +145,9 @@ export class MarketplaceBidsService {
         : null,
       status: 'submitted',
       source: input.source ?? 'pull',
+      // 仅 platform_push 才落 match_score（PRD §5.1 §1775）
+      matchScore:
+        (input.source ?? 'pull') === 'push' ? input.matchScore ?? null : null,
     });
     const saved = await this.bidsRepo.save(bid);
 

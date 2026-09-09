@@ -65,6 +65,20 @@ export class MarketplaceBid {
   @Column({ type: 'varchar', length: 16, default: 'pull' })
   source: BidSource;
 
+  /**
+   * 匹配度分数（PRD §5.1 §1775：仅 platform_push 来源有值）。
+   * 由 OpportunityPushService 投递时从 MatchScoreService 取分后传入。
+   * pull/manual_assign 来源为 null。仅用于投递决策与审计，不对雇主展示。
+   */
+  @Column({
+    name: 'match_score',
+    type: isSqlite ? 'float' : 'numeric',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+  })
+  matchScore: number | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }
