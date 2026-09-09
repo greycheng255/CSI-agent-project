@@ -78,7 +78,7 @@ sign() {
   local body="$1"; local ts=$(date +%s)
   printf 't=%s,v1=%s' "$ts" "$(printf '%s%s' "$body" "$ts" | openssl dgst -sha256 -hmac "$TOKEN" -hex | sed 's/.*= //')"
 }
-ACT_BODY='{"action":"activate","org_id":"'${ORG_WITH_PLAN}'","plan_code":"free"}'
+ACT_BODY='{"action":"activate","org_id":"'${ORG_WITH_PLAN}'","plan_code":"beta-free"}'
 curl -s -X POST http://localhost:4001/v1/entitlement/subscriptions \
   -H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json" \
   -H "X-Signature: $(sign "$ACT_BODY")" -H "X-Request-Id: deploy-act-$(date +%s%N)" \

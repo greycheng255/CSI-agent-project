@@ -118,6 +118,10 @@ echo ""
 # ─────────────── E 族 ───────────────
 echo "── E 族 (entitlement) ──"
 
+# 预激活 test org 免费套餐（幂等）— E1/E2/E3 依赖 org 有 active subscription
+ACT_BODY="{\"action\":\"activate\",\"org_id\":\"${ORG_WITH_PLAN}\",\"plan_code\":\"beta-free\"}"
+hmac_post "/v1/entitlement/subscriptions" "${ACT_BODY}" > /dev/null 2>&1 || true
+
 # E1 套餐
 RESP=$(hmac_get "/v1/entitlement/plans/${ORG_WITH_PLAN}")
 CODE=$(echo "$RESP" | tail -1)
