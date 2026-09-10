@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { MarketplaceOrdersService } from './marketplace-orders.service';
 import { MarketplaceOrder } from './marketplace-order.entity';
 import { MarketplaceCancelRequest } from './cancel-request.entity';
+import { BalanceService } from '../../payment/balance.service';
 
 describe('MarketplaceOrdersService（T12/T13：project_id 回填 + 对账）', () => {
   let service: MarketplaceOrdersService;
@@ -13,6 +14,10 @@ describe('MarketplaceOrdersService（T12/T13：project_id 回填 + 对账）', (
     save: jest.fn(),
   };
   const mockCancelRepo = { findOne: jest.fn() };
+  const mockBalanceService = {
+    payFromBalance: jest.fn(),
+    addIncome: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -24,6 +29,7 @@ describe('MarketplaceOrdersService（T12/T13：project_id 回填 + 对账）', (
           provide: getRepositoryToken(MarketplaceCancelRequest),
           useValue: mockCancelRepo,
         },
+        { provide: BalanceService, useValue: mockBalanceService },
       ],
     }).compile();
     service = module.get(MarketplaceOrdersService);
@@ -33,21 +39,42 @@ describe('MarketplaceOrdersService（T12/T13：project_id 回填 + 对账）', (
     const order = { id: 'o1', projectId: null };
     mockRepo.findOne.mockResolvedValueOnce(order);
     mockRepo.save.mockImplementation((v) => v);
-    const saved = await service.applyProjectId('o1', 'p-1');
-    expect(saved.projectId).toBe('p-1');
+    const saved = await service.applyProjectId(
+      'o1',
+      '11111111-1111-4111-8111-111111111111',
+    );
+    expect(saved.projectId).toBe('11111111-1111-4111-8111-111111111111');
   });
 
   it('回填 project_id：同值重试幂等放行', async () => {
-    mockRepo.findOne.mockResolvedValueOnce({ id: 'o1', projectId: 'p-1' });
+    mockRepo.findOne.mockResolvedValueOnce({
+      id: 'o1',
+      projectId: '11111111-1111-4111-8111-111111111111',
+    });
     mockRepo.save.mockImplementation((v) => v);
-    const saved = await service.applyProjectId('o1', 'p-1');
-    expect(saved.projectId).toBe('p-1');
+    const saved = await service.applyProjectId(
+      'o1',
+      '11111111-1111-4111-8111-111111111111',
+    );
+    expect(saved.projectId).toBe('11111111-1111-4111-8111-111111111111');
   });
 
   it('回填 project_id：已绑定不同值 → 409 CONFLICT_DUPLICATE', async () => {
-    mockRepo.findOne.mockResolvedValueOnce({ id: 'o1', projectId: 'p-1' });
-    await expect(service.applyProjectId('o1', 'p-2')).rejects.toMatchObject({
+    mockRepo.findOne.mockResolvedValueOnce({
+      id: 'o1',
+      projectId: '11111111-1111-4111-8111-111111111111',
+    });
+    await expect(
+      service.applyProjectId('o1', '22222222-2222-4222-8222-222222222222'),
+    ).rejects.toMatchObject({
       status: 409,
+    });
+  });
+
+  it('project_id 非 uuid → 400（避免 PG 22P02 500）', async () => {
+    mockRepo.findOne.mockResolvedValueOnce({ id: 'o1', projectId: null });
+    await expect(service.applyProjectId('o1', 'p-1')).rejects.toMatchObject({
+      status: 400,
     });
   });
 
@@ -81,6 +108,7 @@ describe('MarketplaceOrdersService（T12/T13：project_id 回填 + 对账）', (
       contract_status: 'signed',
       delivery_status: 'in_accept',
       settlement_status: null,
+      payment_status: 'unpaid',
       cancel_request: null,
     });
   });

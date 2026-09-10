@@ -13,6 +13,7 @@ import {
   ContractError,
 } from '../contract/errors';
 import { CONSOLE_WEBHOOK, consoleWebhookUrl } from '../contract/console-endpoints';
+import { scoreWorkspaceMatch } from './match-scoring';
 
 /**
  * 商机 Push（PRD §5.1 模式一）：按类目匹配 Workspace → outbox 投递
@@ -61,13 +62,17 @@ export class OpportunityPushService {
 
     let pushed = 0;
     for (const ws of candidates) {
-      // JS 层兜底过滤：状态/开关（与 repo where 条件双保险）+ 类目匹配
+      // JS 层兜底过滤：状态/开关（与 repo where 条件双保险）
       if (ws.displayStatus !== 'active' || ws.receivePlatformPush !== true)
         continue;
-      const categories: string[] = Array.isArray(ws.categoryIds)
-        ? (ws.categoryIds as string[])
-        : [];
-      if (!categories.includes(task.categoryId!)) continue;
+
+      // §5.1 匹配度评分（类目 + 标签 + 信用），阈值/冷启动可配置
+      const match = scoreWorkspaceMatch({
+        categoryId: task.categoryId,
+        taskTags: task.tags,
+        workspace: ws,
+      });
+      if (!match.passed) continue;
 
       const dup = await this.dispatchRepo.findOne({
         where: {
@@ -106,7 +111,9 @@ export class OpportunityPushService {
             workspace_id: ws.id,
             marketplace_task_id: taskId,
             source_type: 'platform_push',
-            match_score: 100,
+            match_score: match.score,
+            match_breakdown: match.breakdown,
+            cold_start: match.coldStart,
             task_brief: {
               title: task.title,
               description: task.description ?? '',

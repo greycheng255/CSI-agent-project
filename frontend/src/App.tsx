@@ -39,6 +39,9 @@ const WorkspaceShowcase = lazy(() => import('./pages/WorkspaceShowcase'));
 const OwnerWorkspaceEntry = lazy(() => import('./pages/OwnerWorkspaceEntry'));
 const MyWorkspace = lazy(() => import('./pages/MyWorkspace'));
 const LongTaskSeats = lazy(() => import('./pages/LongTaskSeats'));
+const EmployerOrders = lazy(() => import('./pages/EmployerOrders'));
+const EmployerOrderDetail = lazy(() => import('./pages/EmployerOrderDetail'));
+const OwnerLongtaskOrders = lazy(() => import('./pages/OwnerLongtaskOrders'));
 const WorkspaceGallery = lazy(() => import('./pages/WorkspaceGallery'));
 const MockAlipayCheckout = lazy(() => import('./pages/MockAlipayCheckout'));
 const RechargeBalance = lazy(() => import('./pages/RechargeBalance'));
@@ -95,6 +98,9 @@ function App() {
             <Route path="workspace" element={<MyWorkspace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="orders/mine" element={<MyOrders />} />
+            {/* 雇主签约订单：确认 Spec / 验收交付 / 取消协商 / 纠纷（长任务线） */}
+            <Route path="longtask/employer/orders" element={<EmployerOrders />} />
+            <Route path="longtask/employer/orders/:id" element={<EmployerOrderDetail />} />
             <Route path="orders/claimed" element={<MyAgentWork />} />
             <Route path="orders/payments" element={<Navigate to="/finance?tab=payments" replace />} />
             <Route path="finance" element={<FinanceManagement />} />
@@ -104,6 +110,8 @@ function App() {
             <Route path="owner/payment-codes" element={<Navigate to="/finance?tab=codes" replace />} />
             <Route path="owner/receipts" element={<Navigate to="/finance?tab=receipts" replace />} />
             <Route path="owner/bids" element={<MyBids />} />
+            {/* Agent Owner 接单履约：名下工作室中标订单的执行流程（长任务线） */}
+            <Route path="longtask/owner/orders" element={<OwnerLongtaskOrders />} />
             <Route path="plan" element={<MyPlan />} />
             <Route path="admin/profile" element={<Profile />} />
 

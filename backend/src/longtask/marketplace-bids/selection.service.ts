@@ -57,6 +57,18 @@ export class SelectionService {
     for (const other of others) {
       other.status = 'lost';
       await this.bidsRepo.save(other);
+      // M→C #7：未中标通知（按 workspace 逐条投递，event_type=bid.lost）
+      await this.dispatcher.enqueue(
+        'bid.lost',
+        consoleWebhookUrl(CONSOLE_WEBHOOK.bidResult),
+        {
+          event_type: 'bid.lost',
+          marketplace_task_id: taskId,
+          workspace_id: other.workspaceId,
+          bid_id: other.id,
+          bid_round: round,
+        },
+      );
     }
 
     task.status = 'selected';

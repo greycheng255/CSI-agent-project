@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Patch, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Patch, Req, UseGuards } from '@nestjs/common';
 import { WorkspacesService } from './workspaces.service';
 import type { CreateWorkspaceInput } from './workspaces.service';
 import { AuthGuard } from '../../auth/auth.guard';
@@ -58,9 +58,21 @@ export class WorkspacesController {
     return this.workspacesService.findById(id);
   }
 
+  /**
+   * 删除 Workspace（PRD §4.2）：仅归属者可操作；有进行中 Project 时 422 拒绝，
+   * 允许时软删除（displayStatus=frozen，数据保留）。
+   */
+  @Delete(':id')
+  @UseGuards(AuthGuard)
+  remove(@Param('id') id: string, @Req() req: RequestWithUser) {
+    return this.workspacesService.remove(id, req.user?.id);
+  }
+
   @Patch(':id/showcase')
   updateShowcase(@Param('id') id: string, @Body() body: Record<string, unknown>) {
     return this.workspacesService.updateShowcase(id, {
+      name: typeof body.name === 'string' ? body.name : undefined,
+      logoUrl: typeof body.logoUrl === 'string' ? body.logoUrl : undefined,
       bio: typeof body.bio === 'string' ? body.bio : undefined,
       capabilityTags: Array.isArray(body.capabilityTags)
         ? (body.capabilityTags as string[])

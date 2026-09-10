@@ -4,6 +4,9 @@ import { SettlementsService } from './settlements.service';
 import { MarketplaceSettlement } from './settlement.entity';
 import { MarketplaceOrder } from '../marketplace-orders/marketplace-order.entity';
 import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
+import { WorkspacesService } from '../workspaces/workspaces.service';
+import { BalanceService } from '../../payment/balance.service';
+import { BalanceChangeType } from '../../payment/entities/balance.entity';
 
 describe('SettlementsService（T20/T21：备数据 + 划款交关联方）', () => {
   let service: SettlementsService;
@@ -11,6 +14,8 @@ describe('SettlementsService（T20/T21：备数据 + 划款交关联方）', () 
   const mockSettleRepo = { findOne: jest.fn(), find: jest.fn(), save: jest.fn(), create: jest.fn() };
   const mockOrdersRepo = { findOne: jest.fn(), find: jest.fn(), save: jest.fn() };
   const mockDispatcher = { enqueue: jest.fn() };
+  const mockWorkspacesService = { findById: jest.fn() };
+  const mockBalanceService = { addIncome: jest.fn(), payFromBalance: jest.fn() };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -23,6 +28,8 @@ describe('SettlementsService（T20/T21：备数据 + 划款交关联方）', () 
         },
         { provide: getRepositoryToken(MarketplaceOrder), useValue: mockOrdersRepo },
         { provide: WebhookDispatcherService, useValue: mockDispatcher },
+        { provide: WorkspacesService, useValue: mockWorkspacesService },
+        { provide: BalanceService, useValue: mockBalanceService },
       ],
     }).compile();
     service = module.get(SettlementsService);
@@ -68,15 +75,54 @@ describe('SettlementsService（T20/T21：备数据 + 划款交关联方）', () 
     await expect(service.trigger('o1')).rejects.toMatchObject({ status: 409 });
   });
 
-  it('消费 settlement.completed 回写 → settled + 订单状态同步', async () => {
-    mockSettleRepo.findOne.mockResolvedValueOnce({ id: 's1', orderId: 'o1', status: 'pending' });
+  it('消费 settlement.completed 回写 → 划款入工作室 Owner 余额 + settled + 事件', async () => {
+    mockSettleRepo.findOne.mockResolvedValueOnce({
+      id: 's1',
+      orderId: 'o1',
+      workspaceId: 'ws-1',
+      amountCny: 41,
+      status: 'pending',
+    });
     mockSettleRepo.save.mockImplementation((v) => v);
+    mockWorkspacesService.findById.mockResolvedValueOnce({ id: 'ws-1', ownerUserId: 'owner-1' });
     mockOrdersRepo.findOne.mockResolvedValueOnce({ id: 'o1', settlementStatus: null });
     mockOrdersRepo.save.mockImplementation((v) => v);
 
     await service.consumeSettlementCompleted('o1');
+    // 首次回写：托管款划入工作室 Owner 余额（元→分）
+    expect(mockBalanceService.addIncome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'owner-1',
+        amountCny: 4100,
+        orderId: 'o1',
+        changeType: BalanceChangeType.ORDER_INCOME,
+      }),
+    );
     const savedOrder = mockOrdersRepo.save.mock.calls[0][0] as MarketplaceOrder;
     expect(savedOrder.settlementStatus).toBe('settled');
+    // M→C #32：结算完成通知 Console
+    expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
+      'settlement.completed',
+      expect.stringContaining('/v1/webhooks/settlement/result'),
+      expect.objectContaining({ event_type: 'settlement.completed', order_id: 'o1' }),
+    );
+  });
+
+  it('重复回写幂等：不重复划款，仅重发事件', async () => {
+    mockSettleRepo.findOne.mockResolvedValueOnce({
+      id: 's1',
+      orderId: 'o1',
+      workspaceId: 'ws-1',
+      amountCny: 41,
+      status: 'settled',
+    });
+    mockSettleRepo.save.mockImplementation((v) => v);
+    mockOrdersRepo.findOne.mockResolvedValueOnce({ id: 'o1', settlementStatus: 'settled' });
+    mockOrdersRepo.save.mockImplementation((v) => v);
+
+    await service.consumeSettlementCompleted('o1');
+    expect(mockBalanceService.addIncome).not.toHaveBeenCalled();
+    expect(mockDispatcher.enqueue).toHaveBeenCalledTimes(1);
   });
 
   it('对账 #35 视图 + #36 列表', async () => {

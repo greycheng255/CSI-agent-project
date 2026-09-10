@@ -98,6 +98,18 @@ describe('SelectionService（T10：选标/全部驳回/72h 自动驳回）', () 
         bid_round: 1,
       }),
     );
+    // 同轮其余竞标 → 逐条投递 bid.lost（M→C #7）
+    expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
+      'bid.lost',
+      expect.stringContaining('/v1/webhooks/bid/result'),
+      expect.objectContaining({
+        event_type: 'bid.lost',
+        marketplace_task_id: 'task-1',
+        workspace_id: 'ws-2',
+        bid_id: 'bid-lose',
+        bid_round: 1,
+      }),
+    );
   });
 
   it('选标：竞标不属于当前轮 → 422', async () => {

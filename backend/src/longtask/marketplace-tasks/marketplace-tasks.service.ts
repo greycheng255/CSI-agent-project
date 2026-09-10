@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { LessThanOrEqual, Repository } from 'typeorm';
 import {
   MarketplaceTask,
   MarketplaceTaskStatus,
@@ -118,6 +118,21 @@ export class MarketplaceTasksService {
     return this.repo.save(task);
   }
 
+  /**
+   * 统一调度：批量将有效期到期且仍未选标的 open 任务置 expired（PRD §5.6.4 / 附录 D.1）。
+   * 由 5min deadline-scanner 驱动；关联非终态商机的过期由 Console 侧联动。
+   */
+  async scanExpired(now: Date): Promise<number> {
+    const tasks = await this.repo.find({
+      where: { status: 'open', expiresAt: LessThanOrEqual(now) },
+    });
+    for (const task of tasks) {
+      task.status = 'expired';
+      await this.repo.save(task);
+    }
+    return tasks.length;
+  }
+
   /** 选标：open → selected */
   async select(id: string): Promise<MarketplaceTask> {
     const task = await this.getOrThrow(id);
@@ -167,10 +182,38 @@ export class MarketplaceTasksService {
     return this.repo.findOne({ where: { id } });
   }
 
+  /**
+   * 认领无主任务（历史/外部导入任务 employer_user_id 为空）：
+   * 由当前登录雇主在首次选标/驳回等操作时落定归属，保证「选标只能由雇主本人完成」。
+   */
+  async claimEmployer(id: string, userId: string): Promise<MarketplaceTask> {
+    const task = await this.getOrThrow(id);
+    if (task.employerUserId && task.employerUserId !== userId) {
+      throw new ContractError(
+        403,
+        CONTRACT_ERROR_CODE.FORBIDDEN,
+        'task already has a different employer',
+      );
+    }
+    if (!task.employerUserId) {
+      task.employerUserId = userId;
+      return this.repo.save(task);
+    }
+    return task;
+  }
+
   /** 招投标中任务列表（供 C→M Pull 与大厅展示；阶段二接入） */
   findOpen(): Promise<MarketplaceTask[]> {
     return this.repo.find({
       where: { status: 'open' as MarketplaceTaskStatus },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /** 雇主「我的长任务」列表（工作台展示，按发布时间倒序） */
+  listByEmployer(employerUserId: string): Promise<MarketplaceTask[]> {
+    return this.repo.find({
+      where: { employerUserId },
       order: { createdAt: 'DESC' },
     });
   }

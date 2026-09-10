@@ -100,6 +100,41 @@ export class WebhookDispatcherService {
     return this.outboxRepo.save(row);
   }
 
+  /**
+   * 死信落库 + 告警（对接指南 §3.1「5 次失败进死信表 + 告警」）：
+   * 始终写 logger.error；配置 WEBHOOK_DEAD_ALERT_URL 时 best-effort 推送告警（不阻塞、不影响投递结果）。
+   */
+  private async deadLetter(
+    item: WebhookOutbox,
+    reason: string,
+  ): Promise<void> {
+    item.status = 'dead';
+    item.lastError = reason;
+    item.nextAttemptAt = null;
+    await this.outboxRepo.save(item);
+    this.logger.error(
+      `Webhook dead-lettered | event=${item.eventType} event_id=${item.eventId} target=${item.targetUrl} reason=${reason}`,
+    );
+    const alertUrl = process.env.WEBHOOK_DEAD_ALERT_URL?.trim();
+    if (alertUrl) {
+      try {
+        await fetch(alertUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'webhook_dead_letter',
+            event_type: item.eventType,
+            event_id: item.eventId,
+            target_url: item.targetUrl,
+            reason,
+          }),
+        });
+      } catch {
+        /* 告警通道 best-effort：失败不影响死信落库 */
+      }
+    }
+  }
+
   /** 处理到期投递（cron 每 10s 调用；测试注入 now 与 sendFn） */
   async processDue(
     now: Date,
@@ -113,8 +148,7 @@ export class WebhookDispatcherService {
     for (const item of due) {
       // 防御：attempts 已达上限的残留在本批直接进死信
       if (item.attempts >= MAX_WEBHOOK_ATTEMPTS) {
-        item.status = 'dead';
-        await this.outboxRepo.save(item);
+        await this.deadLetter(item, 'attempts-exhausted-before-send');
         result.dead += 1;
         continue;
       }
@@ -136,19 +170,14 @@ export class WebhookDispatcherService {
         item.nextAttemptAt = null;
         result.sent += 1;
       } else if (status >= 400 && status < 500) {
-        // 4xx 不重试，直接死信
-        item.status = 'dead';
-        item.lastError = `HTTP ${status}`;
+        // 4xx 不重试，直接死信（含告警）
+        await this.deadLetter(item, `HTTP ${status}`);
         result.dead += 1;
       } else {
         item.attempts += 1;
         item.lastError = status === -1 ? 'network-error' : `HTTP ${status}`;
         if (item.attempts >= MAX_WEBHOOK_ATTEMPTS) {
-          item.status = 'dead';
-          item.nextAttemptAt = null;
-          this.logger.error(
-            `Webhook dead-lettered after ${MAX_WEBHOOK_ATTEMPTS} attempts | event=${item.eventType} event_id=${item.eventId} target=${item.targetUrl}`,
-          );
+          await this.deadLetter(item, item.lastError);
           result.dead += 1;
         } else {
           item.nextAttemptAt = new Date(

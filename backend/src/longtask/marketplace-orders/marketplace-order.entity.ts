@@ -68,6 +68,13 @@ export class MarketplaceOrder {
   @Column({ name: 'delivery_status', type: 'varchar', length: 32, nullable: true })
   deliveryStatus: string | null;
 
+  /** 雇主签约托管支付：unpaid（未支付）/ paid（已托管） */
+  @Column({ name: 'payment_status', type: 'varchar', length: 16, default: 'unpaid' })
+  paymentStatus: string;
+
+  @Column({ name: 'paid_at', type: 'timestamp with time zone', nullable: true })
+  paidAt: Date | null;
+
   @Column({ name: 'settlement_status', type: 'varchar', length: 32, nullable: true })
   settlementStatus: string | null;
 

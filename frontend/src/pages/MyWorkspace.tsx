@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Award,
   Bot,
   Clock,
   ExternalLink,
+  Gavel,
   Megaphone,
+  PackageCheck,
   RefreshCw,
   Save,
   Star,
@@ -24,6 +26,17 @@ import type {
 import { listOwnerAgents } from '../api/agentsApi';
 import { useAuthStore } from '../store/authStore';
 import type { Agent } from '../types/agent';
+import OwnerLongtaskOrders from './OwnerLongtaskOrders';
+import EmployerOrders from './EmployerOrders';
+
+/** 工作室内功能 Tab（URL ?tab= 可分享/直达） */
+type WorkspaceTab = 'storefront' | 'fulfillment' | 'employer-orders';
+
+const TAB_ITEMS: { key: WorkspaceTab; label: string; icon: typeof Store }[] = [
+  { key: 'storefront', label: '门面管理', icon: Store },
+  { key: 'fulfillment', label: '接单履约', icon: PackageCheck },
+  { key: 'employer-orders', label: '签约订单', icon: Gavel },
+];
 
 type PageState =
   | { status: 'loading'; workspace: null }
@@ -38,6 +51,10 @@ type PageState =
  */
 export default function MyWorkspace() {
   const user = useAuthStore((s) => s.user);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const activeTab: WorkspaceTab =
+    tabParam === 'fulfillment' || tabParam === 'employer-orders' ? tabParam : 'storefront';
   const [state, setState] = useState<PageState>({ status: 'loading', workspace: null });
   const [agents, setAgents] = useState<Agent[]>([]);
   const [saving, setSaving] = useState(false);
@@ -155,6 +172,37 @@ export default function MyWorkspace() {
     );
   }
 
+  /** 工作室内功能 Tab 栏（接单履约/签约订单聚合到工作室） */
+  const renderTabs = () => (
+    <div className="flex gap-1 overflow-x-auto rounded-xl bg-[var(--background-100)] p-1">
+      {TAB_ITEMS.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          onClick={() => setSearchParams(item.key === 'storefront' ? {} : { tab: item.key })}
+          className={`inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-4 text-sm font-medium transition-colors ${
+            activeTab === item.key
+              ? 'bg-white text-[var(--brand-700)] shadow-sm'
+              : 'text-[var(--text-500)] hover:text-[var(--text-800)]'
+          }`}
+        >
+          <item.icon className="h-4 w-4" />
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  // 接单履约 / 签约订单：不依赖工作室是否存在，直接渲染对应功能页
+  if (activeTab !== 'storefront') {
+    return (
+      <div className="space-y-5">
+        {renderTabs()}
+        {activeTab === 'fulfillment' ? <OwnerLongtaskOrders /> : <EmployerOrders />}
+      </div>
+    );
+  }
+
   if (state.status === 'loading') {
     return (
       <div className="max-w-3xl space-y-4" aria-label="正在读取工作室">
@@ -201,6 +249,8 @@ export default function MyWorkspace() {
 
   return (
     <div className="max-w-4xl space-y-6">
+      {renderTabs()}
+
       {/* 头部 */}
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">

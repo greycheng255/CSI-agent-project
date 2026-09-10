@@ -129,6 +129,59 @@ describe('WebhookDispatcherService（投递器契约 §3.1/§4.1）', () => {
     expect(sendFn).not.toHaveBeenCalled();
   });
 
+  it('4xx → 直接死信并记录 lastError', async () => {
+    const row = outboxRow();
+    mockOutboxRepo.find.mockResolvedValueOnce([row]);
+    const sendFn = jest.fn().mockResolvedValue({ status: 404 });
+
+    const result = await service.processDue(new Date(), sendFn);
+    expect(result.dead).toBe(1);
+    expect(row.status).toBe('dead');
+    expect(row.lastError).toBe('HTTP 404');
+  });
+
+  it('配置 WEBHOOK_DEAD_ALERT_URL → 死信时 best-effort 推送告警', async () => {
+    const original = process.env.WEBHOOK_DEAD_ALERT_URL;
+    const originalFetch = global.fetch;
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true });
+    global.fetch = fetchMock as never;
+    process.env.WEBHOOK_DEAD_ALERT_URL = 'http://alert.mock/hook';
+    try {
+      const row = outboxRow();
+      mockOutboxRepo.find.mockResolvedValueOnce([row]);
+      const sendFn = jest.fn().mockResolvedValue({ status: 422 });
+
+      const result = await service.processDue(new Date(), sendFn);
+      expect(result.dead).toBe(1);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://alert.mock/hook',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    } finally {
+      if (original === undefined) delete process.env.WEBHOOK_DEAD_ALERT_URL;
+      else process.env.WEBHOOK_DEAD_ALERT_URL = original;
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('未配置告警地址 → 死信不发起外部请求', async () => {
+    const original = process.env.WEBHOOK_DEAD_ALERT_URL;
+    const originalFetch = global.fetch;
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock as never;
+    delete process.env.WEBHOOK_DEAD_ALERT_URL;
+    try {
+      const row = outboxRow();
+      mockOutboxRepo.find.mockResolvedValueOnce([row]);
+      const sendFn = jest.fn().mockResolvedValue({ status: 400 });
+      await service.processDue(new Date(), sendFn);
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      if (original !== undefined) process.env.WEBHOOK_DEAD_ALERT_URL = original;
+      global.fetch = originalFetch;
+    }
+  });
+
   it('enqueue 生成 outbox 行（eventId 复用或生成）', async () => {
     mockOutboxRepo.create.mockImplementation((v) => v);
     await service.enqueue('bid.result', 'http://x', { a: 1 });

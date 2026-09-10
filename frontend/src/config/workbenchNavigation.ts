@@ -42,9 +42,20 @@ const financeRelatedPaths = [
   '/orders/payments',
 ];
 
+/** 工作室内聚合的长任务功能页（接单履约/签约订单），保持工作台外壳 */
+const workspaceRelatedPaths = ['/longtask/owner/orders', '/longtask/employer/orders'];
+
 export const isWorkbenchNavigationItemActive = (pathname: string, target: string) => {
   if (target === '/finance') {
     return financeRelatedPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  }
+  // 工作室内聚合的长任务功能页（接单履约/签约订单）计入「我的工作室」高亮
+  if (target === '/workspace') {
+    return (
+      pathname === target ||
+      pathname.startsWith(`${target}/`) ||
+      workspaceRelatedPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`))
+    );
   }
 
   return pathname === target || pathname.startsWith(`${target}/`);
@@ -53,4 +64,5 @@ export const isWorkbenchNavigationItemActive = (pathname: string, target: string
 export const isUserWorkbenchPath = (pathname: string) =>
   userWorkbenchNavigation.some((item) => isWorkbenchNavigationItemActive(pathname, item.to)) ||
   userWorkbenchAccountNavigation.some((item) => isWorkbenchNavigationItemActive(pathname, item.to)) ||
-  financeRelatedPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  financeRelatedPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`)) ||
+  workspaceRelatedPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));

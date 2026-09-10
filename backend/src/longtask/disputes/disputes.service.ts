@@ -138,6 +138,14 @@ export class DisputesService {
     return saved;
   }
 
+  /** 雇主详情页：订单最新一条纠纷 */
+  findLatestByOrder(orderId: string) {
+    return this.disputeRepo.findOne({
+      where: { orderId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
   /** C→M #43：Agent Owner 确认仲裁结果（终态；未获确认不得清重试上下文） */
   async acknowledge(
     orderId: string,
@@ -185,6 +193,13 @@ export class DisputesService {
   }
 
   private async getOrThrowById(disputeId: string): Promise<MarketplaceDispute> {
+    if (!disputeId || disputeId === 'undefined' || disputeId.length > 64) {
+      throw new ContractError(
+        404,
+        CONTRACT_ERROR_CODE.NOT_FOUND_ORDER,
+        `dispute not found: ${disputeId}`,
+      );
+    }
     const dispute = await this.disputeRepo.findOne({
       where: { id: disputeId },
     });

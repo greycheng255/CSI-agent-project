@@ -37,7 +37,7 @@ describe('RevisionNegotiationService（T18：2 天窗口 + 4 选项默认 C）',
     const windowMs = saved.deadline!.getTime() - Date.now();
     expect(windowMs).toBeGreaterThan(2 * 24 * 60 * 60 * 1000 - 5000);
     expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
-      'revision.negotiation_action',
+      'revision.negotiation_started',
       expect.stringContaining('/v1/webhooks/revision/negotiation-action'),
       expect.objectContaining({ action: 'started', order_id: 'o1' }),
     );
@@ -121,7 +121,7 @@ describe('RevisionNegotiationService（T18：2 天窗口 + 4 选项默认 C）',
     expect(count).toBe(1);
     expect(negotiation.decision).toBe('C');
     expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
-      'revision.negotiation_action',
+      'revision.negotiation_auto_accepted',
       expect.any(String),
       expect.objectContaining({ action: 'expired_default_c', decision: 'C' }),
     );

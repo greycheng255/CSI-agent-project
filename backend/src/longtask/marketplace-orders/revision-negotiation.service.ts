@@ -50,10 +50,10 @@ export class RevisionNegotiationService {
     });
     const saved = await this.negotiationRepo.save(negotiation);
     await this.dispatcher.enqueue(
-      'revision.negotiation_action',
+      'revision.negotiation_started',
       consoleWebhookUrl(CONSOLE_WEBHOOK.revisionNegotiationAction),
       {
-        event_type: 'revision.negotiation_action',
+        event_type: 'revision.negotiation_started',
         negotiation_id: saved.id,
         order_id: orderId,
         action: 'started',
@@ -83,10 +83,10 @@ export class RevisionNegotiationService {
     const saved = await this.negotiationRepo.save(negotiation);
 
     await this.dispatcher.enqueue(
-      'revision.negotiation_action',
+      'revision.negotiation_decided',
       consoleWebhookUrl(CONSOLE_WEBHOOK.revisionNegotiationAction),
       {
-        event_type: 'revision.negotiation_action',
+        event_type: 'revision.negotiation_decided',
         negotiation_id: negotiationId,
         order_id: negotiation.orderId,
         action: 'decided',
@@ -115,10 +115,10 @@ export class RevisionNegotiationService {
       await this.negotiationRepo.save(negotiation);
       await this.acceptCurrent(negotiation.orderId);
       await this.dispatcher.enqueue(
-        'revision.negotiation_action',
+        'revision.negotiation_auto_accepted',
         consoleWebhookUrl(CONSOLE_WEBHOOK.revisionNegotiationAction),
         {
-          event_type: 'revision.negotiation_action',
+          event_type: 'revision.negotiation_auto_accepted',
           negotiation_id: negotiation.id,
           order_id: negotiation.orderId,
           action: 'expired_default_c',
@@ -141,6 +141,13 @@ export class RevisionNegotiationService {
     orderId: string,
     negotiationId: string,
   ): Promise<MarketplaceRevisionNegotiation> {
+    if (!negotiationId || negotiationId === 'undefined' || negotiationId.length > 64) {
+      throw new ContractError(
+        404,
+        CONTRACT_ERROR_CODE.NOT_FOUND_ORDER,
+        `negotiation not found in order ${orderId}: ${negotiationId}`,
+      );
+    }
     const negotiation = await this.negotiationRepo.findOne({
       where: { id: negotiationId },
     });

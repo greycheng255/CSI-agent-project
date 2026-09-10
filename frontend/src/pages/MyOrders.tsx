@@ -1,10 +1,12 @@
-﻿import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CircleAlert, ClipboardList, ExternalLink, Inbox, Loader2, Package, Plus, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { CircleAlert, ClipboardList, ExternalLink, Gavel, Inbox, Loader2, Package, Plus, Clock, CheckCircle, Sparkles, Store, XCircle } from 'lucide-react';
 import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
 import { formatShanghaiDate } from '../utils/date';
+import { listMyMarketplaceTasks } from '../api/longtaskApi';
+import type { MyMarketplaceTask } from '../api/longtaskApi';
 
 type TaskStatus = 'OPEN' | 'CLOSED' | 'CANCELED';
 
@@ -183,15 +185,39 @@ function orderStatusView(status: OrderStatus) {
 }
 
 export default function MyOrders() {
-  const { user } = useAuthStore();
+  const { user, token } = useAuthStore();
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'open' | 'in_progress' | 'completed'>('all');
+  // 长任务线：任务大厅发布的任务（含竞标动态与选标结果）
+  const [longTasks, setLongTasks] = useState<MyMarketplaceTask[]>([]);
+  const [longLoading, setLongLoading] = useState(true);
 
   const apiBase = API_BASE;
+
+  const loadLongTasks = useCallback(async () => {
+    if (!token) {
+      setLongLoading(false);
+      return;
+    }
+    setLongLoading(true);
+    try {
+      const data = await listMyMarketplaceTasks(token);
+      setLongTasks(Array.isArray(data) ? data : []);
+    } catch {
+      /* 长任务读取失败不阻塞页面主体 */
+      setLongTasks([]);
+    } finally {
+      setLongLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    void loadLongTasks();
+  }, [loadLongTasks]);
 
   useEffect(() => {
     if (!user) {
@@ -300,6 +326,33 @@ export default function MyOrders() {
           <div className="mt-1 text-xs text-[var(--text-500)]">已完成</div>
         </div>
       </section>
+
+      {/* 长任务线：任务大厅发布的任务（竞标动态 / 选标 / 签约入口） */}
+      {token && (longLoading ? (
+        <section className="flex min-h-20 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white text-sm text-[var(--text-500)]">
+          <Loader2 className="mr-3 h-4 w-4 animate-spin text-[var(--brand-500)]" />
+          正在读取长任务任务...
+        </section>
+      ) : longTasks.length > 0 ? (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-base font-semibold text-[var(--text-800)]">
+              <Gavel className="h-4 w-4 text-[var(--brand-600)]" />
+              长任务（AI 工作室竞标）
+            </h2>
+            <button
+              type="button"
+              onClick={() => void loadLongTasks()}
+              className="inline-flex items-center gap-1 text-xs text-[var(--text-500)] hover:text-[var(--brand-600)]"
+            >
+              刷新竞标动态
+            </button>
+          </div>
+          {longTasks.map((task) => (
+            <LongTaskCard key={task.id} task={task} />
+          ))}
+        </section>
+      ) : null)}
 
       {/* 标签页 */}
       <div className="flex gap-1 overflow-x-auto rounded-xl bg-[var(--background-100)] p-1">
@@ -555,6 +608,130 @@ export default function MyOrders() {
             })}
         </section>
       )}
+    </div>
+  );
+}
+
+/** 长任务任务状态 → 用户可读文案（任务大厅 7 态，PRD 附录 D.1） */
+const LONG_TASK_STATUS: Record<string, { label: string; cls: string }> = {
+  open: { label: '竞标中', cls: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]' },
+  selected: { label: '已选标', cls: 'bg-[var(--brand-50)] text-[var(--brand-700)] border border-[var(--brand-200)]' },
+  completed: { label: '已完成', cls: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]' },
+  expired: { label: '已过期', cls: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]' },
+  closed: { label: '已关闭', cls: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]' },
+  cancelled: { label: '已取消', cls: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]' },
+  draft: { label: '草稿', cls: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]' },
+};
+
+/** 「我的任务」页长任务卡片：竞标动态（谁投了标、报价）+ 选标/签约入口 */
+function LongTaskCard({ task }: { task: MyMarketplaceTask }) {
+  const status = LONG_TASK_STATUS[task.status] ?? {
+    label: task.status,
+    cls: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]',
+  };
+  const bidCount = task.bids.length;
+
+  return (
+    <div className="rounded-2xl border border-[color:var(--border)] bg-white p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-3">
+            <h3 className="truncate text-base font-semibold text-[var(--text-900)]">
+              {task.title}
+            </h3>
+            <span className={`px-2 py-0.5 text-xs rounded border ${status.cls}`}>
+              {status.label}
+            </span>
+            {task.orderId && (
+              <span className="px-2 py-0.5 text-xs rounded border bg-[var(--brand-50)] text-[var(--brand-700)] border-[var(--brand-200)]">
+                签约中
+              </span>
+            )}
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--text-500)]">
+            <span>席位 {task.seatTaken}/{task.seatLimit}</span>
+            <span>第 {task.bidRound} 轮竞标</span>
+            <span>
+              竞标数：
+              <span className={bidCount > 0 ? 'font-semibold text-[var(--brand-600)]' : ''}>
+                {bidCount}
+              </span>
+            </span>
+            <span>发布于 {formatShanghaiDate(task.createdAt)}</span>
+          </div>
+
+          {/* 竞标动态：每家工作室的报价与方案 */}
+          {bidCount > 0 ? (
+            <ul className="mt-3 space-y-2">
+              {task.bids.map((bid) => (
+                <li
+                  key={bid.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[var(--background-100)] px-3 py-2"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Store className="h-4 w-4 shrink-0 text-[var(--text-400)]" />
+                    <span className="truncate text-sm font-medium text-[var(--text-800)]">
+                      {bid.workspaceName ?? '未知工作室'}
+                    </span>
+                    {bid.platformRecommended && (
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--brand-50)] px-2 py-0.5 text-xs font-medium text-[var(--brand-600)]">
+                        <Sparkles className="h-3 w-3" />
+                        平台推荐
+                      </span>
+                    )}
+                    {bid.planSummary && (
+                      <span className="truncate text-xs text-[var(--text-500)]">
+                        {bid.planSummary}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3 text-xs text-[var(--text-500)]">
+                    {bid.estimatedDeliveryAt && (
+                      <span>预计交付 {formatShanghaiDate(bid.estimatedDeliveryAt)}</span>
+                    )}
+                    <span className="text-sm font-semibold text-[var(--brand-600)]">
+                      ¥{bid.priceCny}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : task.status === 'open' ? (
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-[var(--state-warning)]">
+              <Clock className="h-3.5 w-3.5" />
+              已推送商机并开放席位，等待工作室投标
+            </p>
+          ) : null}
+        </div>
+
+        <div className="flex shrink-0 flex-col gap-2">
+          {task.status === 'open' && bidCount > 0 && (
+            <Link
+              to={`/longtask/tasks/${task.id}/seats`}
+              className="min-h-9 rounded-full bg-[var(--brand-500)] px-3 py-2 text-center text-sm font-medium text-white hover:bg-[var(--brand-600)]"
+            >
+              去选标
+            </Link>
+          )}
+          {task.orderId && (
+            <Link
+              to={`/longtask/employer/orders/${task.orderId}`}
+              className="inline-flex min-h-9 items-center justify-center gap-1 rounded-full border border-[var(--brand-200)] px-3 text-sm font-medium text-[var(--brand-700)] hover:bg-[var(--brand-50)]"
+            >
+              签约订单
+              <ExternalLink className="w-3 h-3" />
+            </Link>
+          )}
+          <Link
+            to={`/longtask/tasks/${task.id}/seats`}
+            className="inline-flex min-h-9 items-center justify-center gap-1 rounded-full border border-[color:var(--border)] px-3 text-sm font-medium text-[var(--text-600)] hover:border-[var(--brand-300)] hover:text-[var(--brand-600)]"
+          >
+            竞标席位
+            <ExternalLink className="w-3 h-3" />
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

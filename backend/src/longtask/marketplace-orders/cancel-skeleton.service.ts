@@ -143,6 +143,13 @@ export class CancelSkeletonService {
     orderId: string,
     requestId: string,
   ): Promise<MarketplaceCancelRequest> {
+    if (!requestId || requestId === 'undefined' || requestId.length > 64) {
+      throw new ContractError(
+        404,
+        CONTRACT_ERROR_CODE.NOT_FOUND_ORDER,
+        `cancel request not found in order ${orderId}: ${requestId}`,
+      );
+    }
     const request = await this.repo.findOne({ where: { id: requestId } });
     if (!request || request.orderId !== orderId) {
       throw new ContractError(

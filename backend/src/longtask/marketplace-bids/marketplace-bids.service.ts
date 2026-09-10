@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { MarketplaceBid } from './marketplace-bid.entity';
 import { MarketplaceTask } from '../marketplace-tasks/marketplace-task.entity';
 import { Workspace } from '../workspaces/workspace.entity';
@@ -13,6 +13,10 @@ import {
   CompositeScoreInput,
   median,
 } from './bid-scoring';
+import {
+  evaluatePlanSimilarity,
+  PlanSimilarityResult,
+} from './plan-similarity';
 
 const SEAT_FULL_WINDOW_MS = 72 * 60 * 60 * 1000; // 72h 雇主决策倒计时
 const INDUSTRY_AVG_RATING = 3.5; // 行业平均分占位（信誉体系立项前），0-5
@@ -35,6 +39,8 @@ export interface SubmitBidResult {
   seatLimit: number;
   seatFull: boolean;
   seatFullDeadline: Date | null;
+  /** PRD §5.6.8 差异化提示：与同任务已提交方案的最大相似度（≥85% → warning=true，不阻断） */
+  similarity: PlanSimilarityResult;
 }
 
 export interface RankedBid {
@@ -105,6 +111,22 @@ export class MarketplaceBidsService {
       );
     }
 
+    // PRD §5.6.6：未中标 / 已驳回 = 该任务上的竞标机会已消耗，任务重开后不可再次竞标
+    const consumed = await this.bidsRepo.findOne({
+      where: {
+        marketplaceTaskId: task.id,
+        workspaceId: input.workspaceId,
+        status: In(['lost', 'rejected']),
+      },
+    });
+    if (consumed) {
+      throw new ContractError(
+        409,
+        CONTRACT_ERROR_CODE.CONFLICT_DUPLICATE,
+        `bidding chance already consumed for this task (previous status=${consumed.status})`,
+      );
+    }
+
     if (task.seatTaken >= task.seatLimit) {
       throw new ContractError(
         409,
@@ -142,6 +164,19 @@ export class MarketplaceBidsService {
       status: 'submitted',
       source: input.source ?? 'pull',
     });
+    // PRD §5.6.8：与同任务同轮已提交方案的差异化提示（软警告，不阻断）
+    const existing = await this.bidsRepo.find({
+      where: {
+        marketplaceTaskId: task.id,
+        bidRound: round,
+        status: 'submitted',
+      },
+    });
+    const similarity = evaluatePlanSimilarity(
+      input.planSummary ?? null,
+      existing.map((b) => b.planSummary),
+    );
+
     const saved = await this.bidsRepo.save(bid);
 
     return {
@@ -150,6 +185,7 @@ export class MarketplaceBidsService {
       seatLimit: task.seatLimit,
       seatFull: task.seatTaken >= task.seatLimit,
       seatFullDeadline: task.seatFullDeadline,
+      similarity,
     };
   }
 

@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MarketplaceContractController } from './contract/marketplace-contract.controller';
+import { MarketplaceOpsController } from './contract/marketplace-ops.controller';
 import { Rfc7807Filter } from './contract/rfc7807.filter';
 import { WebhookDispatcherService } from './contract/webhook-dispatcher.service';
 import { WebhookDispatcherCron } from './contract/webhook-dispatcher.cron';
+import { DeadlineScannerCron } from './contract/deadline-scanner.cron';
 import { WebhookInboundEvent } from './contract/webhook-inbound.entity';
 import { WebhookOutbox } from './contract/webhook-outbox.entity';
 import { HmacNonce } from './contract/hmac-nonce.entity';
@@ -23,6 +25,8 @@ import { MarketplaceDelivery } from './marketplace-orders/delivery.entity';
 import { DeliveryContractService } from './marketplace-orders/delivery-contract.service';
 import { MarketplaceOrder } from './marketplace-orders/marketplace-order.entity';
 import { MarketplaceOrdersService } from './marketplace-orders/marketplace-orders.service';
+import { EmployerMarketplaceOrdersController } from './marketplace-orders/employer-marketplace-orders.controller';
+import { OwnerMarketplaceOrdersController } from './marketplace-orders/owner-marketplace-orders.controller';
 import { MarketplaceRevisionNegotiation } from './marketplace-orders/negotiation.entity';
 import { RevisionNegotiationService } from './marketplace-orders/revision-negotiation.service';
 import { SpecContractService } from './marketplace-orders/spec-contract.service';
@@ -39,6 +43,7 @@ import { WorkspacesService } from './workspaces/workspaces.service';
 import { WorkspaceSyncService } from './workspaces/workspace-sync.service';
 import { WorkspaceWebhookController } from './workspaces/workspace-webhook.controller';
 import { AuthModule } from '../auth/auth.module';
+import { PaymentModule } from '../payment/payment.module';
 
 /**
  * 长任务域模块（阶段一 + 阶段二）。
@@ -47,6 +52,7 @@ import { AuthModule } from '../auth/auth.module';
 @Module({
   imports: [
     AuthModule,
+    PaymentModule, // 签约托管支付：复用 BalanceService（余额扣款/退款）
     TypeOrmModule.forFeature([
       Workspace,
       MarketplaceTask,
@@ -69,7 +75,10 @@ import { AuthModule } from '../auth/auth.module';
     WorkspaceWebhookController,
     MarketplaceTasksController,
     MarketplaceContractController,
+    MarketplaceOpsController,
     OwnerMarketplaceBidsController,
+    EmployerMarketplaceOrdersController,
+    OwnerMarketplaceOrdersController,
   ],
   providers: [
     WorkspacesService,
@@ -88,6 +97,7 @@ import { AuthModule } from '../auth/auth.module';
     DisputesService,
     WebhookDispatcherService,
     WebhookDispatcherCron,
+    DeadlineScannerCron,
     TimeoutScannerService,
     { provide: APP_FILTER, useClass: Rfc7807Filter },
   ],

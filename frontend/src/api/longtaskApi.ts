@@ -96,6 +96,9 @@ export async function createWorkspace(
 }
 
 export interface UpdateWorkspaceShowcaseInput {
+  /** PRD §4.1 引导配置：名称 / logo / 简介 / 类目 / 标签 / 公告 / 承诺 */
+  name?: string | null;
+  logoUrl?: string | null;
   bio?: string | null;
   capabilityTags?: string[] | null;
   /** 经营类目（PRD §4.1 引导配置「选择经营类目」；接收该类目商机推送） */
@@ -250,6 +253,50 @@ export async function listWorkspaceGallery(): Promise<
   );
 }
 
+// ===== 雇主「我的长任务」（工作台「我的任务」页展示竞标动态与签约入口）=====
+
+/** 我的长任务当前轮竞标摘要（来自席位 rank 投影） */
+export interface MyMarketplaceTaskBid {
+  id: string;
+  workspaceId: string;
+  workspaceName: string | null;
+  workspaceLogoUrl: string | null;
+  priceCny: number;
+  planSummary: string | null;
+  estimatedDeliveryAt: string | null;
+  source: 'push' | 'pull' | 'manual_assign';
+  status: string;
+  platformRecommended: boolean;
+  createdAt: string;
+}
+
+/** 我发布的长任务任务（含竞标动态与选标结果） */
+export interface MyMarketplaceTask {
+  id: string;
+  title: string;
+  description: string | null;
+  status: 'draft' | 'open' | 'selected' | 'completed' | 'expired' | 'closed' | 'cancelled';
+  seatTaken: number;
+  seatLimit: number;
+  bidRound: number;
+  createdAt: string;
+  expiresAt: string | null;
+  bids: MyMarketplaceTaskBid[];
+  /** 已选标生成的签约订单（长任务线），用于跳转签约订单详情 */
+  orderId: string | null;
+  orderContractStatus: string | null;
+}
+
+/** 我发布的长任务列表（仅登录雇主本人名下，按发布时间倒序） */
+export async function listMyMarketplaceTasks(
+  token: string,
+): Promise<MyMarketplaceTask[]> {
+  return requestJson<MyMarketplaceTask[]>(
+    '/api/v1/longtask/marketplace-tasks/mine',
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+}
+
 /** 默认工作室自动开通结果 */
 export interface EnsureDefaultWorkspaceResult {
   created: boolean;
@@ -302,6 +349,13 @@ export interface OwnerMarketplaceBidResult {
   seatLimit: number;
   seatFull: boolean;
   seatFullDeadline: string | null;
+  /** PRD §5.6.8 差异化提示：与同任务已提交方案相似度（≥85% → warning，不阻断提交） */
+  similarity?: {
+    maxSimilarity: number;
+    similarCount: number;
+    warning: boolean;
+    threshold: number;
+  };
 }
 
 /**
@@ -317,4 +371,283 @@ export async function submitOwnerMarketplaceBid(
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify(input),
   });
+}
+
+// ===== 雇主订单 / 签约（长任务线内部读取端点 + 雇主动作）=====
+
+/** Spec 里程碑（Console 推送快照，权重合计 100%） */
+export interface EmployerOrderMilestone {
+  key?: string;
+  name?: string;
+  weight?: number;
+  status?: string;
+}
+
+/** 长任务订单（MarketplaceOrder 投影；列表附带任务标题与中标工作室名） */
+export interface EmployerOrder {
+  id: string;
+  projectId: string | null;
+  workspaceId: string;
+  marketplaceTaskId: string;
+  employerUserId: string | null;
+  finalPriceCny: number | null;
+  contractStatus: string;
+  specSnapshot: { content?: unknown } | null;
+  specHash: string | null;
+  specVersion: number;
+  milestones: EmployerOrderMilestone[] | null;
+  specDeadline: string | null;
+  specRejectionCount: number;
+  deliveryStatus: string | null;
+  settlementStatus: string | null;
+  /** 雇主签约托管支付：unpaid / paid（金额语义统一为元） */
+  paymentStatus?: string;
+  paidAt?: string | null;
+  afterSaleDeadline: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** 列表投影；详情由 task/workspace 字段提供 */
+  taskTitle?: string | null;
+  workspaceName?: string | null;
+}
+
+/** 交付物（场景五；平台只存 metadata + 签名 URL） */
+export interface EmployerOrderDelivery {
+  id: string;
+  orderId: string;
+  submissionSeq: number;
+  metadata: Record<string, unknown> | null;
+  artifactUrls: string[] | null;
+  status: 'submitted' | 'accepted' | 'rejected' | 'revision_requested' | 'auto_accepted';
+  reviewRound: number;
+  submittedAt: string | null;
+  acceptDeadline: string | null;
+  createdAt: string;
+}
+
+/** 协商取消请求（场景八） */
+export interface EmployerOrderCancelRequest {
+  id: string;
+  orderId: string;
+  cancelProposalSeq: number;
+  status: 'open' | 'accepted' | 'rejected' | 'counter_proposed' | 'finalized' | 'to_dispute';
+  trigger: string | null;
+  ownerResponse: string | null;
+  resolution: string | null;
+  createdAt: string;
+}
+
+/** 纠纷（场景十） */
+export interface EmployerOrderDispute {
+  id: string;
+  orderId: string;
+  status: 'evidence_open' | 'arbitrating' | 'resolved' | 'acknowledged';
+  evidenceDeadline: string | null;
+  arbitrationDeadline: string | null;
+  resolution: string | null;
+  resolutionAmountCny: number | null;
+  createdAt: string;
+}
+
+export interface EmployerOrderTaskBrief {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+}
+
+export interface EmployerOrderWorkspaceBrief {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+}
+
+/** 订单详情（Spec 快照与里程碑、交付物、最新协商/纠纷） */
+export interface EmployerOrderDetail {
+  order: EmployerOrder;
+  task: EmployerOrderTaskBrief | null;
+  workspace: EmployerOrderWorkspaceBrief | null;
+  deliveries: EmployerOrderDelivery[];
+  latestCancelRequest: EmployerOrderCancelRequest | null;
+  latestDispute: EmployerOrderDispute | null;
+}
+
+/** 我的订单列表（仅当前登录雇主名下订单） */
+export async function listEmployerOrders(
+  token: string,
+): Promise<EmployerOrder[]> {
+  return requestJson<EmployerOrder[]>('/api/v1/longtask/employer/orders', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+/** 订单详情（读取即认领无主订单，非雇主 → 403） */
+export async function getEmployerOrderDetail(
+  token: string,
+  orderId: string,
+): Promise<EmployerOrderDetail> {
+  return requestJson<EmployerOrderDetail>(
+    `/api/v1/longtask/employer/orders/${encodeURIComponent(orderId)}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+}
+
+/** 场景四 #12：雇主确认 / 驳回 Spec */
+export async function employerSpecAction(
+  token: string,
+  orderId: string,
+  action: 'confirmed' | 'rejected',
+  reason?: string | null,
+): Promise<EmployerOrder> {
+  return requestJson<EmployerOrder>(
+    `/api/v1/longtask/employer/orders/${encodeURIComponent(orderId)}/spec-action`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action, reason: reason ?? null }),
+    },
+  );
+}
+
+/** 场景五 #14：雇主验收（accepted / rejected / revision_requested） */
+export async function employerReviewDelivery(
+  token: string,
+  orderId: string,
+  action: 'accepted' | 'rejected' | 'revision_requested',
+  reason?: string | null,
+): Promise<EmployerOrderDelivery> {
+  return requestJson<EmployerOrderDelivery>(
+    `/api/v1/longtask/employer/orders/${encodeURIComponent(orderId)}/review`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action, reason: reason ?? null }),
+    },
+  );
+}
+
+/** 场景八 #24：雇主发起协商取消 */
+export async function employerRequestCancel(
+  token: string,
+  orderId: string,
+): Promise<EmployerOrderCancelRequest> {
+  return requestJson<EmployerOrderCancelRequest>(
+    `/api/v1/longtask/employer/orders/${encodeURIComponent(orderId)}/cancel-requests`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: '{}',
+    },
+  );
+}
+
+/**
+ * 签约托管支付（余额）：按订单价（元）扣款入平台托管。
+ * 服务端按订单价计费，无需传金额；余额不足时后端返回 400，可引导雇主去充值。
+ */
+export async function employerPayWithBalance(
+  token: string,
+  orderId: string,
+): Promise<EmployerOrder> {
+  return requestJson<EmployerOrder>(
+    `/api/v1/longtask/employer/orders/${encodeURIComponent(orderId)}/pay-with-balance`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: '{}',
+    },
+  );
+}
+
+// ===== Agent Owner 接单履约（名下工作室的中标订单与交付）=====
+
+/** Owner 视角中标订单（列表投影） */
+export interface OwnerLongtaskOrder {
+  id: string;
+  projectId: string | null;
+  workspaceId: string;
+  marketplaceTaskId: string;
+  finalPriceCny: number | null;
+  contractStatus: string;
+  paymentStatus: string;
+  specVersion: number;
+  deliveryStatus: string | null;
+  settlementStatus: string | null;
+  settlementAmountCny: number | null;
+  settledAt: string | null;
+  afterSaleDeadline: string | null;
+  createdAt: string;
+  taskTitle: string | null;
+  workspaceName: string | null;
+}
+
+/** Owner 订单详情（交付历史 + 结算单） */
+export interface OwnerLongtaskOrderDetail {
+  order: EmployerOrder;
+  task: EmployerOrderTaskBrief | null;
+  workspace: EmployerOrderWorkspaceBrief | null;
+  deliveries: EmployerOrderDelivery[];
+  settlement: {
+    order_id: string;
+    settlement_status: string;
+    amount_cny: number | null;
+    completed_at: string | null;
+  } | null;
+}
+
+/** 名下工作室的中标订单列表（按下单时间倒序） */
+export async function listOwnerLongtaskOrders(
+  token: string,
+): Promise<OwnerLongtaskOrder[]> {
+  return requestJson<OwnerLongtaskOrder[]>(
+    '/api/v1/longtask/owner/orders',
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+}
+
+/** Owner 订单详情 */
+export async function getOwnerLongtaskOrderDetail(
+  token: string,
+  orderId: string,
+): Promise<OwnerLongtaskOrderDetail> {
+  return requestJson<OwnerLongtaskOrderDetail>(
+    `/api/v1/longtask/owner/orders/${encodeURIComponent(orderId)}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+}
+
+/** Owner 提交交付物（启动雇主 14 天验收计时） */
+export async function ownerSubmitDeliverable(
+  token: string,
+  orderId: string,
+  input: { note?: string | null; artifactUrls?: string[] | null },
+): Promise<EmployerOrderDelivery> {
+  return requestJson<EmployerOrderDelivery>(
+    `/api/v1/longtask/owner/orders/${encodeURIComponent(orderId)}/deliverables`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        metadata: input.note ? { note: input.note } : null,
+        artifact_urls: input.artifactUrls ?? [],
+      }),
+    },
+  );
+}
+
+/** 场景十 #33/#39：雇主发起纠纷（进入 3 天举证窗口） */
+export async function employerRaiseDispute(
+  token: string,
+  orderId: string,
+  reason?: string | null,
+): Promise<EmployerOrderDispute> {
+  return requestJson<EmployerOrderDispute>(
+    `/api/v1/longtask/employer/orders/${encodeURIComponent(orderId)}/disputes`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ reason: reason ?? null }),
+    },
+  );
 }

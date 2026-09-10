@@ -1,8 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThanOrEqual, Repository } from 'typeorm';
 import { MarketplaceSettlement } from './settlement.entity';
 import { MarketplaceOrder } from '../marketplace-orders/marketplace-order.entity';
+import { WorkspacesService } from '../workspaces/workspaces.service';
+import { BalanceService } from '../../payment/balance.service';
+import { BalanceChangeType } from '../../payment/entities/balance.entity';
 import {
   Milestone,
   isWeightsSumValid,
@@ -17,16 +20,20 @@ import { CONSOLE_WEBHOOK, consoleWebhookUrl } from '../contract/console-endpoint
 
 /**
  * 结算数据面（T20/T21，D3）：结算单 + 里程碑公式 + 对账 #35/#36。
- * 平台不执行划款：settlement/trigger 后把结算数据交关联方，
- * 收到关联方 settlement.completed 回写后更新状态。
+ * 资金闭环：雇主托管支付 → 验收 → settlement/trigger 备结算数据 →
+ * 关联方回写 settlement.completed → 平台把托管款划入工作室 Owner 余额（amount_cny 元→分）。
  */
 @Injectable()
 export class SettlementsService {
+  private readonly logger = new Logger(SettlementsService.name);
+
   constructor(
     @InjectRepository(MarketplaceSettlement)
     private readonly settleRepo: Repository<MarketplaceSettlement>,
     @InjectRepository(MarketplaceOrder)
     private readonly ordersRepo: Repository<MarketplaceOrder>,
+    private readonly workspacesService: WorkspacesService,
+    private readonly balanceService: BalanceService,
     private readonly dispatcher: WebhookDispatcherService,
   ) {}
 
@@ -69,7 +76,10 @@ export class SettlementsService {
     return saved;
   }
 
-  /** M→C #32 消费：收到关联方 settlement.completed 回写 → 状态 settled */
+  /**
+   * 结算完成回写 → 划款入工作室 Owner 余额 → 通知 Console（M→C #32 `settlement.completed`）。
+   * 划款幂等：仅首次（status != settled）回写时入账，重复调用仅重发事件（Console 侧按 event 去重）。
+   */
   async consumeSettlementCompleted(
     orderId: string,
     payload?: Record<string, unknown>,
@@ -82,6 +92,32 @@ export class SettlementsService {
         `settlement not found for order ${orderId}`,
       );
     }
+    const firstWriteback = settlement.status !== 'settled';
+
+    if (firstWriteback) {
+      const amountFen = (settlement.amountCny ?? 0) * 100; // 结算单存元，余额库分记账
+      const workspace = await this.workspacesService.findById(
+        settlement.workspaceId,
+      );
+      if (workspace?.ownerUserId && amountFen > 0) {
+        await this.balanceService.addIncome({
+          userId: workspace.ownerUserId,
+          amountCny: amountFen,
+          orderId,
+          changeType: BalanceChangeType.ORDER_INCOME,
+          description: `长任务结算划款: ${settlement.amountCny}元`,
+        });
+      } else if (amountFen <= 0) {
+        this.logger.warn(
+          `settlement ${orderId}: zero amount, payout skipped`,
+        );
+      } else {
+        this.logger.error(
+          `settlement ${orderId}: workspace ${settlement.workspaceId} owner missing, payout skipped`,
+        );
+      }
+    }
+
     settlement.status = 'settled';
     settlement.completedAt = new Date();
     const saved = await this.settleRepo.save(settlement);
@@ -91,6 +127,18 @@ export class SettlementsService {
       order.settlementStatus = 'settled';
       await this.ordersRepo.save(order);
     }
+
+    await this.dispatcher.enqueue(
+      'settlement.completed',
+      consoleWebhookUrl(CONSOLE_WEBHOOK.settlementResult),
+      {
+        event_type: 'settlement.completed',
+        order_id: orderId,
+        project_id: order?.projectId ?? null,
+        amount_cny: saved.amountCny,
+        completed_at: saved.completedAt?.toISOString() ?? null,
+      },
+    );
     return { ...saved, _payload: payload } as MarketplaceSettlement;
   }
 

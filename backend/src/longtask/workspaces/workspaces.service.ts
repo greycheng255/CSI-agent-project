@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import { Workspace } from './workspace.entity';
+import { MarketplaceOrder } from '../marketplace-orders/marketplace-order.entity';
 import {
   CONTRACT_ERROR_CODE,
   ContractError,
@@ -30,6 +31,9 @@ export interface CreateWorkspaceInput {
 }
 
 export interface UpdateShowcaseInput {
+  /** PRD §4.1 引导配置：名称 / logo / 简介 / 类目 / 标签 / 公告 / 承诺 */
+  name?: string | null;
+  logoUrl?: string | null;
   bio?: string | null;
   capabilityTags?: string[] | null;
   /** 经营类目（PRD §4.1 引导配置「选择经营类目」；matchForPush 投递匹配依据） */
@@ -46,6 +50,8 @@ export class WorkspacesService {
   constructor(
     @InjectRepository(Workspace)
     private readonly repo: Repository<Workspace>,
+    @InjectRepository(MarketplaceOrder)
+    private readonly ordersRepo: Repository<MarketplaceOrder>,
     private readonly dispatcher: WebhookDispatcherService,
   ) {}
 
@@ -119,10 +125,50 @@ export class WorkspacesService {
     return { created: true, workspace };
   }
 
+  /**
+   * 删除 Workspace（PRD §4.2）：有进行中 Project（非终态 Order）→ 拒绝删除；
+   * 允许删除时做软删除（displayStatus=frozen，数据保留供审计）。
+   * 待处理/竞标分析中的商机由 Console 侧持有，归属校验在 Console；此处以本侧 Order 为准。
+   */
+  async remove(
+    id: string,
+    requesterId?: string,
+  ): Promise<{ deleted: boolean; softDeleted: boolean }> {
+    const ws = await this.repo.findOne({ where: { id } });
+    if (!ws) {
+      throw new ContractError(
+        404,
+        CONTRACT_ERROR_CODE.NOT_FOUND_WORKSPACE,
+        `workspace not found: ${id}`,
+      );
+    }
+    if (requesterId && ws.ownerUserId && ws.ownerUserId !== requesterId) {
+      throw new ContractError(
+        403,
+        CONTRACT_ERROR_CODE.FORBIDDEN,
+        'workspace does not belong to this owner',
+      );
+    }
+    const activeOrders = await this.ordersRepo.count({
+      where: { workspaceId: id, contractStatus: Not(In(['cancelled', 'closed'])) },
+    });
+    if (activeOrders > 0) {
+      throw new ContractError(
+        422,
+        CONTRACT_ERROR_CODE.STATE_INVALID_TRANSITION,
+        `workspace has ${activeOrders} active project(s); finish or cancel them first`,
+      );
+    }
+    if (ws.displayStatus !== 'frozen') {
+      ws.displayStatus = 'frozen';
+      await this.repo.save(ws);
+    }
+    return { deleted: true, softDeleted: true };
+  }
+
   findById(id: string): Promise<Workspace | null> {
     return this.repo.findOne({ where: { id } });
   }
-
   findBySlug(slug: string): Promise<Workspace | null> {
     return this.repo.findOne({ where: { slug } });
   }
@@ -184,6 +230,11 @@ export class WorkspacesService {
         `capability_tags must not exceed ${MAX_CAPABILITY_TAGS} items`,
       );
     }
+    if (patch.name !== undefined) {
+      const name = patch.name?.trim();
+      if (name) ws.name = name;
+    }
+    if (patch.logoUrl !== undefined) ws.logoUrl = patch.logoUrl;
     if (patch.bio !== undefined) ws.bio = patch.bio;
     if (patch.capabilityTags !== undefined) ws.capabilityTags = patch.capabilityTags;
     if (patch.categoryIds !== undefined) ws.categoryIds = patch.categoryIds;

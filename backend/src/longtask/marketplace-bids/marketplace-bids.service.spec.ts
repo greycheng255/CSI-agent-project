@@ -27,6 +27,8 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    // submit 内新增「同轮已提交方案」查询（§5.6.8 相似度）；默认无既有方案
+    mockBidsRepo.find.mockResolvedValue([]);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MarketplaceBidsService,
@@ -106,6 +108,31 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
     await expect(
       service.submit({ taskId: 'task-1', workspaceId: 'ws-1', priceCny: 1 }),
     ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('§5.6.6 已驳回/未中标后任务重开 → 竞标机会已消耗，409 拒绝', async () => {
+    mockTasksRepo.findOne.mockResolvedValueOnce(openTask({ bidRound: 2 }));
+    mockBidsRepo.findOne
+      .mockResolvedValueOnce(null) // 当前轮无重复
+      .mockResolvedValueOnce({ id: 'b-old', status: 'rejected' }); // 历史已驳回
+    await expect(
+      service.submit({ taskId: 'task-1', workspaceId: 'ws-1', priceCny: 1 }),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('§5.6.6 历史「不予竞标/中标失效」不阻断（无 lost/rejected 记录）→ 允许重投', async () => {
+    mockTasksRepo.findOne.mockResolvedValue(openTask({ bidRound: 2 }));
+    mockBidsRepo.findOne.mockResolvedValue(null); // 无同轮重复、无历史消耗
+    mockBidsRepo.find.mockResolvedValue([]);
+    mockBidsRepo.create.mockImplementation((v) => v);
+    mockBidsRepo.save.mockImplementation((v) => ({ ...v, id: 'b-new' }));
+    mockWorkspacesRepo.findOne.mockResolvedValue({ id: 'ws-1', name: 'A' });
+    const result = await service.submit({
+      taskId: 'task-1',
+      workspaceId: 'ws-1',
+      priceCny: 100,
+    });
+    expect(result.bid.id).toBe('b-new');
   });
 
   it('任务未找到 → 404；非 open 状态 → 422', async () => {

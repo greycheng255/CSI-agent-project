@@ -174,8 +174,9 @@ export default function LongTaskSeats() {
         : '预算面议';
 
   const openForBid = task.status === 'open';
-  const isEmployer =
-    !!user?.id && !!task.employerUserId && task.employerUserId === user.id;
+  // 选标/驳回只能由雇主本人执行；无主任务（employerUserId 为空）由首个操作者认领
+  const isEmployer = !!user?.id && (!task.employerUserId || task.employerUserId === user.id);
+  const unclaimedTask = !task.employerUserId;
   const mineWsId = myWorkspace?.id ?? null;
   const alreadyBid = !!mineWsId && seats.some((s) => s.bid.workspaceId === mineWsId);
   const wsUsable = !!myWorkspace && myWorkspace.displayStatus === 'active';
@@ -224,7 +225,7 @@ export default function LongTaskSeats() {
     setSubmitting(true);
     setBidMsg('');
     try {
-      await submitOwnerMarketplaceBid(token, {
+      const submitted = await submitOwnerMarketplaceBid(token, {
         taskId: id,
         workspaceId: mineWsId,
         priceCny,
@@ -232,7 +233,13 @@ export default function LongTaskSeats() {
         estimatedDeliveryAt: delivery ? delivery : null,
       });
       setBidOk(true);
-      setBidMsg('已提交竞标，席位 +1');
+      setBidMsg(
+        submitted.similarity?.warning
+          ? `已提交竞标，席位 +1；⚠ 与已有 ${submitted.similarity.similarCount} 个方案相似度较高（${Math.round(
+              submitted.similarity.maxSimilarity * 100,
+            )}%），建议差异化后再投。`
+          : '已提交竞标，席位 +1',
+      );
       setShowBidForm(false);
       loadSeats(id); // 刷新席位列表
     } catch (err) {
@@ -513,6 +520,11 @@ export default function LongTaskSeats() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-sm text-[var(--text-500)]">
               共 {seats.length} 家工作室参与竞标
+              {unclaimedTask && (
+                <span className="ml-2 text-xs text-[var(--text-400)]">
+                  （该任务暂无归属雇主，选择/驳回后你将成为该任务雇主）
+                </span>
+              )}
             </span>
             <div className="flex flex-wrap items-center gap-3">
               {isEmployer && openForBid && seats.length > 0 && (

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { WorkspacesService } from './workspaces.service';
 import { Workspace } from './workspace.entity';
+import { MarketplaceOrder } from '../marketplace-orders/marketplace-order.entity';
 import { ContractError } from '../contract/errors';
 import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
 
@@ -24,6 +25,10 @@ describe('WorkspacesService（T1：展示页/投递/竞标主体投影）', () =
       providers: [
         WorkspacesService,
         { provide: getRepositoryToken(Workspace), useValue: mockRepo },
+        {
+          provide: getRepositoryToken(MarketplaceOrder),
+          useValue: { count: jest.fn().mockResolvedValue(0) },
+        },
         {
           provide: WebhookDispatcherService,
           useValue: dispatcherMock,
@@ -108,6 +113,26 @@ describe('WorkspacesService（T1：展示页/投递/竞标主体投影）', () =
       receivePlatformPush: true,
     });
     expect(updated.categoryIds).toEqual(['web']);
+  });
+
+  it('更新展示页：引导配置写入名称与 logo（PRD §4.1）', async () => {
+    const ws = { id: 'w1', name: '旧名', logoUrl: null };
+    mockRepo.findOne.mockResolvedValueOnce(ws);
+    mockRepo.save.mockImplementation((v) => v);
+    const updated = await service.updateShowcase('w1', {
+      name: '  新工作室  ',
+      logoUrl: 'https://cdn/logo.png',
+    });
+    expect(updated.name).toBe('新工作室');
+    expect(updated.logoUrl).toBe('https://cdn/logo.png');
+  });
+
+  it('更新展示页：空名称不覆盖原值', async () => {
+    const ws = { id: 'w1', name: '保留名' };
+    mockRepo.findOne.mockResolvedValueOnce(ws);
+    mockRepo.save.mockImplementation((v) => v);
+    const updated = await service.updateShowcase('w1', { name: '   ' });
+    expect(updated.name).toBe('保留名');
   });
 
   it('更新展示页：服务承诺写入', async () => {

@@ -176,6 +176,14 @@ export class DeliveryContractService {
     return pending.length;
   }
 
+  /** 雇主订单详情：按提交序倒序列出该订单全部交付物 */
+  listByOrder(orderId: string): Promise<MarketplaceDelivery[]> {
+    return this.deliveryRepo.find({
+      where: { orderId },
+      order: { submissionSeq: 'DESC' },
+    });
+  }
+
   /** 5/9/13 天三级催办（reminder 级） */
   dueReminders(
     delivery: MarketplaceDelivery,
@@ -183,6 +191,17 @@ export class DeliveryContractService {
   ): number[] {
     if (!delivery.submittedAt) return [];
     return dueReminderDays(new Date(delivery.submittedAt).getTime(), nowMs);
+  }
+
+  /**
+   * 观察口径：统计处于 5/9/13 天催办点的待验收交付数。
+   * 催办消息由 Console 侧 deadline_scanner 经 #9 通道推送（集成指南 §3.2 场景五），M 侧只做计数与日志。
+   */
+  async countDueReminders(nowMs = Date.now()): Promise<number> {
+    const rows = await this.deliveryRepo.find({
+      where: { status: 'submitted' },
+    });
+    return rows.filter((d) => this.dueReminders(d, nowMs).length > 0).length;
   }
 
   private async getOrThrowOrder(orderId: string): Promise<MarketplaceOrder> {

@@ -51,10 +51,10 @@ export class SpecChangeService {
     });
     const saved = await this.changeRepo.save(change);
     await this.dispatcher.enqueue(
-      'spec_change.request',
+      'spec_change.requested',
       consoleWebhookUrl(CONSOLE_WEBHOOK.specChangeRequest),
       {
-        event_type: 'spec_change.request',
+        event_type: 'spec_change.requested',
         request_id: saved.id,
         order_id: orderId,
         project_id: order.projectId,
@@ -73,19 +73,45 @@ export class SpecChangeService {
     const change = await this.getOrThrowChange(orderId, changeId);
     change.classification = classification;
     change.status = 'classified';
-    const saved = await this.changeRepo.save(change);
+    return this.changeRepo.save(change);
+  }
 
-    if (classification === 'new_requirement') {
-      await this.dispatcher.enqueue(
-        'spec_change.employer_confirmation',
-        consoleWebhookUrl(CONSOLE_WEBHOOK.specChangeEmployerConfirmation),
-        {
-          event_type: 'spec_change.employer_confirmation',
-          request_id: changeId,
-          order_id: change.orderId,
-        },
+  /**
+   * M→C #20：雇主对「新增需求」判定的二次确认（事件字面值 spec_change.employer_confirmed / rejected）。
+   * 仅 classification=new_requirement 的请求需要二次确认；revision 判定直接走 #21-#23 提案链。
+   */
+  async employerConfirm(
+    orderId: string,
+    changeId: string,
+    decision: 'confirmed' | 'rejected',
+  ): Promise<MarketplaceSpecChange> {
+    const change = await this.getOrThrowChange(orderId, changeId);
+    if (change.classification !== 'new_requirement') {
+      throw new ContractError(
+        422,
+        CONTRACT_ERROR_CODE.STATE_INVALID_TRANSITION,
+        `change ${changeId} is not a new_requirement, no employer confirmation needed`,
       );
     }
+    const order = await this.getOrThrowOrder(orderId);
+    change.status = decision === 'confirmed' ? 'confirmed' : 'rejected';
+    const saved = await this.changeRepo.save(change);
+    await this.dispatcher.enqueue(
+      decision === 'confirmed'
+        ? 'spec_change.employer_confirmed'
+        : 'spec_change.employer_rejected',
+      consoleWebhookUrl(CONSOLE_WEBHOOK.specChangeEmployerConfirmation),
+      {
+        event_type:
+          decision === 'confirmed'
+            ? 'spec_change.employer_confirmed'
+            : 'spec_change.employer_rejected',
+        request_id: changeId,
+        order_id: orderId,
+        project_id: order.projectId,
+        decision,
+      },
+    );
     return saved;
   }
 
@@ -152,6 +178,13 @@ export class SpecChangeService {
     orderId: string,
     changeId: string,
   ): Promise<MarketplaceSpecChange> {
+    if (!changeId || changeId === 'undefined' || changeId.length > 64) {
+      throw new ContractError(
+        404,
+        CONTRACT_ERROR_CODE.NOT_FOUND_ORDER,
+        `spec change not found in order ${orderId}: ${changeId}`,
+      );
+    }
     const change = await this.changeRepo.findOne({ where: { id: changeId } });
     if (!change || change.orderId !== orderId) {
       throw new ContractError(

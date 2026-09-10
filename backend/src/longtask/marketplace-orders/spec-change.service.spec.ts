@@ -37,7 +37,7 @@ describe('SpecChangeService（T19：场景七 Spec 变更）', () => {
     const saved = await service.employerRequestChange('o1', 1, { note: '加需求' });
     expect(saved.status).toBe('requested');
     expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
-      'spec_change.request',
+      'spec_change.requested',
       expect.stringContaining('/v1/webhooks/spec-change/request'),
       expect.objectContaining({ order_id: 'o1', change_seq: 1 }),
     );
@@ -51,7 +51,7 @@ describe('SpecChangeService（T19：场景七 Spec 变更）', () => {
     ).rejects.toMatchObject({ status: 409 });
   });
 
-  it('Console 判定 new_requirement → 投递雇主二次确认', async () => {
+  it('Console 判定 new_requirement → 仅落判定，二次确认由雇主动作触发', async () => {
     mockChangeRepo.findOne.mockResolvedValueOnce({
       id: 'c1',
       orderId: 'o1',
@@ -59,12 +59,57 @@ describe('SpecChangeService（T19：场景七 Spec 变更）', () => {
     });
     mockChangeRepo.save.mockImplementation((v) => v);
 
-    await service.classify('o1', 'c1', 'new_requirement');
+    const saved = await service.classify('o1', 'c1', 'new_requirement');
+    expect(saved.classification).toBe('new_requirement');
+    expect(mockDispatcher.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('雇主二次确认 confirmed → 投递 spec_change.employer_confirmed', async () => {
+    mockChangeRepo.findOne.mockResolvedValueOnce({
+      id: 'c1',
+      orderId: 'o1',
+      classification: 'new_requirement',
+      status: 'classified',
+    });
+    mockOrdersRepo.findOne.mockResolvedValueOnce({ id: 'o1', projectId: 'p1' });
+    mockChangeRepo.save.mockImplementation((v) => v);
+
+    await service.employerConfirm('o1', 'c1', 'confirmed');
     expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
-      'spec_change.employer_confirmation',
+      'spec_change.employer_confirmed',
       expect.stringContaining('/v1/webhooks/spec-change/employer-confirmation'),
-      expect.objectContaining({ request_id: 'c1', order_id: 'o1' }),
+      expect.objectContaining({ request_id: 'c1', order_id: 'o1', decision: 'confirmed' }),
     );
+  });
+
+  it('雇主二次确认 rejected → 投递 spec_change.employer_rejected', async () => {
+    mockChangeRepo.findOne.mockResolvedValueOnce({
+      id: 'c1',
+      orderId: 'o1',
+      classification: 'new_requirement',
+      status: 'classified',
+    });
+    mockOrdersRepo.findOne.mockResolvedValueOnce({ id: 'o1', projectId: 'p1' });
+    mockChangeRepo.save.mockImplementation((v) => v);
+
+    await service.employerConfirm('o1', 'c1', 'rejected');
+    expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
+      'spec_change.employer_rejected',
+      expect.any(String),
+      expect.objectContaining({ decision: 'rejected' }),
+    );
+  });
+
+  it('非 new_requirement 判定 → 二次确认 422', async () => {
+    mockChangeRepo.findOne.mockResolvedValueOnce({
+      id: 'c1',
+      orderId: 'o1',
+      classification: 'revision',
+      status: 'classified',
+    });
+    await expect(
+      service.employerConfirm('o1', 'c1', 'confirmed'),
+    ).rejects.toMatchObject({ status: 422 });
   });
 
   it('Console 判定 revision → 不触发二次确认', async () => {
