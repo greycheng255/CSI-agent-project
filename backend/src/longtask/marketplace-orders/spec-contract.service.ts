@@ -122,8 +122,13 @@ export class SpecContractService {
         {
           event_type: 'spec.confirmed',
           order_id: orderId,
+          workspace_id: order.workspaceId,
+          marketplace_task_id: order.marketplaceTaskId,
           project_id: order.projectId,
+          spec_id: order.id,
           spec_version: order.specVersion,
+          revision_number: 1,
+          confirmed_at: new Date().toISOString(),
         },
       );
       return saved;
@@ -138,9 +143,14 @@ export class SpecContractService {
       {
         event_type: 'spec.rejected',
         order_id: orderId,
+        workspace_id: order.workspaceId,
+        marketplace_task_id: order.marketplaceTaskId,
         project_id: order.projectId,
-        rejection_count: saved.specRejectionCount,
-        reason: reason ?? null,
+        spec_id: order.id,
+        spec_version: order.specVersion,
+        revision_number: 1,
+        reject_reason: reason ?? null,
+        rejected_at: new Date().toISOString(),
       },
     );
     if (saved.specRejectionCount >= SPEC_REJECTION_LIMIT) {
@@ -173,7 +183,14 @@ export class SpecContractService {
         {
           event_type: 'spec.timeout',
           order_id: order.id,
+          workspace_id: order.workspaceId,
+          marketplace_task_id: order.marketplaceTaskId,
           project_id: order.projectId,
+          spec_id: order.id,
+          spec_version: order.specVersion,
+          next_action: 'auto_cancel',
+          reason: 'employer_timeout',
+          timed_out_at: new Date().toISOString(),
         },
       );
       // PRD §6.5.2：任务重开竞标进入下一轮
@@ -187,10 +204,18 @@ export class SpecContractService {
     orderId: string,
     reply: Record<string, unknown>,
   ): Promise<void> {
+    const order = await this.ordersRepo.findOne({ where: { id: orderId } });
     await this.dispatcher.enqueue(
       'task.employer_reply',
       consoleWebhookUrl(CONSOLE_WEBHOOK.employerReply),
-      { event_type: 'task.employer_reply', order_id: orderId, reply },
+      {
+        event_type: 'task.employer_reply',
+        order_id: orderId,
+        workspace_id: order?.workspaceId ?? null,
+        marketplace_task_id: order?.marketplaceTaskId ?? null,
+        project_id: order?.projectId ?? null,
+        reply,
+      },
     );
   }
 

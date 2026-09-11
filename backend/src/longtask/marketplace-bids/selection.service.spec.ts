@@ -5,6 +5,7 @@ import { MarketplaceBid } from './marketplace-bid.entity';
 import { MarketplaceTask } from '../marketplace-tasks/marketplace-task.entity';
 import { MarketplaceOrder } from '../marketplace-orders/marketplace-order.entity';
 import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
+import { NotificationDeliveryService } from '../../wechat/notification-delivery.service';
 
 describe('SelectionService（T10：选标/全部驳回/72h 自动驳回）', () => {
   let service: SelectionService;
@@ -27,6 +28,11 @@ describe('SelectionService（T10：选标/全部驳回/72h 自动驳回）', () 
     create: jest.fn(),
   };
   const mockDispatcher = { enqueue: jest.fn() };
+  const mockNotify = {
+    notifyBidWon: jest.fn(),
+    notifyEscrowPaid: jest.fn(),
+    notifySettlement: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -45,6 +51,10 @@ describe('SelectionService（T10：选标/全部驳回/72h 自动驳回）', () 
         {
           provide: WebhookDispatcherService,
           useValue: mockDispatcher,
+        },
+        {
+          provide: NotificationDeliveryService,
+          useValue: mockNotify,
         },
       ],
     }).compile();

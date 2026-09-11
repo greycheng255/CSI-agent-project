@@ -5,6 +5,7 @@ import { MarketplaceOrder } from './marketplace-order.entity';
 import { MarketplaceCancelRequest } from './cancel-request.entity';
 import { BalanceService } from '../../payment/balance.service';
 import { BalanceChangeType } from '../../payment/entities/balance.entity';
+import { NotificationDeliveryService } from '../../wechat/notification-delivery.service';
 import {
   CONTRACT_ERROR_CODE,
   ContractError,
@@ -28,6 +29,7 @@ export class MarketplaceOrdersService {
     @InjectRepository(MarketplaceCancelRequest)
     private readonly cancelRepo: Repository<MarketplaceCancelRequest>,
     private readonly balanceService: BalanceService,
+    private readonly notify: NotificationDeliveryService,
   ) {}
 
   async applyProjectId(
@@ -155,7 +157,14 @@ export class MarketplaceOrdersService {
     try {
       order.paymentStatus = 'paid';
       order.paidAt = new Date();
-      return await this.repo.save(order);
+      const saved = await this.repo.save(order);
+      // 微信通知：雇主支付托管到账 → 通知卖方工作室 owner
+      await this.notify.notifyEscrowPaid(
+        order.workspaceId,
+        order.id,
+        priceCny,
+      );
+      return saved;
     } catch (error) {
       await this.balanceService.addIncome({
         userId,

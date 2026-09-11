@@ -44,6 +44,7 @@ import { WorkspaceSyncService } from './workspaces/workspace-sync.service';
 import { WorkspaceWebhookController } from './workspaces/workspace-webhook.controller';
 import { AuthModule } from '../auth/auth.module';
 import { PaymentModule } from '../payment/payment.module';
+import { WechatModule } from '../wechat/wechat.module';
 
 /**
  * 长任务域模块（阶段一 + 阶段二）。
@@ -53,6 +54,7 @@ import { PaymentModule } from '../payment/payment.module';
   imports: [
     AuthModule,
     PaymentModule, // 签约托管支付：复用 BalanceService（余额扣款/退款）
+    WechatModule, // 微信通知交付（中标/支付/结算到账）
     TypeOrmModule.forFeature([
       Workspace,
       MarketplaceTask,

@@ -2,13 +2,22 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CancelSkeletonService } from './cancel-skeleton.service';
 import { MarketplaceCancelRequest } from './cancel-request.entity';
+import { MarketplaceOrder } from './marketplace-order.entity';
 import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
 
 describe('CancelSkeletonService（T16b：场景八骨架 + counter_proposal 422）', () => {
   let service: CancelSkeletonService;
 
   const mockRepo = { findOne: jest.fn(), save: jest.fn(), create: jest.fn() };
+  const mockOrdersRepo = { findOne: jest.fn() };
   const mockDispatcher = { enqueue: jest.fn() };
+
+  const order = {
+    id: 'o1',
+    workspaceId: 'ws-1',
+    marketplaceTaskId: 'task-1',
+    projectId: 'p1',
+  } as MarketplaceOrder;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -19,27 +28,31 @@ describe('CancelSkeletonService（T16b：场景八骨架 + counter_proposal 422�
           provide: getRepositoryToken(MarketplaceCancelRequest),
           useValue: mockRepo,
         },
+        { provide: getRepositoryToken(MarketplaceOrder), useValue: mockOrdersRepo },
         { provide: WebhookDispatcherService, useValue: mockDispatcher },
       ],
     }).compile();
     service = module.get(CancelSkeletonService);
   });
 
-  it('发起协商取消：建请求 + 投递 project.cancel_request', async () => {
+  it('发起协商取消：建请求 + 投递 project.cancel_requested', async () => {
     mockRepo.create.mockImplementation((v) => v);
     mockRepo.save.mockImplementation((v) => ({ ...v, id: 'cr-1' }));
+    mockOrdersRepo.findOne.mockResolvedValue(order);
 
     const request = await service.initiateCancel('o1', 'employer', 'p1');
     expect(request.status).toBe('open');
     expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
-      'project.cancel_request',
+      'project.cancel_requested',
       expect.stringContaining('/v1/webhooks/project/cancel-request'),
       expect.objectContaining({
-        event_type: 'project.cancel_request',
+        event_type: 'project.cancel_requested',
         request_id: 'cr-1',
         order_id: 'o1',
         project_id: 'p1',
-        trigger: 'employer',
+        source: 'employer_initiated',
+        cancel_proposal_seq: 1,
+        workspace_id: 'ws-1',
       }),
     );
   });
@@ -59,7 +72,8 @@ describe('CancelSkeletonService（T16b：场景八骨架 + counter_proposal 422�
   });
 
   it('respond counter_proposal：反提案受理 + 投递 cancel-counter-response（T19b 放开）', async () => {
-    mockRepo.findOne.mockResolvedValue({ id: 'cr-1', orderId: 'o1', status: 'open' });
+    mockRepo.findOne.mockResolvedValue({ id: 'cr-1', orderId: 'o1', status: 'open', cancelProposalSeq: 1 });
+    mockOrdersRepo.findOne.mockResolvedValue(order);
     mockRepo.save.mockImplementation((v) => v);
     const req = await service.respond('o1', 'cr-1', 'counter_proposal');
     expect(req.status).toBe('counter_proposed');
@@ -70,7 +84,8 @@ describe('CancelSkeletonService（T16b：场景八骨架 + counter_proposal 422�
         event_type: 'project.cancel_counter_response',
         request_id: 'cr-1',
         order_id: 'o1',
-        owner_response: 'counter_proposal',
+        decision: 'accepted',
+        cancel_proposal_seq: 1,
       }),
     );
   });
@@ -91,24 +106,26 @@ describe('CancelSkeletonService（T16b：场景八骨架 + counter_proposal 422�
   });
 
   it('finalize：投递 cancel-resolution(auto_settled)', async () => {
-    mockRepo.findOne.mockResolvedValueOnce({ id: 'cr-1', orderId: 'o1', status: 'accepted' });
+    mockRepo.findOne.mockResolvedValueOnce({ id: 'cr-1', orderId: 'o1', status: 'accepted', cancelProposalSeq: 1 });
+    mockOrdersRepo.findOne.mockResolvedValue(order);
     mockRepo.save.mockImplementation((v) => v);
     await service.finalize('o1', 'cr-1');
     expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
       'project.cancel_resolution',
       expect.stringContaining('/v1/webhooks/project/cancel-resolution'),
-      expect.objectContaining({ resolution: 'auto_settled' }),
+      expect.objectContaining({ result: 'auto_settled', cancel_proposal_seq: 1 }),
     );
   });
 
   it('to-dispute：投递 cancel-resolution(to_dispute)', async () => {
-    mockRepo.findOne.mockResolvedValueOnce({ id: 'cr-1', orderId: 'o1', status: 'open' });
+    mockRepo.findOne.mockResolvedValueOnce({ id: 'cr-1', orderId: 'o1', status: 'open', cancelProposalSeq: 1 });
+    mockOrdersRepo.findOne.mockResolvedValue(order);
     mockRepo.save.mockImplementation((v) => v);
     await service.toDispute('o1', 'cr-1');
     expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
       'project.cancel_resolution',
       expect.any(String),
-      expect.objectContaining({ resolution: 'to_dispute' }),
+      expect.objectContaining({ result: 'to_dispute', cancel_proposal_seq: 1 }),
     );
   });
 

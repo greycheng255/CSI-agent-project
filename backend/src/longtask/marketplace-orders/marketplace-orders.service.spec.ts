@@ -4,6 +4,7 @@ import { MarketplaceOrdersService } from './marketplace-orders.service';
 import { MarketplaceOrder } from './marketplace-order.entity';
 import { MarketplaceCancelRequest } from './cancel-request.entity';
 import { BalanceService } from '../../payment/balance.service';
+import { NotificationDeliveryService } from '../../wechat/notification-delivery.service';
 
 describe('MarketplaceOrdersService（T12/T13：project_id 回填 + 对账）', () => {
   let service: MarketplaceOrdersService;
@@ -30,6 +31,10 @@ describe('MarketplaceOrdersService（T12/T13：project_id 回填 + 对账）', (
           useValue: mockCancelRepo,
         },
         { provide: BalanceService, useValue: mockBalanceService },
+        {
+          provide: NotificationDeliveryService,
+          useValue: { notifyEscrowPaid: jest.fn() },
+        },
       ],
     }).compile();
     service = module.get(MarketplaceOrdersService);

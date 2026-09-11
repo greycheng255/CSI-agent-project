@@ -50,6 +50,7 @@ export class SpecChangeService {
       payload,
     });
     const saved = await this.changeRepo.save(change);
+    const changePayload = (payload ?? {}) as Record<string, unknown>;
     await this.dispatcher.enqueue(
       'spec_change.requested',
       consoleWebhookUrl(CONSOLE_WEBHOOK.specChangeRequest),
@@ -57,8 +58,15 @@ export class SpecChangeService {
         event_type: 'spec_change.requested',
         request_id: saved.id,
         order_id: orderId,
+        workspace_id: order.workspaceId,
+        marketplace_task_id: order.marketplaceTaskId,
         project_id: order.projectId,
         change_seq: changeSeq,
+        change_type: (changePayload.change_type as string) ?? 'new_requirement',
+        requested_by: 'employer',
+        requested_at: new Date().toISOString(),
+        requested_changes: changePayload.requested_changes ?? null,
+        request_content: changePayload.request_content ?? changePayload,
       },
     );
     return saved;
@@ -108,8 +116,14 @@ export class SpecChangeService {
             : 'spec_change.employer_rejected',
         request_id: changeId,
         order_id: orderId,
+        workspace_id: order.workspaceId,
+        marketplace_task_id: order.marketplaceTaskId,
         project_id: order.projectId,
-        decision,
+        employer_response: {
+          confirmed: decision === 'confirmed',
+          notes: null,
+        },
+        responded_at: new Date().toISOString(),
       },
     );
     return saved;
@@ -165,6 +179,14 @@ export class SpecChangeService {
     const change = await this.getOrThrowChange(orderId, changeId);
     change.status = 'rejected';
     return this.changeRepo.save(change);
+  }
+
+  /** 订单全部变更记录（按 change_seq 升序），供雇主详情页展示 */
+  async listByOrder(orderId: string): Promise<MarketplaceSpecChange[]> {
+    return this.changeRepo.find({
+      where: { orderId },
+      order: { changeSeq: 'ASC' },
+    });
   }
 
   private findChange(

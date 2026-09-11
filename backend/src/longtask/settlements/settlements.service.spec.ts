@@ -4,6 +4,7 @@ import { SettlementsService } from './settlements.service';
 import { MarketplaceSettlement } from './settlement.entity';
 import { MarketplaceOrder } from '../marketplace-orders/marketplace-order.entity';
 import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
+import { NotificationDeliveryService } from '../../wechat/notification-delivery.service';
 import { WorkspacesService } from '../workspaces/workspaces.service';
 import { BalanceService } from '../../payment/balance.service';
 import { BalanceChangeType } from '../../payment/entities/balance.entity';
@@ -28,6 +29,7 @@ describe('SettlementsService（T20/T21：备数据 + 划款交关联方）', () 
         },
         { provide: getRepositoryToken(MarketplaceOrder), useValue: mockOrdersRepo },
         { provide: WebhookDispatcherService, useValue: mockDispatcher },
+        { provide: NotificationDeliveryService, useValue: { notifySettlement: jest.fn() } },
         { provide: WorkspacesService, useValue: mockWorkspacesService },
         { provide: BalanceService, useValue: mockBalanceService },
       ],

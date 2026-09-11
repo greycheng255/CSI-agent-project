@@ -15,6 +15,14 @@ const AFTER_SALE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type NegotiationDecision = 'A' | 'B' | 'C' | 'D';
 
+/** M→C 协商选项词汇表（线上 Console 枚举，与内部 A/B/C/D 语义映射） */
+export const NEGOTIATION_OPTION_VOCAB: Record<NegotiationDecision, string> = {
+  A: 'append_revision',
+  B: 'spec_change',
+  C: 'accept_current',
+  D: 'to_dispute',
+};
+
 /**
  * 场景六 修订协商（T18，PRD §7.7.3）：
  * 2 天窗口 + 4 结构化选项；窗口超时**默认 C（接受当前交付）**。
@@ -56,6 +64,9 @@ export class RevisionNegotiationService {
         event_type: 'revision.negotiation_started',
         negotiation_id: saved.id,
         order_id: orderId,
+        workspace_id: order.workspaceId,
+        marketplace_task_id: order.marketplaceTaskId,
+        project_id: order.projectId,
         action: 'started',
         reason,
         deadline: saved.deadline?.toISOString() ?? null,
@@ -82,6 +93,9 @@ export class RevisionNegotiationService {
     negotiation.decision = decision;
     const saved = await this.negotiationRepo.save(negotiation);
 
+    const order = await this.ordersRepo.findOne({
+      where: { id: negotiation.orderId },
+    });
     await this.dispatcher.enqueue(
       'revision.negotiation_decided',
       consoleWebhookUrl(CONSOLE_WEBHOOK.revisionNegotiationAction),
@@ -89,8 +103,14 @@ export class RevisionNegotiationService {
         event_type: 'revision.negotiation_decided',
         negotiation_id: negotiationId,
         order_id: negotiation.orderId,
+        workspace_id: order?.workspaceId ?? null,
+        marketplace_task_id: order?.marketplaceTaskId ?? null,
+        project_id: order?.projectId ?? null,
         action: 'decided',
-        decision,
+        option: NEGOTIATION_OPTION_VOCAB[decision],
+        decided_by: 'employer',
+        effective: true,
+        decided_at: new Date().toISOString(),
       },
     );
 
@@ -114,6 +134,9 @@ export class RevisionNegotiationService {
       negotiation.decision = 'C';
       await this.negotiationRepo.save(negotiation);
       await this.acceptCurrent(negotiation.orderId);
+      const order = await this.ordersRepo.findOne({
+        where: { id: negotiation.orderId },
+      });
       await this.dispatcher.enqueue(
         'revision.negotiation_auto_accepted',
         consoleWebhookUrl(CONSOLE_WEBHOOK.revisionNegotiationAction),
@@ -121,8 +144,12 @@ export class RevisionNegotiationService {
           event_type: 'revision.negotiation_auto_accepted',
           negotiation_id: negotiation.id,
           order_id: negotiation.orderId,
+          workspace_id: order?.workspaceId ?? null,
+          marketplace_task_id: order?.marketplaceTaskId ?? null,
+          project_id: order?.projectId ?? null,
           action: 'expired_default_c',
           decision: 'C',
+          expired_at: new Date().toISOString(),
         },
       );
     }

@@ -78,7 +78,11 @@ describe('SpecChangeService（T19：场景七 Spec 变更）', () => {
     expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
       'spec_change.employer_confirmed',
       expect.stringContaining('/v1/webhooks/spec-change/employer-confirmation'),
-      expect.objectContaining({ request_id: 'c1', order_id: 'o1', decision: 'confirmed' }),
+      expect.objectContaining({
+        request_id: 'c1',
+        order_id: 'o1',
+        employer_response: { confirmed: true, notes: null },
+      }),
     );
   });
 
@@ -96,7 +100,9 @@ describe('SpecChangeService（T19：场景七 Spec 变更）', () => {
     expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
       'spec_change.employer_rejected',
       expect.any(String),
-      expect.objectContaining({ decision: 'rejected' }),
+      expect.objectContaining({
+        employer_response: { confirmed: false, notes: null },
+      }),
     );
   });
 

@@ -2,13 +2,22 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DisputesService } from './disputes.service';
 import { MarketplaceDispute } from './dispute.entity';
+import { MarketplaceOrder } from '../marketplace-orders/marketplace-order.entity';
 import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
 
 describe('DisputesService（T22：3 天举证 + 7 天裁定 + 4 选项 + 终态确认）', () => {
   let service: DisputesService;
 
   const mockDisputeRepo = { findOne: jest.fn(), find: jest.fn(), save: jest.fn(), create: jest.fn() };
+  const mockOrdersRepo = { findOne: jest.fn() };
   const mockDispatcher = { enqueue: jest.fn() };
+
+  const order = {
+    id: 'o1',
+    workspaceId: 'ws-1',
+    marketplaceTaskId: 'task-1',
+    projectId: 'p1',
+  } as MarketplaceOrder;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -19,6 +28,7 @@ describe('DisputesService（T22：3 天举证 + 7 天裁定 + 4 选项 + 终态�
           provide: getRepositoryToken(MarketplaceDispute),
           useValue: mockDisputeRepo,
         },
+        { provide: getRepositoryToken(MarketplaceOrder), useValue: mockOrdersRepo },
         { provide: WebhookDispatcherService, useValue: mockDispatcher },
       ],
     }).compile();
@@ -28,14 +38,15 @@ describe('DisputesService（T22：3 天举证 + 7 天裁定 + 4 选项 + 终态�
   it('纠纷发起：3 天举证窗口 + 投递 dispute-raised', async () => {
     mockDisputeRepo.create.mockImplementation((v) => v);
     mockDisputeRepo.save.mockImplementation((v) => ({ ...v, id: 'd1' }));
+    mockOrdersRepo.findOne.mockResolvedValue(order);
 
     const dispute = await service.raiseDispute('o1', '交付质量问题');
     const windowMs = dispute.evidenceDeadline!.getTime() - Date.now();
     expect(windowMs).toBeGreaterThan(3 * 24 * 60 * 60 * 1000 - 5000);
     expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
-      'project.dispute_raised',
+      'dispute.raised',
       expect.stringContaining('/v1/webhooks/project/dispute-raised'),
-      expect.objectContaining({ dispute_id: 'd1', order_id: 'o1' }),
+      expect.objectContaining({ dispute_id: 'd1', order_id: 'o1', raised_by: 'employer' }),
     );
   });
 
@@ -73,7 +84,7 @@ describe('DisputesService（T22：3 天举证 + 7 天裁定 + 4 选项 + 终态�
     expect(dispute.resolution).toBe('partial_settlement');
     expect(dispute.resolutionAmountCny).toBe(4_000);
     expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
-      'dispute.arbitration_result',
+      'dispute.resolved',
       expect.stringContaining('/v1/webhooks/dispute/arbitration-result'),
       expect.objectContaining({ outcome: 'partial_settlement', resolution: 'partial_settlement', amount_cny: 4_000 }),
     );
@@ -82,7 +93,7 @@ describe('DisputesService（T22：3 天举证 + 7 天裁定 + 4 选项 + 终态�
     mockDisputeRepo.findOne.mockResolvedValueOnce({ id: 'd2', orderId: 'o1', status: 'arbitrating' });
     await service.resolve('d2', 'resume_execution');
     expect(mockDispatcher.enqueue).toHaveBeenLastCalledWith(
-      'dispute.arbitration_result',
+      'dispute.resolved',
       expect.any(String),
       expect.objectContaining({ outcome: 'resume_execution', amount_cny: null }),
     );
@@ -91,7 +102,7 @@ describe('DisputesService（T22：3 天举证 + 7 天裁定 + 4 选项 + 终态�
     mockDisputeRepo.findOne.mockResolvedValueOnce({ id: 'd3', orderId: 'o1', status: 'arbitrating' });
     await service.resolve('d3', 'closed');
     expect(mockDispatcher.enqueue).toHaveBeenLastCalledWith(
-      'dispute.arbitration_result',
+      'dispute.resolved',
       expect.any(String),
       expect.objectContaining({ outcome: 'closed', amount_cny: null }),
     );

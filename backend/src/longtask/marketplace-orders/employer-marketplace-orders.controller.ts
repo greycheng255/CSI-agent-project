@@ -66,24 +66,32 @@ export class EmployerMarketplaceOrdersController {
     }));
   }
 
-  /** 订单详情：Spec 快照/版本/里程碑、交付物、最新取消协商与纠纷 */
+  /** 订单详情：Spec 快照/版本/里程碑、交付物、变更记录、最新取消协商与纠纷 */
   @Get(':id')
   @UseGuards(AuthGuard)
   async detail(@Param('id') orderId: string, @Req() req: RequestWithUser) {
     const order = await this.assertOrderEmployer(orderId, req.user?.id);
-    const [task, workspace, deliveries, latestCancelRequest, latestDispute] =
-      await Promise.all([
-        this.tasksService.findById(order.marketplaceTaskId),
-        this.workspacesService.findById(order.workspaceId),
-        this.deliveryContractService.listByOrder(orderId),
-        this.ordersService.latestCancelRequest(orderId),
-        this.disputesService.findLatestByOrder(orderId),
-      ]);
+    const [
+      task,
+      workspace,
+      deliveries,
+      specChanges,
+      latestCancelRequest,
+      latestDispute,
+    ] = await Promise.all([
+      this.tasksService.findById(order.marketplaceTaskId),
+      this.workspacesService.findById(order.workspaceId),
+      this.deliveryContractService.listByOrder(orderId),
+      this.specChangeService.listByOrder(orderId),
+      this.ordersService.latestCancelRequest(orderId),
+      this.disputesService.findLatestByOrder(orderId),
+    ]);
     return {
       order,
       task,
       workspace,
       deliveries,
+      specChanges,
       latestCancelRequest,
       latestDispute,
     };

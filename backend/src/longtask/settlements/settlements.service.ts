@@ -12,6 +12,7 @@ import {
   settlementAmount,
 } from './milestone-math';
 import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
+import { NotificationDeliveryService } from '../../wechat/notification-delivery.service';
 import {
   CONTRACT_ERROR_CODE,
   ContractError,
@@ -35,6 +36,7 @@ export class SettlementsService {
     private readonly workspacesService: WorkspacesService,
     private readonly balanceService: BalanceService,
     private readonly dispatcher: WebhookDispatcherService,
+    private readonly notify: NotificationDeliveryService,
   ) {}
 
   /** C→M #31：触发结算（校验权重和=100% → 备结算单数据；幂等 UNIQUE(order_id)） */
@@ -134,11 +136,24 @@ export class SettlementsService {
       {
         event_type: 'settlement.completed',
         order_id: orderId,
+        workspace_id: order?.workspaceId ?? null,
+        marketplace_task_id: order?.marketplaceTaskId ?? null,
         project_id: order?.projectId ?? null,
+        settlement_id: saved.id,
         amount_cny: saved.amountCny,
+        currency: 'CNY',
         completed_at: saved.completedAt?.toISOString() ?? null,
       },
     );
+
+    // 微信通知：结算到账 → 通知工作室 owner
+    if (firstWriteback) {
+      await this.notify.notifySettlement(
+        settlement.workspaceId,
+        orderId,
+        saved.amountCny ?? 0,
+      );
+    }
     return { ...saved, _payload: payload } as MarketplaceSettlement;
   }
 
@@ -187,7 +202,11 @@ export class SettlementsService {
           {
             event_type: 'settlement.appeal_period_closed',
             order_id: order.id,
+            workspace_id: order.workspaceId,
+            marketplace_task_id: order.marketplaceTaskId,
             project_id: order.projectId,
+            settlement_id: settlement.id,
+            closed_at: new Date().toISOString(),
           },
         );
         closed += 1;

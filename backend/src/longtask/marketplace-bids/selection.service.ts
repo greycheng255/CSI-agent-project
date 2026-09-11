@@ -5,6 +5,7 @@ import { MarketplaceBid } from './marketplace-bid.entity';
 import { MarketplaceTask } from '../marketplace-tasks/marketplace-task.entity';
 import { MarketplaceOrder } from '../marketplace-orders/marketplace-order.entity';
 import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
+import { NotificationDeliveryService } from '../../wechat/notification-delivery.service';
 import {
   CONTRACT_ERROR_CODE,
   ContractError,
@@ -26,6 +27,7 @@ export class SelectionService {
     @InjectRepository(MarketplaceOrder)
     private readonly ordersRepo: Repository<MarketplaceOrder>,
     private readonly dispatcher: WebhookDispatcherService,
+    private readonly notify: NotificationDeliveryService,
   ) {}
 
   /** 选标：winner=won、同轮其余=lost、任务→selected、建 Order、发 bid.won */
@@ -92,15 +94,27 @@ export class SelectionService {
         marketplace_task_id: taskId,
         workspace_id: bid.workspaceId,
         order_id: saved.id,
+        bid_id: bid.id,
         bid_round: round,
       },
+    );
+
+    // 微信通知：中标 → 通知中标工作室 owner
+    await this.notify.notifyBidWon(
+      bid.workspaceId,
+      taskId,
+      saved.id,
+      task.title,
     );
 
     return saved;
   }
 
   /** 全部驳回：当前轮 submitted→rejected、任务重开、每个受影响 Workspace 发 batch_rejected */
-  async rejectAll(taskId: string): Promise<{ rejectedCount: number }> {
+  async rejectAll(
+    taskId: string,
+    reason: 'employer_rejected' | 'seat_full_timeout' = 'employer_rejected',
+  ): Promise<{ rejectedCount: number }> {
     const task = await this.getOpenTask(taskId);
     const round = task.bidRound;
 
@@ -113,6 +127,7 @@ export class SelectionService {
     });
 
     const affectedWorkspaces = [...new Set(submitted.map((b) => b.workspaceId))];
+    const bidIds = submitted.map((b) => b.id);
     for (const bid of submitted) {
       bid.status = 'rejected';
       await this.bidsRepo.save(bid);
@@ -136,6 +151,9 @@ export class SelectionService {
           marketplace_task_id: taskId,
           workspace_id: workspaceId,
           bid_round: round,
+          bid_ids: bidIds,
+          reason,
+          rejected_at: new Date().toISOString(),
         },
       );
     }
@@ -153,7 +171,7 @@ export class SelectionService {
     });
     let rejected = 0;
     for (const task of tasks) {
-      await this.rejectAll(task.id);
+      await this.rejectAll(task.id, 'seat_full_timeout');
       rejected += 1;
     }
     return rejected;

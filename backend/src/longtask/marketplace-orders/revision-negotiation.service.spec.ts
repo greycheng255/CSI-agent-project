@@ -50,8 +50,11 @@ describe('RevisionNegotiationService（T18：2 天窗口 + 4 选项默认 C）',
       status: 'open',
     });
     mockNegotiationRepo.save.mockImplementation((v) => v);
-    mockOrdersRepo.findOne.mockResolvedValueOnce({
+    mockOrdersRepo.findOne.mockResolvedValue({
       id: 'o1',
+      workspaceId: 'ws-1',
+      marketplaceTaskId: 'task-1',
+      projectId: 'p1',
       deliveryStatus: 'revising',
       afterSaleDeadline: null,
     });
@@ -104,12 +107,16 @@ describe('RevisionNegotiationService（T18：2 天窗口 + 4 选项默认 C）',
       id: 'n1',
       orderId: 'o1',
       status: 'open',
+      decision: '',
       deadline: new Date('2026-08-20T00:00:00Z'),
     };
     mockNegotiationRepo.find.mockResolvedValueOnce([negotiation]);
     mockNegotiationRepo.save.mockImplementation((v) => v);
-    mockOrdersRepo.findOne.mockResolvedValueOnce({
+    mockOrdersRepo.findOne.mockResolvedValue({
       id: 'o1',
+      workspaceId: 'ws-1',
+      marketplaceTaskId: 'task-1',
+      projectId: 'p1',
       deliveryStatus: 'revising',
       afterSaleDeadline: null,
     });

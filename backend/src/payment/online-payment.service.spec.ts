@@ -4,6 +4,7 @@ import {
   Payment,
   PaymentProvider,
   PaymentStatus,
+  PaymentPurpose,
 } from './entities/payment.entity';
 import { Order, OrderStatus } from '../orders/entities/order.entity';
 import { PaymentNotification } from './entities/payment-notification.entity';
@@ -48,6 +49,8 @@ describe('OnlinePaymentService callback settlement', () => {
       tradeNo: null,
       amountCny: 1234,
       status: PaymentStatus.INIT,
+      purpose: PaymentPurpose.ORDER,
+      orderId: 'order-1',
       rawNotify: null,
       paidAt: null,
       order,
@@ -71,6 +74,7 @@ describe('OnlinePaymentService callback settlement', () => {
         if (entity === Payment) return Promise.resolve(payment);
         if (entity === PaymentNotification)
           return Promise.resolve(notification);
+        if (entity === Order) return Promise.resolve(order);
         if (entity === OrderPayment) return Promise.resolve(orderPayment);
         return Promise.resolve(null);
       }),
@@ -102,6 +106,8 @@ describe('OnlinePaymentService callback settlement', () => {
       dataSource,
       alipay,
       webhooks,
+      {} as never, // RechargeService（订单结算路径不触及）
+      {} as never, // BalanceService（订单结算路径不触及）
     );
     const params = {
       notify_id: 'notify-1',

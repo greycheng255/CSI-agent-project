@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   CircleAlert,
+  FileEdit,
   Gavel,
   Loader2,
   Package,
@@ -13,9 +14,11 @@ import {
   XCircle,
 } from 'lucide-react';
 import {
+  employerConfirmSpecChange,
   employerPayWithBalance,
   employerRaiseDispute,
   employerRequestCancel,
+  employerRequestSpecChange,
   employerReviewDelivery,
   employerSpecAction,
   getEmployerOrderDetail,
@@ -25,6 +28,7 @@ import type {
   EmployerOrderDelivery,
   EmployerOrderDetail,
   EmployerOrderDispute,
+  EmployerOrderSpecChange,
 } from '../api/longtaskApi';
 import { WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
 import { useAuthStore } from '../store/authStore';
@@ -62,6 +66,30 @@ const DISPUTE_LABEL: Record<string, string> = {
   acknowledged: '仲裁已终态',
 };
 
+const CHANGE_STATUS_LABEL: Record<string, string> = {
+  requested: '待判定（Console 24h）',
+  classified: '已判定',
+  proposed: '提案待响应',
+  confirmed: '已确认',
+  rejected: '已拒绝',
+};
+
+function changeClassificationLabel(change: EmployerOrderSpecChange): string {
+  if (change.classification === 'new_requirement') return '新增需求';
+  if (change.classification === 'revision') return '修订';
+  return '待判定';
+}
+
+/** 兼容两层 payload 包装：服务端存 { payload: { description } } */
+function changeDescription(change: EmployerOrderSpecChange): string {
+  const p = change.payload as {
+    payload?: { description?: unknown };
+    description?: unknown;
+  } | null;
+  const d = p?.payload?.description ?? p?.description;
+  return typeof d === 'string' ? d.trim() : '';
+}
+
 /** 里程碑权重：Console 可能传分数（合计 1）或百分数 */
 function formatWeight(weight?: number): string {
   if (typeof weight !== 'number') return '—';
@@ -83,6 +111,7 @@ export default function EmployerOrderDetail() {
   const [msgOk, setMsgOk] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [disputeReason, setDisputeReason] = useState('');
+  const [changeDesc, setChangeDesc] = useState('');
 
   const load = useCallback(async () => {
     if (!id || !token) {
@@ -162,9 +191,18 @@ export default function EmployerOrderDetail() {
 
   const { order, task, workspace, deliveries, latestCancelRequest, latestDispute } =
     detail;
+  const specChanges = detail.specChanges ?? [];
+  const pendingConfirmChange =
+    specChanges.find(
+      (c) => c.classification === 'new_requirement' && c.status === 'classified',
+    ) ?? null;
+  const nextChangeSeq =
+    specChanges.reduce((max, c) => Math.max(max, c.changeSeq), 0) + 1;
   const pendingDelivery = deliveries.find((d) => d.status === 'submitted') ?? null;
   const canConfirmSpec = order.contractStatus === 'awaiting_confirmation';
   const canReview = order.deliveryStatus === 'in_accept' && !!pendingDelivery;
+  const canRequestChange =
+    order.contractStatus === 'signed' && order.settlementStatus !== 'settled';
   const canCancel =
     order.contractStatus === 'signed' &&
     order.settlementStatus !== 'settled' &&
@@ -418,6 +456,93 @@ export default function EmployerOrderDetail() {
             <CheckCircle2 className="h-4 w-4" />
             已签约，等待交付。
           </p>
+        )}
+      </section>
+
+      {/* Spec 变更（场景七 #18 发起 / #20 新增需求二次确认） */}
+      <section className="rounded-2xl border border-[color:var(--border)] bg-white p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="flex items-center gap-2 font-semibold text-[var(--text-800)]">
+            <FileEdit className="h-5 w-5 text-[var(--brand-600)]" />
+            Spec 变更
+          </h2>
+          {specChanges.length > 0 && (
+            <span className="rounded-full bg-[var(--background-100)] px-2.5 py-0.5 text-xs font-medium text-[var(--text-600)]">
+              {specChanges.length} 条记录 · 当前 v{order.specVersion}
+            </span>
+          )}
+        </div>
+
+        {specChanges.length === 0 ? (
+          <p className="mt-3 text-sm text-[var(--text-500)]">暂无变更记录。</p>
+        ) : (
+          <ul className="mt-3 space-y-3">
+            {specChanges.map((change) => (
+              <SpecChangeCard
+                key={change.id}
+                change={change}
+                busy={busy}
+                needConfirm={pendingConfirmChange?.id === change.id}
+                onConfirm={(decision) =>
+                  runAction(
+                    () =>
+                      employerConfirmSpecChange(
+                        token,
+                        order.id,
+                        change.id,
+                        decision,
+                      ),
+                    decision === 'confirmed'
+                      ? '已确认新增需求，等待对方推送新版 Spec。'
+                      : '已拒绝该新增需求，原 Spec 继续执行。',
+                  )
+                }
+              />
+            ))}
+          </ul>
+        )}
+
+        {canRequestChange && (
+          <div className="mt-4 space-y-3 border-t border-[color:var(--border)] pt-4">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-semibold text-[var(--text-600)]">
+                发起变更 / 修订请求
+              </span>
+              <input
+                type="text"
+                value={changeDesc}
+                onChange={(event) => setChangeDesc(event.target.value)}
+                placeholder="例如：增加数据导出为 Excel 的能力"
+                className="h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+              />
+            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled={busy || !changeDesc.trim()}
+                onClick={() => {
+                  void runAction(
+                    () =>
+                      employerRequestSpecChange(
+                        token,
+                        order.id,
+                        nextChangeSeq,
+                        changeDesc.trim(),
+                      ),
+                    '已发起变更请求，对方将在 24 小时内判定为修订或新增需求。',
+                  );
+                  setChangeDesc('');
+                }}
+                className="btn-cs btn-primary min-h-11 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                发起变更请求（#{nextChangeSeq}）
+              </button>
+              {busy && <Loader2 className="h-4 w-4 animate-spin text-[var(--text-400)]" />}
+            </div>
+            <p className="text-xs text-[var(--text-400)]">
+              Console 将在 24 小时内判定为「修订」或「新增需求」；判定为新增需求时需你二次确认。
+            </p>
+          </div>
         )}
       </section>
 
@@ -707,5 +832,87 @@ function DisputeSummary({ dispute }: { dispute: EmployerOrderDispute }) {
         </span>
       )}
     </p>
+  );
+}
+
+/**
+ * Spec 变更记录卡片（场景七）：
+ * 展示判定结果与状态；判定为「新增需求」且待雇主确认时提供二次确认/拒绝按钮（#20）。
+ */
+function SpecChangeCard({
+  change,
+  busy,
+  needConfirm,
+  onConfirm,
+}: {
+  change: EmployerOrderSpecChange;
+  busy: boolean;
+  needConfirm: boolean;
+  onConfirm: (decision: 'confirmed' | 'rejected') => void;
+}) {
+  const done = change.status === 'confirmed' || change.status === 'rejected';
+  const desc = changeDescription(change);
+  return (
+    <li
+      className={`rounded-xl border p-4 ${
+        needConfirm
+          ? 'border-[var(--brand-300)] bg-[var(--brand-50)]'
+          : 'border-[color:var(--border)]'
+      }`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-2 font-medium text-[var(--text-800)]">
+          <FileEdit className="h-4 w-4 text-[var(--text-400)]" />
+          变更 #{change.changeSeq}
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+              change.classification === 'new_requirement'
+                ? 'bg-[var(--state-warning-surface)] text-[var(--state-warning)]'
+                : 'bg-[var(--background-100)] text-[var(--text-600)]'
+            }`}
+          >
+            {changeClassificationLabel(change)}
+          </span>
+        </span>
+        <span
+          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+            done
+              ? 'bg-[var(--brand-50)] text-[var(--state-success-text)]'
+              : 'bg-[var(--background-100)] text-[var(--text-600)]'
+          }`}
+        >
+          {done ? <CheckCircle2 className="h-3 w-3" /> : null}
+          {CHANGE_STATUS_LABEL[change.status] ?? change.status}
+        </span>
+      </div>
+      {desc && (
+        <p className="mt-1.5 text-sm text-[var(--text-700)]">{desc}</p>
+      )}
+      <p className="mt-1 text-xs text-[var(--text-400)]">
+        发起时间 {new Date(change.createdAt).toLocaleString()}
+      </p>
+
+      {needConfirm && (
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onConfirm('confirmed')}
+            className="btn-cs btn-primary min-h-10 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            确认新增需求
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onConfirm('rejected')}
+            className="btn-cs min-h-10 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            拒绝（维持原 Spec）
+          </button>
+          {busy && <Loader2 className="h-4 w-4 animate-spin text-[var(--text-400)]" />}
+        </div>
+      )}
+    </li>
   );
 }

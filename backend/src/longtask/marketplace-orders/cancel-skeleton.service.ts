@@ -4,12 +4,19 @@ import { Repository } from 'typeorm';
 import {
   MarketplaceCancelRequest,
 } from './cancel-request.entity';
+import { MarketplaceOrder } from './marketplace-order.entity';
 import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
 import {
   CONTRACT_ERROR_CODE,
   ContractError,
 } from '../contract/errors';
 import { CONSOLE_WEBHOOK, consoleWebhookUrl } from '../contract/console-endpoints';
+
+/** 内部触发源 → Console source 枚举 */
+const CANCEL_SOURCE_MAP = {
+  employer: 'employer_initiated',
+  spec_rejection_limit: 'spec_reject_5',
+} as const;
 
 /**
  * 场景八：协商取消与结算（骨架，T16b）。
@@ -23,6 +30,8 @@ export class CancelSkeletonService {
   constructor(
     @InjectRepository(MarketplaceCancelRequest)
     private readonly repo: Repository<MarketplaceCancelRequest>,
+    @InjectRepository(MarketplaceOrder)
+    private readonly ordersRepo: Repository<MarketplaceOrder>,
     private readonly dispatcher: WebhookDispatcherService,
   ) {}
 
@@ -38,15 +47,21 @@ export class CancelSkeletonService {
       trigger,
     });
     const saved = await this.repo.save(request);
+    const order = await this.orderOrThrow(orderId);
     await this.dispatcher.enqueue(
-      'project.cancel_request',
+      'project.cancel_requested',
       consoleWebhookUrl(CONSOLE_WEBHOOK.projectCancelRequest),
       {
-        event_type: 'project.cancel_request',
+        event_type: 'project.cancel_requested',
         request_id: saved.id,
         order_id: orderId,
-        project_id: projectId ?? null,
-        trigger,
+        workspace_id: order.workspaceId,
+        marketplace_task_id: order.marketplaceTaskId,
+        project_id: projectId ?? order.projectId,
+        cancel_proposal_seq: saved.cancelProposalSeq ?? 1,
+        source: CANCEL_SOURCE_MAP[trigger],
+        reason: null,
+        requested_at: saved.createdAt?.toISOString() ?? new Date().toISOString(),
       },
     );
     return saved;
@@ -63,7 +78,8 @@ export class CancelSkeletonService {
       request.ownerResponse = response;
       request.status = 'counter_proposed';
       const saved = await this.repo.save(request);
-      // M→C #27：雇主对部分结算方案响应（反提案送达 Console）
+      const order = await this.orderOrThrow(request.orderId);
+      // M→C #27：雇主对部分结算方案响应（决策已定，送达 Console）
       await this.dispatcher.enqueue(
         'project.cancel_counter_response',
         consoleWebhookUrl(CONSOLE_WEBHOOK.projectCancelCounterResponse),
@@ -71,7 +87,12 @@ export class CancelSkeletonService {
           event_type: 'project.cancel_counter_response',
           request_id: requestId,
           order_id: request.orderId,
-          owner_response: response,
+          workspace_id: order.workspaceId,
+          marketplace_task_id: order.marketplaceTaskId,
+          project_id: order.projectId,
+          cancel_proposal_seq: request.cancelProposalSeq ?? 1,
+          decision: 'accepted',
+          responded_at: new Date().toISOString(),
         },
       );
       return saved;
@@ -104,6 +125,7 @@ export class CancelSkeletonService {
     request.status = 'finalized';
     request.resolution = 'auto_settled';
     const saved = await this.repo.save(request);
+    const order = await this.orderOrThrow(request.orderId);
     await this.dispatcher.enqueue(
       'project.cancel_resolution',
       consoleWebhookUrl(CONSOLE_WEBHOOK.projectCancelResolution),
@@ -111,7 +133,12 @@ export class CancelSkeletonService {
         event_type: 'project.cancel_resolution',
         request_id: requestId,
         order_id: request.orderId,
-        resolution: 'auto_settled',
+        workspace_id: order.workspaceId,
+        marketplace_task_id: order.marketplaceTaskId,
+        project_id: order.projectId,
+        cancel_proposal_seq: request.cancelProposalSeq ?? 1,
+        result: 'auto_settled',
+        resolved_at: new Date().toISOString(),
       },
     );
     return saved;
@@ -126,6 +153,7 @@ export class CancelSkeletonService {
     request.status = 'to_dispute';
     request.resolution = 'to_dispute';
     const saved = await this.repo.save(request);
+    const order = await this.orderOrThrow(request.orderId);
     await this.dispatcher.enqueue(
       'project.cancel_resolution',
       consoleWebhookUrl(CONSOLE_WEBHOOK.projectCancelResolution),
@@ -133,7 +161,12 @@ export class CancelSkeletonService {
         event_type: 'project.cancel_resolution',
         request_id: requestId,
         order_id: request.orderId,
-        resolution: 'to_dispute',
+        workspace_id: order.workspaceId,
+        marketplace_task_id: order.marketplaceTaskId,
+        project_id: order.projectId,
+        cancel_proposal_seq: request.cancelProposalSeq ?? 1,
+        result: 'to_dispute',
+        resolved_at: new Date().toISOString(),
       },
     );
     return saved;
@@ -159,5 +192,17 @@ export class CancelSkeletonService {
       );
     }
     return request;
+  }
+
+  private async orderOrThrow(orderId: string): Promise<MarketplaceOrder> {
+    const order = await this.ordersRepo.findOne({ where: { id: orderId } });
+    if (!order) {
+      throw new ContractError(
+        404,
+        CONTRACT_ERROR_CODE.NOT_FOUND_ORDER,
+        `order not found: ${orderId}`,
+      );
+    }
+    return order;
   }
 }

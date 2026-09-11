@@ -119,7 +119,11 @@ export class DeliveryContractService {
       {
         event_type: eventType,
         order_id: orderId,
+        workspace_id: order.workspaceId,
+        marketplace_task_id: order.marketplaceTaskId,
         project_id: order.projectId,
+        submission_id: saved.id,
+        delivery_id: saved.id,
         submission_seq: saved.submissionSeq,
         reason: reason ?? null,
         // A2 闭账字段：accepted 携带售后申诉期截止；revision_requested 携带当前
@@ -127,6 +131,8 @@ export class DeliveryContractService {
         accept_deadline: saved.acceptDeadline?.toISOString() ?? null,
         after_sale_deadline:
           action === 'accepted' ? order.afterSaleDeadline?.toISOString() ?? null : null,
+        requested_at:
+          action === 'revision_requested' ? new Date().toISOString() : undefined,
       },
     );
 
@@ -166,10 +172,15 @@ export class DeliveryContractService {
         {
           event_type: 'delivery.auto_accepted',
           order_id: delivery.orderId,
+          workspace_id: order?.workspaceId ?? null,
+          marketplace_task_id: order?.marketplaceTaskId ?? null,
           project_id: order?.projectId ?? null,
+          submission_id: delivery.id,
+          delivery_id: delivery.id,
           submission_seq: delivery.submissionSeq,
           accept_deadline: delivery.acceptDeadline?.toISOString() ?? null,
           after_sale_deadline: order?.afterSaleDeadline?.toISOString() ?? null,
+          auto_accepted_at: new Date().toISOString(),
         },
       );
     }

@@ -35,6 +35,7 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
   function order(overrides: Partial<MarketplaceOrder> = {}) {
     return {
       id: 'o1',
+      workspaceId: 'ws-1',
       projectId: 'p1',
       marketplaceTaskId: 'task-1',
       specVersion: 0,
@@ -144,7 +145,11 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
     expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
       'spec.rejected',
       expect.any(String),
-      expect.objectContaining({ event_type: 'spec.rejected', rejection_count: 5 }),
+      expect.objectContaining({
+        event_type: 'spec.rejected',
+        reject_reason: '不认可范围',
+        workspace_id: 'ws-1',
+      }),
     );
     expect(mockCancelService.initiateCancel).toHaveBeenCalledWith(
       'o1',

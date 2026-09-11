@@ -6,6 +6,7 @@ import {
   DisputeResolution,
   ZERO_SETTLEMENT_RESOLUTIONS,
 } from './dispute.entity';
+import { MarketplaceOrder } from '../marketplace-orders/marketplace-order.entity';
 import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
 import {
   CONTRACT_ERROR_CODE,
@@ -25,10 +26,12 @@ export class DisputesService {
   constructor(
     @InjectRepository(MarketplaceDispute)
     private readonly disputeRepo: Repository<MarketplaceDispute>,
+    @InjectRepository(MarketplaceOrder)
+    private readonly ordersRepo: Repository<MarketplaceOrder>,
     private readonly dispatcher: WebhookDispatcherService,
   ) {}
 
-  /** M→C #33/#39：雇主发起纠纷（7 天申诉期内） → 投递 project/dispute-raised */
+  /** M→C #33/#39：雇主发起纠纷（7 天申诉期内） → 投递 dispute/raised */
   async raiseDispute(
     orderId: string,
     reason?: string | null,
@@ -39,14 +42,20 @@ export class DisputesService {
       evidenceDeadline: new Date(Date.now() + EVIDENCE_WINDOW_MS),
     });
     const saved = await this.disputeRepo.save(dispute);
+    const order = await this.orderOrThrow(orderId);
     await this.dispatcher.enqueue(
-      'project.dispute_raised',
+      'dispute.raised',
       consoleWebhookUrl(CONSOLE_WEBHOOK.projectDisputeRaised),
       {
-        event_type: 'project.dispute_raised',
+        event_type: 'dispute.raised',
         dispute_id: saved.id,
         order_id: orderId,
+        workspace_id: order.workspaceId,
+        marketplace_task_id: order.marketplaceTaskId,
+        project_id: order.projectId,
         reason: reason ?? null,
+        raised_by: 'employer',
+        raised_at: new Date().toISOString(),
       },
     );
     return saved;
@@ -83,6 +92,7 @@ export class DisputesService {
     dispute.status = 'arbitrating';
     dispute.arbitrationDeadline = new Date(Date.now() + ARBITRATION_WINDOW_MS);
     const saved = await this.disputeRepo.save(dispute);
+    const order = await this.orderOrThrow(dispute.orderId);
     await this.dispatcher.enqueue(
       'dispute.arbitration_started',
       consoleWebhookUrl(CONSOLE_WEBHOOK.disputeArbitrationStarted),
@@ -90,6 +100,10 @@ export class DisputesService {
         event_type: 'dispute.arbitration_started',
         dispute_id: disputeId,
         order_id: dispute.orderId,
+        workspace_id: order.workspaceId,
+        marketplace_task_id: order.marketplaceTaskId,
+        project_id: order.projectId,
+        arbitration_deadline: saved.arbitrationDeadline?.toISOString() ?? null,
       },
     );
     return saved;
@@ -123,16 +137,21 @@ export class DisputesService {
     dispute.resolution = resolution;
     dispute.resolutionAmountCny = amountCny ?? null;
     const saved = await this.disputeRepo.save(dispute);
+    const order = await this.orderOrThrow(dispute.orderId);
     await this.dispatcher.enqueue(
-      'dispute.arbitration_result',
+      'dispute.resolved',
       consoleWebhookUrl(CONSOLE_WEBHOOK.disputeArbitrationResult),
       {
-        event_type: 'dispute.arbitration_result',
+        event_type: 'dispute.resolved',
         dispute_id: disputeId,
         order_id: dispute.orderId,
+        workspace_id: order.workspaceId,
+        marketplace_task_id: order.marketplaceTaskId,
+        project_id: order.projectId,
         outcome: resolution,
         resolution,
         amount_cny: amountCny ?? null,
+        decided_at: new Date().toISOString(),
       },
     );
     return saved;
@@ -190,6 +209,18 @@ export class DisputesService {
       );
     }
     return dispute;
+  }
+
+  private async orderOrThrow(orderId: string): Promise<MarketplaceOrder> {
+    const order = await this.ordersRepo.findOne({ where: { id: orderId } });
+    if (!order) {
+      throw new ContractError(
+        404,
+        CONTRACT_ERROR_CODE.NOT_FOUND_ORDER,
+        `order not found: ${orderId}`,
+      );
+    }
+    return order;
   }
 
   private async getOrThrowById(disputeId: string): Promise<MarketplaceDispute> {
