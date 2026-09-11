@@ -37,6 +37,10 @@ export class User {
   @Column({ nullable: true })
   email: string;
 
+  /** 公众号 openid（网页授权绑定，用于微信通知） */
+  @Column({ name: 'wechat_openid', type: 'varchar', length: 64, nullable: true })
+  wechatOpenid: string | null;
+
   @Column({ name: 'password_hash', nullable: true })
   passwordHash: string;
 

@@ -54,6 +54,7 @@ import { LongtaskModule } from './longtask/longtask.module';
 import { EntitlementModule } from './entitlement/entitlement.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { LlmProxyModule } from './llm-proxy/llm-proxy.module';
+import { WechatModule } from './wechat/wechat.module';
 import { GatewayApiKey } from './gateway/gateway-key.entity';
 import {
   EntitlementCreditHold,
@@ -82,6 +83,7 @@ import { WebhookOutbox } from './longtask/contract/webhook-outbox.entity';
 import { WebhookInboundEvent } from './longtask/contract/webhook-inbound.entity';
 import { User } from './users/entities/user.entity';
 import { HmacNonce } from './longtask/contract/hmac-nonce.entity';
+import { NotificationOutbox } from './wechat/notification-outbox.entity';
 import { UserLlmConfig } from './entitlement/user-llm-config.entity';
 import { Agent } from './agents/entities/agent.entity';
 import { Task } from './tasks/entities/task.entity';
@@ -94,8 +96,6 @@ import { Arbitration } from './arbitrations/entities/arbitration.entity';
 import { AuditLog } from './audit/entities/audit-log.entity';
 import { WebhookDelivery } from './webhooks/entities/webhook-delivery.entity';
 import { AccessToken } from './auth/entities/access-token.entity';
-import { SsoClient } from './auth/entities/sso-client.entity';
-import { SsoAuthorizationCode } from './auth/entities/sso-authorization-code.entity';
 import { AgentCredential } from './agents/entities/agent-credential.entity';
 import { AgentAuditLog } from './agents/entities/agent-audit-log.entity';
 import { AgentCapability } from './agents/entities/agent-capability.entity';
@@ -179,8 +179,6 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
         AuditLog,
         WebhookDelivery,
         AccessToken,
-        SsoClient,
-        SsoAuthorizationCode,
         AgentCredential,
         AgentAuditLog,
         AgentCapability,
@@ -236,6 +234,8 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
         EntitlementCreditHold,
         EntitlementUsageRecord,
         EntitlementPaymentOrder,
+        // 业务通知（微信渠道）
+        NotificationOutbox,
         // 网关 workspace key 签发/轮换/吊销（K1-K4）
         GatewayApiKey,
       ],
@@ -262,6 +262,7 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
     EntitlementModule, // AI 网关订阅权益计费（DR-12）
     GatewayModule, // 网关 workspace key 签发/轮换/吊销（K1-K4）
     LlmProxyModule, // AI 网关直连代理（BYOK 按用户配置转发并计量）
+    WechatModule, // 微信公众号通知交付
   ],
   controllers: [AppController],
   providers: [AppService, DatabaseWarmupService],

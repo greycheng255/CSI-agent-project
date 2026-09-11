@@ -45,6 +45,7 @@ const OwnerLongtaskOrders = lazy(() => import('./pages/OwnerLongtaskOrders'));
 const WorkspaceGallery = lazy(() => import('./pages/WorkspaceGallery'));
 const MockAlipayCheckout = lazy(() => import('./pages/MockAlipayCheckout'));
 const RechargeBalance = lazy(() => import('./pages/RechargeBalance'));
+const WechatBind = lazy(() => import('./pages/WechatBind'));
 
 function PageFallback() {
   return (
@@ -65,6 +66,8 @@ function App() {
         <Route path="/oauth/opennotebook/callback" element={<OpenNotebookOAuthCallback />} />
         {/* 支付宝 mock 模式收银台（独立弹窗，不挂 MainLayout） */}
         <Route path="/pay/mock-checkout" element={<MockAlipayCheckout />} />
+        {/* 微信绑定回调落地页（公众号网页授权后由 WECHAT_BIND_REDIRECT_URI 跳入，读 ?code） */}
+        <Route path="/wechat-bind" element={<WechatBind />} />
 
         <Route path="/" element={<MainLayout />}>
           <Route index element={<Home />} />

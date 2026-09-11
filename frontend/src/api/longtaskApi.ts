@@ -449,6 +449,18 @@ export interface EmployerOrderDispute {
   createdAt: string;
 }
 
+/** Spec 变更请求（场景七 #18-#23；幂等键 order_id+change_seq） */
+export interface EmployerOrderSpecChange {
+  id: string;
+  orderId: string;
+  changeSeq: number;
+  /** Console 判定：revision=修订 / new_requirement=新增需求（需雇主二次确认） */
+  classification: string | null;
+  status: 'requested' | 'classified' | 'proposed' | 'confirmed' | 'rejected';
+  payload: Record<string, unknown> | null;
+  createdAt: string;
+}
+
 export interface EmployerOrderTaskBrief {
   id: string;
   title: string;
@@ -463,12 +475,13 @@ export interface EmployerOrderWorkspaceBrief {
   logoUrl: string | null;
 }
 
-/** 订单详情（Spec 快照与里程碑、交付物、最新协商/纠纷） */
+/** 订单详情（Spec 快照与里程碑、交付物、变更记录、最新协商/纠纷） */
 export interface EmployerOrderDetail {
   order: EmployerOrder;
   task: EmployerOrderTaskBrief | null;
   workspace: EmployerOrderWorkspaceBrief | null;
   deliveries: EmployerOrderDelivery[];
+  specChanges: EmployerOrderSpecChange[];
   latestCancelRequest: EmployerOrderCancelRequest | null;
   latestDispute: EmployerOrderDispute | null;
 }
@@ -556,6 +569,46 @@ export async function employerPayWithBalance(
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: '{}',
+    },
+  );
+}
+
+/**
+ * 场景七 #18：雇主发起 Spec 变更/修订请求（启动 Console 24h 判定）。
+ * change_seq 为幂等键，须取订单内现有最大 seq+1。
+ */
+export async function employerRequestSpecChange(
+  token: string,
+  orderId: string,
+  changeSeq: number,
+  description: string,
+): Promise<EmployerOrderSpecChange> {
+  return requestJson<EmployerOrderSpecChange>(
+    `/api/v1/longtask/employer/orders/${encodeURIComponent(orderId)}/spec-change-requests`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        change_seq: changeSeq,
+        payload: { description },
+      }),
+    },
+  );
+}
+
+/** 场景七 #20：雇主对「新增需求」判定二次确认（confirmed / rejected） */
+export async function employerConfirmSpecChange(
+  token: string,
+  orderId: string,
+  changeId: string,
+  decision: 'confirmed' | 'rejected',
+): Promise<EmployerOrderSpecChange> {
+  return requestJson<EmployerOrderSpecChange>(
+    `/api/v1/longtask/employer/orders/${encodeURIComponent(orderId)}/spec-changes/${encodeURIComponent(changeId)}/confirm`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ decision }),
     },
   );
 }
@@ -650,4 +703,46 @@ export async function employerRaiseDispute(
       body: JSON.stringify({ reason: reason ?? null }),
     },
   );
+}
+
+// ===== 微信公众号通知绑定 =====
+
+export interface WechatBindUrlResult {
+  configured: boolean;
+  url: string | null;
+  state?: string;
+}
+
+export interface WechatBindStatusResult {
+  configured: boolean;
+  bound: boolean;
+}
+
+/** 获取绑定授权 URL（公众号网页授权 snsapi_base） */
+export async function getWechatBindUrl(
+  token: string,
+): Promise<WechatBindUrlResult> {
+  return requestJson<WechatBindUrlResult>('/api/v1/wechat/bind-url', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+/** 绑定回调：用授权 code 换 openid 写回当前用户 */
+export async function wechatBindCallback(
+  token: string,
+  code: string,
+): Promise<{ ok: boolean; bound?: boolean; error?: string }> {
+  return requestJson<{ ok: boolean; bound?: boolean; error?: string }>(
+    `/api/v1/wechat/callback?code=${encodeURIComponent(code)}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+}
+
+/** 查询当前用户微信绑定状态 */
+export async function getWechatBindStatus(
+  token: string,
+): Promise<WechatBindStatusResult> {
+  return requestJson<WechatBindStatusResult>('/api/v1/wechat/status', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 }

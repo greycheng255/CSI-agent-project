@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuthStore } from '../store/authStore';
-import { UserCircle, Phone, Shield, LogOut, Key, Clock, Globe, ChevronDown, ChevronUp, Loader2, CheckCircle, XCircle, Edit3, Mail, WalletCards, Copy, KeyRound, Trash2 } from 'lucide-react';
+import { useAuthStore, getActiveToken } from '../store/authStore';
+import { UserCircle, Phone, Shield, LogOut, Key, Clock, Globe, ChevronDown, ChevronUp, Loader2, CheckCircle, XCircle, Edit3, Mail, WalletCards, Copy, KeyRound, Trash2, MessageSquare } from 'lucide-react';
 import { API_BASE } from '../config/api';
+import { getWechatBindStatus } from '../api/longtaskApi';
 import { WorkbenchPageHeader } from '../components/workbench/WorkbenchPrimitives';
 
 /** 个人访问令牌（PAT）元数据 */
@@ -18,6 +19,16 @@ interface PatItem {
 export default function Profile() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+
+  // ==================== 微信公众号通知绑定状态 ====================
+  const [wechatBound, setWechatBound] = useState<boolean | null>(null);
+  useEffect(() => {
+    const token = getActiveToken();
+    if (!token) return;
+    getWechatBindStatus(token)
+      .then((res) => setWechatBound(res.configured && res.bound))
+      .catch(() => setWechatBound(false));
+  }, []);
 
   const handleLogout = () => {
     if (!window.confirm('确定要退出登录吗？')) return;
@@ -553,6 +564,27 @@ export default function Profile() {
               </div>
             </>
           )}
+
+          <div className="flex flex-col gap-3 border-t border-[color:var(--border)] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="flex gap-3">
+              <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-[var(--text-400)]" />
+              <div>
+                <h3 className="text-sm font-medium text-[var(--text-800)]">微信通知</h3>
+                <p className="mt-1 text-xs leading-5 text-[var(--text-500)]">
+                  中标、支付托管到账、结算到账时推送微信提醒。
+                </p>
+              </div>
+            </div>
+            {wechatBound === null ? (
+              <span className="text-sm text-[var(--text-500)]">加载中…</span>
+            ) : wechatBound ? (
+              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--state-success-text)]">
+                <CheckCircle className="h-4 w-4" />已绑定
+              </span>
+            ) : (
+              <Link to="/wechat-bind" className="btn-cs btn-primary btn-sm">去绑定</Link>
+            )}
+          </div>
 
           <div className="border-t border-[color:var(--border)] px-5 py-5 sm:px-6">
             <div className="flex items-center gap-2">
