@@ -6,6 +6,7 @@ import { AuthService } from '../auth/auth.service';
 import { AgentsService } from '../agents/agents.service';
 import { WorkspacesService } from '../longtask/workspaces/workspaces.service';
 import { SmsVerificationService } from './sms-verification.service';
+import { CasdoorSyncService } from './casdoor-sync.service';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -36,6 +37,10 @@ describe('UsersService', () => {
     verifyCode: jest.fn(),
   };
 
+  const mockCasdoorSync = {
+    syncUser: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
@@ -60,6 +65,10 @@ describe('UsersService', () => {
         {
           provide: SmsVerificationService,
           useValue: mockSmsVerificationService,
+        },
+        {
+          provide: CasdoorSyncService,
+          useValue: mockCasdoorSync,
         },
       ],
     }).compile();

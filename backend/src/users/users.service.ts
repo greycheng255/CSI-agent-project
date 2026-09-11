@@ -17,6 +17,7 @@ import {
   SmsVerificationService,
   type SmsVerificationScene,
 } from './sms-verification.service';
+import { CasdoorSyncService } from './casdoor-sync.service';
 
 type AuthDto = {
   phone: string;
@@ -49,6 +50,7 @@ export class UsersService {
     @Inject(forwardRef(() => WorkspacesService))
     private readonly workspacesService: WorkspacesService,
     private readonly smsVerificationService: SmsVerificationService,
+    private readonly casdoorSync: CasdoorSyncService,
   ) {}
 
   private hashPassword(password: string): string {
@@ -106,6 +108,7 @@ export class UsersService {
 
     await this.usersRepository.save(user);
     this.logger.log(`新用户注册成功: ${user.id} (${user.phone}) org=${user.orgId}`);
+    await this.casdoorSync.syncUser(user);
 
     await this.ensureDefaultAgent(user);
 
@@ -212,6 +215,7 @@ export class UsersService {
       await this.usersRepository.save(user);
       isNewUser = true;
       this.logger.log(`短信登录创建用户成功: ${user.id} org=${user.orgId}`);
+      await this.casdoorSync.syncUser(user);
     } else {
       await this.ensureOrgId(user);
     }
@@ -256,6 +260,7 @@ export class UsersService {
       displayName: user.displayName,
       kycStatus: user.kycStatus,
       createdAt: user.createdAt,
+      wechatBound: !!user.wechatOpenid,
     };
   }
 

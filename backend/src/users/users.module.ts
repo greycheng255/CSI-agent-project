@@ -7,6 +7,7 @@ import { AuthModule } from '../auth/auth.module';
 import { AgentsModule } from '../agents/agents.module';
 import { LongtaskModule } from '../longtask/longtask.module';
 import { SmsVerificationService } from './sms-verification.service';
+import { CasdoorSyncService } from './casdoor-sync.service';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { SmsVerificationService } from './sms-verification.service';
     forwardRef(() => LongtaskModule),
   ],
   controllers: [UsersController],
-  providers: [UsersService, SmsVerificationService],
+  providers: [UsersService, SmsVerificationService, CasdoorSyncService],
   exports: [UsersService],
 })
 export class UsersModule {}
