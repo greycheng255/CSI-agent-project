@@ -47,7 +47,7 @@ v1.0 文档描述的 Marketplace 自研 SSO 端点**已于 2026-09-11 全部下�
 |---|---|
 | `client_id` | `8558111a9d4e85b7a17e` |
 | `client_secret` | `jpAjj5Cgr-bh53s8JJ5XCW2BO8qh8gza` |
-| `redirect_uri`(白名单) | `http://www.csi.shopping/callback`(精确匹配;如需 https 或其他环境回调,联系平台追加) |
+| `redirect_uri`(白名单) | `http://www.csi.shopping/callback`、`https://www.csi.shopping/callback`(精确匹配;如需预发/本地等额外环境回调,联系平台追加) |
 | 允许的 grant | `authorization_code`、`refresh_token` |
 | scope | `openid profile email` |
 | 用户组织 | `csi` |
@@ -314,8 +314,8 @@ v2 中 org_id 只在 **id_token / access_token 的 `properties` 嵌套 claim** �
 ### Q5:测试账号密码是什么?
 存量 97 用户统一初始密码 `Csi#2026Genesis`(bcrypt 存储)。请通知用户首登改密;后续新注册用户自动同步。
 
-### Q6:callback 必须是 http 吗?
-当前白名单是 `http://www.csi.shopping/callback`(精确匹配)。Console 若切 https,联系平台把 https 版本加入白名单(两版可并存)。
+### Q6:callback 支持 http 和 https 吗?
+两个版本都已在白名单:`http://www.csi.shopping/callback` 与 `https://www.csi.shopping/callback`(精确匹配,协议/域名/路径完全一致)。预发、本地开发等其他环境回调联系平台追加。
 
 ---
 
