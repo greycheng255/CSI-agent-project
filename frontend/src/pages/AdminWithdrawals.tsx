@@ -45,7 +45,7 @@ const statusBadge: Record<string, string> = {
     'bg-[var(--brand-50)] text-[var(--brand-600)] border border-blue-500/20',
   PROCESSING: 'bg-purple-500/10 text-purple-500 border border-purple-500/20',
   COMPLETED:
-    'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]',
+    'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[color:var(--state-success-border)]',
   REJECTED: 'bg-red-500/10 text-[var(--state-error)] border border-red-500/20',
   FAILED: 'bg-red-500/10 text-[var(--state-error)] border border-red-500/20',
 };
@@ -185,8 +185,8 @@ export default function AdminWithdrawals() {
         <div
           className={`flex items-center gap-2 rounded-xl border p-3 text-sm ${
             msg.ok
-              ? 'border-[#bde9c9] bg-[var(--state-success-surface)] text-[var(--state-success-text)]'
-              : 'border-[#ffc6c1] bg-[var(--state-error-surface)] text-[var(--state-error)]'
+              ? 'border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] text-[var(--state-success-text)]'
+              : 'border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] text-[var(--state-error)]'
           }`}
         >
           {msg.ok ? (

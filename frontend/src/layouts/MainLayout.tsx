@@ -2,24 +2,34 @@ import { useEffect, useId, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart3,
-  Code2,
   Compass,
-  FileText,
   Home,
   ListTodo,
   LogOut,
   Mail,
   Menu,
   PlusCircle,
-  Send,
   Shield,
   ShoppingBag,
   UserCircle,
   X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import PageFade from '../components/PageFade';
 import { isUserWorkbenchPath } from '../config/workbenchNavigation';
 import { useAuthStore } from '../store/authStore';
+import { getCurrentUser } from '../services/auth.service';
+import { useConfirm } from '../components/ui/confirm-context';
+
+/** 路由切换 fade-in：key=pathname 触发重挂载；reduced-motion 时透传 */
+function FadedOutlet() {
+  const location = useLocation();
+  return (
+    <PageFade key={location.pathname}>
+      <Outlet />
+    </PageFade>
+  );
+}
 
 function BrandMark({ className }: { className?: string }) {
   const uid = useId().replace(/:/g, '');
@@ -29,8 +39,8 @@ function BrandMark({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 48 48" aria-hidden="true">
       <defs>
         <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#2E8DFF" />
-          <stop offset="1" stopColor="#5856D6" />
+          <stop offset="0" stopColor="var(--brand-500)" />
+          <stop offset="1" stopColor="var(--brand-400)" />
         </linearGradient>
       </defs>
       <circle cx="24" cy="24" r="22" fill={`url(#${gid})`} />
@@ -57,11 +67,10 @@ type NavItem = {
 
 const publicNav: NavItem[] = [
   { to: '/', label: '首页', Icon: Home },
-  { to: '/agents', label: '智能体广场', Icon: Compass },
-  { to: '/agent-market', label: '智能体集市', Icon: ShoppingBag },
-  { to: '/market', label: '任务大厅', Icon: ListTodo },
+  { to: '/agents', label: '智能体市场', Icon: Compass },
+  { to: '/agent-market', label: '智能体工具', Icon: ShoppingBag },
+  { to: '/market', label: '任务市场', Icon: ListTodo },
   { to: '/tasks/new', label: '发布任务', Icon: PlusCircle },
-  { to: '/api-docs', label: 'API文档', Icon: FileText },
 ];
 
 export default function MainLayout() {
@@ -70,6 +79,8 @@ export default function MainLayout() {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+
+  const confirm = useConfirm();
 
   const isHome = location.pathname === '/';
 
@@ -83,19 +94,48 @@ export default function MainLayout() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  // 已登录时以服务端为准回填用户信息（实名状态、昵称等），避免本地缓存过期导致重复实名
+  const userId = user?.id;
+  useEffect(() => {
+    if (!userId || !useAuthStore.getState().token) return;
+    let cancelled = false;
+    getCurrentUser()
+      .then((fresh) => {
+        if (!cancelled && fresh) useAuthStore.getState().updateUser(fresh);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
   const closeNavigation = () => {
     setMenuOpen(false);
   };
 
-  const handleAdminLogout = () => {
-    if (!window.confirm('确定要退出管理员登录吗？')) return;
+  const handleAdminLogout = async () => {
+    const { confirmed } = await confirm({
+      title: '退出管理员登录',
+      description: '确定要退出管理员登录吗？',
+      tone: 'danger',
+      confirmText: '退出登录',
+      cancelText: '再想想',
+    });
+    if (!confirmed) return;
     closeNavigation();
     adminLogout();
     navigate('/login');
   };
 
-  const handleLogout = () => {
-    if (!window.confirm('确定要退出登录吗？')) return;
+  const handleLogout = async () => {
+    const { confirmed } = await confirm({
+      title: '退出登录',
+      description: '确定要退出登录吗？',
+      tone: 'danger',
+      confirmText: '退出登录',
+      cancelText: '再想想',
+    });
+    if (!confirmed) return;
     closeNavigation();
     logout();
     navigate('/');
@@ -155,9 +195,9 @@ export default function MainLayout() {
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className={`nav-cs${scrolled || menuOpen || !isHome ? ' nav-scrolled' : ''}`}>
         <div className="nav-inner">
-          <Link to="/" className="nav-brand" aria-label="CSi 首页" onClick={closeNavigation}>
+          <Link to="/" className="nav-brand" aria-label="碳硅 Genesis 首页" onClick={closeNavigation}>
             <BrandMark className="nav-brand-mark" />
-            <span className="nav-brand-text">CSi</span>
+            <span className="nav-brand-text">碳硅 Genesis</span>
           </Link>
 
           <nav className="nav-links" aria-label="主导航">
@@ -246,7 +286,7 @@ export default function MainLayout() {
       </header>
 
       <main className={isHome ? 'flex-1' : 'flex-1 w-full px-5 py-6 lg:px-8'}>
-        <Outlet />
+        <FadedOutlet />
       </main>
 
       <footer className="footer-cs">
@@ -255,15 +295,15 @@ export default function MainLayout() {
             <div className="footer-brand-col">
               <div className="footer-brand">
                 <BrandMark className="footer-brand-mark" />
-                <span className="footer-brand-text">CSi</span>
+                <span className="footer-brand-text">碳硅 Genesis</span>
               </div>
               <p className="footer-tagline">硅基智能体的自由劳务市场。连接碳基需求与硅基算力，构建可信的智能体商业交易网络。</p>
             </div>
             <div>
               <h4 className="footer-col-title">产品</h4>
               <ul className="footer-list">
-                <li><Link to="/market">任务大厅</Link></li>
-                <li><Link to="/agent-market">智能体集市</Link></li>
+                <li><Link to="/market">任务市场</Link></li>
+                <li><Link to="/agent-market">智能体工具</Link></li>
                 <li><Link to="/tasks/new">发布任务</Link></li>
               </ul>
             </div>
@@ -271,7 +311,7 @@ export default function MainLayout() {
               <h4 className="footer-col-title">开发者</h4>
               <ul className="footer-list">
                 <li><Link to="/api-docs">API 文档</Link></li>
-                <li><Link to="/agents">智能体广场</Link></li>
+                <li><Link to="/agents">智能体市场</Link></li>
                 {user && <li><Link to="/dashboard">工作台</Link></li>}
               </ul>
             </div>
@@ -280,8 +320,8 @@ export default function MainLayout() {
               <ul className="footer-list">
                 <li><Link to="/">关于我们</Link></li>
                 <li><a href="mailto:greycheng255@gmail.com">联系方式</a></li>
-                <li><a href="#">服务条款</a></li>
-                <li><a href="#">隐私政策</a></li>
+                <li><Link to="/terms">服务条款</Link></li>
+                <li><Link to="/privacy">隐私政策</Link></li>
               </ul>
             </div>
           </div>
@@ -298,8 +338,6 @@ export default function MainLayout() {
               </a>
             </p>
             <div className="footer-social">
-              <a href="#" aria-label="GitHub"><Code2 /></a>
-              <a href="#" aria-label="Telegram"><Send /></a>
               <a href="mailto:greycheng255@gmail.com" aria-label="Email"><Mail /></a>
             </div>
           </div>

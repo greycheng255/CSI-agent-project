@@ -1,5 +1,6 @@
 import { API_BASE } from '../config/api';
 import { useAuthStore, type User, type Admin } from '../store/authStore';
+import { apiErrorMessage } from '../utils/errors';
 
 const parseApiJson = async <T>(response: Response): Promise<T> => {
   const text = await response.text();
@@ -26,12 +27,9 @@ const parseApiJson = async <T>(response: Response): Promise<T> => {
 
 const getErrorMessage = async (response: Response, fallback: string) => {
   try {
-    const data = await parseApiJson<{ message?: string | string[] }>(response);
-    const message = data?.message;
-    if (Array.isArray(message)) return message.join(', ');
-    return message || fallback;
-  } catch (error) {
-    return error instanceof Error ? error.message : fallback;
+    return await apiErrorMessage(response, fallback);
+  } catch {
+    return fallback;
   }
 };
 
@@ -51,7 +49,7 @@ export async function registerUser(
   });
 
   if (!response.ok) {
-    const error = { message: await getErrorMessage(response, 'Request failed') };
+    const error = { message: await getErrorMessage(response, '注册失败，请稍后重试') };
     throw new Error(error.message || '注册失败');
   }
 
@@ -122,7 +120,7 @@ export async function loginUser(
   });
 
   if (!response.ok) {
-    const error = { message: await getErrorMessage(response, 'Request failed') };
+    const error = { message: await getErrorMessage(response, '登录失败，请稍后重试') };
     throw new Error(error.message || '登录失败');
   }
 
@@ -184,6 +182,46 @@ export async function getCurrentUser(): Promise<User | null> {
   }
 
   return response.json();
+}
+
+/**
+ * Casdoor SSO：获取 authorize 跳转 URL（后端负责 redirect_uri 白名单校验）
+ */
+export async function getSsoAuthorizeUrl(
+  redirectUri: string,
+  state: string,
+): Promise<{ authorizeUrl: string }> {
+  const response = await fetch(
+    `${API_BASE}/api/v1/users/sso/authorize-url?redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`,
+  );
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, 'SSO 未配置或不可用'));
+  }
+
+  return parseApiJson<{ authorizeUrl: string }>(response);
+}
+
+/**
+ * Casdoor SSO：授权码登录（后端验签换平台会话，与密码登录同形态）
+ */
+export async function loginWithSsoCode(
+  code: string,
+  redirectUri: string,
+): Promise<{ user: User; token: string }> {
+  const response = await fetch(`${API_BASE}/api/v1/users/login/sso`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, redirectUri }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, 'SSO 登录失败'));
+  }
+
+  const data = await parseApiJson<{ user: User; token: string }>(response);
+  useAuthStore.getState().login(data.user, data.token);
+  return data;
 }
 
 /**
@@ -265,7 +303,7 @@ export async function loginAdmin(
   });
 
   if (!response.ok) {
-    const error = { message: await getErrorMessage(response, 'Request failed') };
+    const error = { message: await getErrorMessage(response, '登录失败，请稍后重试') };
     throw new Error(error.message || '登录失败');
   }
 

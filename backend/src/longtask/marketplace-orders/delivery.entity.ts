@@ -51,6 +51,23 @@ export class MarketplaceDelivery {
   @Column({ name: 'review_round', type: 'int', default: 0 })
   reviewRound: number;
 
+  /** Console 回填空送：平台确定性 Gate（G1/G2/G3/G6）是否全部通过。PRD §9.4 自动验收第 1 条硬约束 */
+  @Column({
+    name: 'gates_all_passed',
+    type: 'boolean',
+    nullable: true,
+  })
+  gatesAllPassed: boolean | null;
+
+  /** 已发送的 5/9/13 天催办点位（供自动验收第 2 条硬约束与会话去重） */
+  @Column({
+    name: 'reminder_days_sent',
+    type: 'int',
+    array: true,
+    default: () => "'{}'",
+  })
+  reminderDaysSent: number[];
+
   @Column({
     name: 'submitted_at',
     type: 'timestamp with time zone',

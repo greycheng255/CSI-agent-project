@@ -4,6 +4,7 @@ import { CircleAlert, Inbox, Loader2, DollarSign, CheckCircle2, RefreshCw, Exter
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
 import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { useToast } from '../components/ui/toast-context';
 
 type OrderStatus = 'PENDING_RELEASE' | 'COMPLETED';
 
@@ -56,6 +57,7 @@ export default function AdminRelease() {
   const { admin, adminToken } = useAuthStore();
   const navigate = useNavigate();
   const apiBase = API_BASE;
+  const toast = useToast();
 
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,9 +118,9 @@ export default function AdminRelease() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        alert(err?.message || '放款失败');
+        toast.error('放款失败', err?.message);
       } else {
-        alert('放款成功！');
+        toast.success('放款成功！');
         setShowReleaseModal(null);
         setTransferScreenshot(null);
         setTransactionId('');
@@ -220,11 +222,11 @@ export default function AdminRelease() {
                   <div className="flex items-center gap-3">
                     <span className="font-mono text-xs text-[var(--text-400)]">ORDER#{order.id.slice(0, 8)}</span>
                     {activeTab === 'pending' ? (
-                      <span className="rounded-full border border-[#f3d79a] bg-[var(--state-warning-surface)] px-2.5 py-1 text-xs text-[var(--state-warning)]">
+                      <span className="rounded-full border border-[color:var(--state-warning-border)] bg-[var(--state-warning-surface)] px-2.5 py-1 text-xs text-[var(--state-warning)]">
                         待放款
                       </span>
                     ) : (
-                      <span className="flex items-center gap-1 rounded-full border border-[#bde9c9] bg-[var(--state-success-surface)] px-2.5 py-1 text-xs text-[var(--state-success-text)]">
+                      <span className="flex items-center gap-1 rounded-full border border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] px-2.5 py-1 text-xs text-[var(--state-success-text)]">
                         <CheckCircle2 className="w-3 h-3" />
                         已放款
                       </span>
@@ -333,7 +335,7 @@ export default function AdminRelease() {
             </div>
 
             {/* 步骤说明 */}
-            <div className="mb-4 rounded-xl border border-[#f3d79a] bg-[var(--state-warning-surface)] p-3">
+            <div className="mb-4 rounded-xl border border-[color:var(--state-warning-border)] bg-[var(--state-warning-surface)] p-3">
               <p className="text-sm text-[var(--state-warning)]">
                 <strong>放款流程：</strong>请先使用您的支付工具向开发者转账，然后上传转账截图作为凭证，最后点击确认放款。
               </p>
@@ -412,7 +414,7 @@ export default function AdminRelease() {
                   </div>
                 ) : (
                   <div className="mt-4 border-t border-[color:var(--border)] pt-4">
-                    <div className="bg-[var(--state-error-surface)] border border-[#ffc6c1] rounded-lg p-3">
+                    <div className="bg-[var(--state-error-surface)] border border-[color:var(--state-error-border)] rounded-lg p-3">
                       <p className="text-sm text-[var(--state-error)]">
                         <strong>⚠️ 开发者未设置收款码</strong>
                       </p>
@@ -509,7 +511,7 @@ export default function AdminRelease() {
               <button
                 onClick={() => {
                   if (!transferScreenshot) {
-                    alert('请上传转账截图');
+                    toast.warning('请上传转账截图');
                     return;
                   }
                   handleReleaseWithProof(showReleaseModal.id);

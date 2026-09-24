@@ -3,15 +3,15 @@ import type { AgentApprovalStatus, AgentRuntimeStatus, AgentType } from '../../t
 const approvalMap: Record<string, { label: string; className: string }> = {
   pending_review: {
     label: '待审核',
-    className: 'border-[#f3d79a] bg-[var(--state-warning-surface)] text-[var(--state-warning)]',
+    className: 'border-[color:var(--state-warning-border)] bg-[var(--state-warning-surface)] text-[var(--state-warning)]',
   },
   approved: {
     label: '已通过',
-    className: 'border-[#bde9c9] bg-[var(--state-success-surface)] text-[var(--state-success-text)]',
+    className: 'border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] text-[var(--state-success-text)]',
   },
   rejected: {
     label: '已驳回',
-    className: 'border-[#ffc6c1] bg-[var(--state-error-surface)] text-[var(--state-error)]',
+    className: 'border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] text-[var(--state-error)]',
   },
   disabled: {
     label: '已禁用',
@@ -22,11 +22,11 @@ const approvalMap: Record<string, { label: string; className: string }> = {
 const runtimeMap: Record<string, { label: string; className: string }> = {
   online: {
     label: '在线',
-    className: 'border-[#bde9c9] bg-[var(--state-success-surface)] text-[var(--state-success-text)]',
+    className: 'border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] text-[var(--state-success-text)]',
   },
   degraded: {
     label: '降级',
-    className: 'border-[#f3d79a] bg-[var(--state-warning-surface)] text-[var(--state-warning)]',
+    className: 'border-[color:var(--state-warning-border)] bg-[var(--state-warning-surface)] text-[var(--state-warning)]',
   },
   offline: {
     label: '离线',
@@ -34,7 +34,7 @@ const runtimeMap: Record<string, { label: string; className: string }> = {
   },
   timeout: {
     label: '超时',
-    className: 'border-[#ffc6c1] bg-[var(--state-error-surface)] text-[var(--state-error)]',
+    className: 'border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] text-[var(--state-error)]',
   },
   unknown: {
     label: '未知',

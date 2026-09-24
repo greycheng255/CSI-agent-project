@@ -3,8 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore, getActiveToken } from '../store/authStore';
 import { UserCircle, Phone, Shield, LogOut, Key, Clock, Globe, ChevronDown, ChevronUp, Loader2, CheckCircle, XCircle, Edit3, Mail, WalletCards, Copy, KeyRound, Trash2, MessageSquare } from 'lucide-react';
 import { API_BASE } from '../config/api';
+import { sendSmsCode } from '../services/auth.service';
 import { getWechatBindStatus } from '../api/longtaskApi';
 import { WorkbenchPageHeader } from '../components/workbench/WorkbenchPrimitives';
+import { useConfirm } from '../components/ui/confirm-context';
 
 /** 个人访问令牌（PAT）元数据 */
 interface PatItem {
@@ -19,6 +21,42 @@ interface PatItem {
 export default function Profile() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const confirm = useConfirm();
+
+  // ==================== 实名认证表单（持久化到后端） ====================
+  const [kycFormOpen, setKycFormOpen] = useState(false);
+  const [kycRealName, setKycRealName] = useState('');
+  const [kycIdCard, setKycIdCard] = useState('');
+  const [kycSubmitting, setKycSubmitting] = useState(false);
+  const [kycError, setKycError] = useState('');
+  const [kycNotice, setKycNotice] = useState('');
+
+  const submitKycForm = async () => {
+    if (kycSubmitting) return;
+    setKycSubmitting(true);
+    setKycError('');
+    setKycNotice('');
+    try {
+      const token = useAuthStore.getState().token;
+      const res = await fetch(`${API_BASE}/api/v1/users/kyc`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ realName: kycRealName, idCardNumber: kycIdCard }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setKycError(data.message || '实名认证提交失败，请稍后重试');
+        return;
+      }
+      useAuthStore.getState().updateKyc('VERIFIED');
+      setKycFormOpen(false);
+      setKycNotice(data.message || '实名认证已通过');
+    } catch {
+      setKycError('网络异常，请稍后重试');
+    } finally {
+      setKycSubmitting(false);
+    }
+  };
 
   // ==================== 微信公众号通知绑定状态 ====================
   const [wechatBound, setWechatBound] = useState<boolean | null>(null);
@@ -30,15 +68,29 @@ export default function Profile() {
       .catch(() => setWechatBound(false));
   }, []);
 
-  const handleLogout = () => {
-    if (!window.confirm('确定要退出登录吗？')) return;
+  const handleLogout = async () => {
+    const { confirmed } = await confirm({
+      title: '退出登录',
+      description: '确定要退出登录吗？',
+      tone: 'danger',
+      confirmText: '退出登录',
+      cancelText: '再想想',
+    });
+    if (!confirmed) return;
     logout();
     navigate('/');
   };
 
   // SSO 全局登出：撤销所有设备/应用的登录与 SSO 令牌（PAT 保留），再清除本地状态
   const handleLogoutAll = async () => {
-    if (!window.confirm('确定要退出所有设备的登录吗？所有网页与应用会话将立即失效（个人访问令牌保留）。')) return;
+    const { confirmed } = await confirm({
+      title: '退出所有设备',
+      description: '确定要退出所有设备的登录吗？所有网页与应用会话将立即失效（个人访问令牌保留）。',
+      tone: 'danger',
+      confirmText: '退出所有设备',
+      cancelText: '再想想',
+    });
+    if (!confirmed) return;
     try {
       await fetch(`${API_BASE}/api/v1/sso/logout`, {
         method: 'POST',
@@ -79,6 +131,14 @@ export default function Profile() {
   const [userNewPwd, setUserNewPwd] = useState('');
   const [userPwdLoading, setUserPwdLoading] = useState(false);
   const [userPwdMsg, setUserPwdMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // SSO 设置密码（短信建号用户打通 Casdoor）
+  const [showSsoPwd, setShowSsoPwd] = useState(false);
+  const [ssoCode, setSsoCode] = useState('');
+  const [ssoNewPwd, setSsoNewPwd] = useState('');
+  const [ssoSendingCode, setSsoSendingCode] = useState(false);
+  const [ssoCountdown, setSsoCountdown] = useState(0);
+  const [ssoPwdLoading, setSsoPwdLoading] = useState(false);
+  const [ssoPwdMsg, setSsoPwdMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [balance, setBalance] = useState<{ availableCny: number; frozenCny: number; totalIncomeCny: number } | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [balanceError, setBalanceError] = useState(false);
@@ -156,7 +216,14 @@ export default function Profile() {
   };
 
   const handleRevokePat = async (id: string, name: string | null) => {
-    if (!window.confirm(`确定要撤销令牌「${name || id}」吗？使用该令牌的客户端将立即失去访问权限。`)) return;
+    const { confirmed } = await confirm({
+      title: '撤销令牌',
+      description: `确定要撤销令牌「${name || id}」吗？使用该令牌的客户端将立即失去访问权限。`,
+      tone: 'danger',
+      confirmText: '撤销令牌',
+      cancelText: '再想想',
+    });
+    if (!confirmed) return;
     try {
       const res = await fetch(`${API_BASE}/api/v1/users/pat/${id}`, {
         method: 'DELETE',
@@ -344,7 +411,7 @@ export default function Profile() {
             </div>
 
             {adminPwdMsg && (
-              <div className={`mx-5 mt-5 flex items-center gap-2 rounded-xl border p-3 text-sm ${adminPwdMsg.ok ? 'border-[#bde9c9] bg-[var(--state-success-surface)] text-[var(--state-success-text)]' : 'border-[#ffc6c1] bg-[var(--state-error-surface)] text-[var(--state-error)]'}`}>
+              <div className={`mx-5 mt-5 flex items-center gap-2 rounded-xl border p-3 text-sm ${adminPwdMsg.ok ? 'border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] text-[var(--state-success-text)]' : 'border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] text-[var(--state-error)]'}`}>
                 {adminPwdMsg.ok ? <CheckCircle className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}{adminPwdMsg.text}
               </div>
             )}
@@ -397,6 +464,67 @@ export default function Profile() {
       }
     } catch {
       setEditMsg('网络错误');
+    }
+  };
+
+  // SSO 设置密码验证码倒计时
+  useEffect(() => {
+    if (ssoCountdown <= 0) return;
+    const t = window.setTimeout(() => setSsoCountdown((v) => v - 1), 1000);
+    return () => window.clearTimeout(t);
+  }, [ssoCountdown]);
+
+  const handleSsoSendCode = async () => {
+    if (!user?.phone) {
+      setSsoPwdMsg({ ok: false, text: '账号未绑定手机号' });
+      return;
+    }
+    setSsoPwdMsg(null);
+    setSsoSendingCode(true);
+    try {
+      const res = await sendSmsCode(user.phone, 'login');
+      setSsoCountdown(res.retryAfterSeconds || 60);
+    } catch (err) {
+      setSsoPwdMsg({ ok: false, text: err instanceof Error ? err.message : '验证码发送失败' });
+    } finally {
+      setSsoSendingCode(false);
+    }
+  };
+
+  const handleSetSsoPwd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSsoPwdMsg(null);
+    if (!ssoCode.trim() || !ssoNewPwd) {
+      setSsoPwdMsg({ ok: false, text: '请填写验证码与新密码' });
+      return;
+    }
+    if (ssoNewPwd.length < 6) {
+      setSsoPwdMsg({ ok: false, text: '新密码长度至少6位' });
+      return;
+    }
+    setSsoPwdLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/users/set-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${useAuthStore.getState().token}`,
+        },
+        body: JSON.stringify({ verificationCode: ssoCode.trim(), newPassword: ssoNewPwd }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setSsoPwdMsg({ ok: true, text: '密码设置成功，可用新密码通过 SSO 登录' });
+        setSsoCode('');
+        setSsoNewPwd('');
+        setShowSsoPwd(false);
+      } else {
+        setSsoPwdMsg({ ok: false, text: d.message || '设置失败' });
+      }
+    } catch {
+      setSsoPwdMsg({ ok: false, text: '网络错误' });
+    } finally {
+      setSsoPwdLoading(false);
     }
   };
 
@@ -463,7 +591,7 @@ export default function Profile() {
             <button onClick={handleLogoutAll} className="btn-cs btn-sm border border-[color:var(--border)] bg-white text-[var(--text-700)] hover:bg-[var(--background-100)]">
               退出所有设备
             </button>
-            <button onClick={handleLogout} className="btn-cs btn-sm border border-[#ffc6c1] bg-[var(--state-error-surface)] text-[var(--state-error)] hover:bg-[#ffe1de]">
+            <button onClick={handleLogout} className="btn-cs btn-sm border border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] text-[var(--state-error)] hover:bg-[var(--state-error-surface-strong)]">
               <LogOut className="h-4 w-4" />退出登录
             </button>
           </>
@@ -499,7 +627,7 @@ export default function Profile() {
           </div>
 
           {editMsg && !userEdit && (
-            <div className="mx-5 mt-5 flex items-center gap-2 rounded-xl border border-[#bde9c9] bg-[var(--state-success-surface)] p-3 text-sm text-[var(--state-success-text)] sm:mx-6">
+            <div className="mx-5 mt-5 flex items-center gap-2 rounded-xl border border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] p-3 text-sm text-[var(--state-success-text)] sm:mx-6">
               <CheckCircle className="h-4 w-4 shrink-0" />{editMsg}
             </div>
           )}
@@ -507,7 +635,7 @@ export default function Profile() {
           {userEdit ? (
             <form onSubmit={handleUserEdit} className="space-y-4 px-5 py-5 sm:px-6">
               {editMsg && (
-                <div className="flex items-center gap-2 rounded-xl border border-[#ffc6c1] bg-[var(--state-error-surface)] p-3 text-sm text-[var(--state-error)]">
+                <div className="flex items-center gap-2 rounded-xl border border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] p-3 text-sm text-[var(--state-error)]">
                   <XCircle className="h-4 w-4 shrink-0" />{editMsg}
                 </div>
               )}
@@ -552,16 +680,61 @@ export default function Profile() {
               <div className="flex flex-col gap-3 border-t border-[color:var(--border)] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                 <div className="flex gap-3">
                   <Shield className="mt-0.5 h-4 w-4 shrink-0 text-[var(--text-400)]" />
-                  <div><h3 className="text-sm font-medium text-[var(--text-800)]">实名认证</h3><p className="mt-1 text-xs leading-5 text-[var(--text-500)]">完成认证后可使用完整的交易与资金功能。</p></div>
+                  <div><h3 className="text-sm font-medium text-[var(--text-800)]">实名认证</h3><p className="mt-1 text-xs leading-5 text-[var(--text-500)]">完成认证后可使用完整的交易与资金功能，认证一次长期有效。</p></div>
                 </div>
                 {user.kycStatus === 'VERIFIED' ? (
                   <span className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--state-success-text)]"><CheckCircle className="h-4 w-4" />已完成</span>
                 ) : user.kycStatus === 'PENDING' ? (
                   <span className="text-sm font-medium text-[var(--state-warning)]">审核中</span>
                 ) : (
-                  <button type="button" onClick={() => { useAuthStore.getState().updateKyc('VERIFIED'); alert('模拟实名认证成功！'); }} className="btn-cs btn-primary btn-sm">去认证</button>
+                  <button type="button" onClick={() => { setKycFormOpen(true); setKycError(''); }} className="btn-cs btn-primary btn-sm">去认证</button>
                 )}
               </div>
+
+              {kycNotice && (
+                <div className="border-t border-[color:var(--border)] px-5 py-3 text-sm text-[var(--state-success-text)] sm:px-6">{kycNotice}</div>
+              )}
+
+              {kycFormOpen && user.kycStatus !== 'VERIFIED' && (
+                <div className="space-y-3 border-t border-[color:var(--border)] px-5 py-5 sm:px-6">
+                  <p className="text-xs leading-5 text-[var(--text-500)]">请填写真实姓名与身份证号。信息经加密存储，仅用于交易主体核验，不会向任何第三方展示。</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label htmlFor="kyc-real-name" className="mb-1.5 block text-xs font-semibold text-[var(--text-600)]">真实姓名</label>
+                      <input
+                        id="kyc-real-name"
+                        value={kycRealName}
+                        onChange={(e) => setKycRealName(e.target.value)}
+                        placeholder="与身份证一致"
+                        className="h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm outline-none focus:border-[var(--brand-500)]"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="kyc-id-card" className="mb-1.5 block text-xs font-semibold text-[var(--text-600)]">身份证号</label>
+                      <input
+                        id="kyc-id-card"
+                        value={kycIdCard}
+                        onChange={(e) => setKycIdCard(e.target.value)}
+                        placeholder="18 位身份证号码"
+                        maxLength={18}
+                        className="h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 font-mono text-sm outline-none focus:border-[var(--brand-500)]"
+                      />
+                    </div>
+                  </div>
+                  {kycError && <p className="text-xs text-[var(--state-error)]">{kycError}</p>}
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={submitKycForm}
+                      disabled={kycSubmitting || kycRealName.trim().length < 2 || kycIdCard.trim().length !== 18}
+                      className="btn-cs btn-primary btn-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {kycSubmitting ? '提交中…' : '提交认证'}
+                    </button>
+                    <button type="button" onClick={() => setKycFormOpen(false)} className="btn-cs btn-ghost-dark btn-sm">取消</button>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -616,7 +789,7 @@ export default function Profile() {
           </div>
 
           {userPwdMsg && (
-            <div className={`mx-5 mt-5 flex items-center gap-2 rounded-xl border p-3 text-sm ${userPwdMsg.ok ? 'border-[#bde9c9] bg-[var(--state-success-surface)] text-[var(--state-success-text)]' : 'border-[#ffc6c1] bg-[var(--state-error-surface)] text-[var(--state-error)]'}`}>
+            <div className={`mx-5 mt-5 flex items-center gap-2 rounded-xl border p-3 text-sm ${userPwdMsg.ok ? 'border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] text-[var(--state-success-text)]' : 'border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] text-[var(--state-error)]'}`}>
               {userPwdMsg.ok ? <CheckCircle className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}{userPwdMsg.text}
             </div>
           )}
@@ -641,6 +814,40 @@ export default function Profile() {
             </form>
           )}
 
+          {/* ==================== 设置 SSO 登录密码 ==================== */}
+          <div className="border-t border-[color:var(--border)]">
+            <button
+              type="button"
+              onClick={() => { setShowSsoPwd(!showSsoPwd); setSsoPwdMsg(null); }}
+              className="flex min-h-14 w-full items-center justify-between px-5 text-left transition-colors hover:bg-[var(--background-100)]"
+              aria-expanded={showSsoPwd}
+            >
+              <span className="flex items-center gap-3 text-sm font-medium text-[var(--text-700)]"><Globe className="h-4 w-4 text-[var(--brand-600)]" />设置 SSO 登录密码</span>
+              {showSsoPwd ? <ChevronUp className="h-4 w-4 text-[var(--text-400)]" /> : <ChevronDown className="h-4 w-4 text-[var(--text-400)]" />}
+            </button>
+
+            {showSsoPwd && (
+              <form onSubmit={handleSetSsoPwd} className="space-y-4 border-t border-[color:var(--border)] px-5 py-5">
+                <p className="text-sm leading-6 text-[var(--text-500)]">短信验证码登录的账号没有密码，设置后可凭此密码使用 SSO（Casdoor）安全登录。</p>
+                {ssoPwdMsg && (
+                  <div className={`flex items-center gap-2 rounded-xl border p-3 text-sm ${ssoPwdMsg.ok ? 'border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] text-[var(--state-success-text)]' : 'border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] text-[var(--state-error)]'}`}>
+                    {ssoPwdMsg.ok ? <CheckCircle className="h-4 w-4 shrink-0" /> : <XCircle className="h-4 w-4 shrink-0" />}{ssoPwdMsg.text}
+                  </div>
+                )}
+                <div className="flex items-end gap-2">
+                  <div className="flex-1"><label htmlFor="sso-sms-code" className="mb-1.5 block text-sm font-medium text-[var(--text-600)]">短信验证码</label><input id="sso-sms-code" inputMode="numeric" value={ssoCode} onChange={(e) => setSsoCode(e.target.value.replace(/\D/g, ''))} placeholder={`输入 ${user?.phone || '手机号'} 收到的验证码`} className="field-input" /></div>
+                  <button type="button" onClick={handleSsoSendCode} disabled={ssoSendingCode || ssoCountdown > 0} className="btn-cs btn-secondary btn-sm h-[42px] shrink-0 disabled:opacity-50">
+                    {ssoSendingCode && <Loader2 className="h-4 w-4 animate-spin" />}{ssoCountdown > 0 ? `${ssoCountdown}s 后重发` : '获取验证码'}
+                  </button>
+                </div>
+                <div><label htmlFor="sso-new-password" className="mb-1.5 block text-sm font-medium text-[var(--text-600)]">新密码</label><input id="sso-new-password" type="password" value={ssoNewPwd} onChange={(e) => setSsoNewPwd(e.target.value)} placeholder="至少 6 位" autoComplete="new-password" className="field-input" /></div>
+                <button type="submit" disabled={ssoPwdLoading} className="btn-cs btn-primary btn-sm w-full disabled:opacity-50">
+                  {ssoPwdLoading && <Loader2 className="h-4 w-4 animate-spin" />}{ssoPwdLoading ? '设置中...' : '确认设置'}
+                </button>
+              </form>
+            )}
+          </div>
+
           {/* ==================== 个人访问令牌（PAT）=================== */}
           <div className="border-t border-[color:var(--border)]">
             <div className="flex items-center justify-between gap-3 px-5 py-5">
@@ -656,13 +863,13 @@ export default function Profile() {
             </div>
 
             {patError && (
-              <div className="mx-5 mb-4 flex items-center gap-2 rounded-xl border border-[#ffc6c1] bg-[var(--state-error-surface)] p-3 text-sm text-[var(--state-error)]">
+              <div className="mx-5 mb-4 flex items-center gap-2 rounded-xl border border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] p-3 text-sm text-[var(--state-error)]">
                 <XCircle className="h-4 w-4 shrink-0" />{patError}
               </div>
             )}
 
             {newPatToken && (
-              <div className="mx-5 mb-4 space-y-3 rounded-xl border border-[#bde9c9] bg-[var(--state-success-surface)] p-4">
+              <div className="mx-5 mb-4 space-y-3 rounded-xl border border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-[var(--state-success-text)]">
                   <CheckCircle className="h-4 w-4 shrink-0" />令牌已创建，仅显示一次，请立即复制保存
                 </div>
@@ -672,7 +879,7 @@ export default function Profile() {
                     {copied ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied ? '已复制' : '复制'}
                   </button>
                 </div>
-                <p className="text-xs text-[var(--text-500)]">使用方式：作为请求头 <code className="font-mono">Authorization: Bearer &lt;令牌&gt;</code> 传给平台 API。</p>
+                <p className="text-xs text-[var(--text-500)]">用于调用平台接口时验证身份。点击复制后，按接入文档的说明使用即可。</p>
                 <button type="button" onClick={() => setNewPatToken(null)} className="btn-cs btn-ghost-dark btn-sm w-full">我已保存，关闭</button>
               </div>
             )}
@@ -731,7 +938,7 @@ export default function Profile() {
                           <button
                             type="button"
                             onClick={() => handleRevokePat(pat.id, pat.name)}
-                            className="flex shrink-0 items-center gap-1 rounded-lg border border-[#ffc6c1] px-2.5 py-1.5 text-xs font-medium text-[var(--state-error)] transition-colors hover:bg-[var(--state-error-surface)]"
+                            className="flex shrink-0 items-center gap-1 rounded-lg border border-[color:var(--state-error-border)] px-2.5 py-1.5 text-xs font-medium text-[var(--state-error)] transition-colors hover:bg-[var(--state-error-surface)]"
                           >
                             <Trash2 className="h-3.5 w-3.5" />撤销
                           </button>

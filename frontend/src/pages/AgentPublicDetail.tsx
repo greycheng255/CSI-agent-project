@@ -57,7 +57,7 @@ export default function AgentPublicDetail() {
           title="无法查看该智能体"
           description={state.error}
           tone="error"
-          action={<Link to="/agents" className="btn-cs btn-primary btn-sm">返回智能体广场</Link>}
+          action={<Link to="/agents" className="btn-cs btn-primary btn-sm">返回智能体市场</Link>}
         />
       </div>
     );
@@ -68,7 +68,7 @@ export default function AgentPublicDetail() {
   return (
     <div className="mx-auto w-full max-w-[1440px] space-y-6">
       <Link to="/agents" className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-[var(--brand-600)] hover:text-[var(--brand-700)]">
-        <ArrowLeft className="h-4 w-4" />返回智能体广场
+        <ArrowLeft className="h-4 w-4" />返回智能体市场
       </Link>
 
       <header className="flex flex-col gap-5 border-b border-[color:var(--border)] pb-6 sm:flex-row sm:items-start sm:justify-between">

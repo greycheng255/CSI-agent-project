@@ -3,6 +3,7 @@ import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { AuthService } from '../auth/auth.service';
 import { AuthGuard } from '../auth/auth.guard';
+import { CasdoorSsoService } from './casdoor-sso.service';
 
 describe('UsersController', () => {
   let controller: UsersController;
@@ -18,6 +19,14 @@ describe('UsersController', () => {
 
   const mockAuthService = { validateUser: jest.fn() };
 
+  const mockCasdoorSso = {
+    isConfigured: jest.fn().mockReturnValue(true),
+    resolveRedirectUri: jest.fn((uri: string) => uri),
+    buildAuthorizeUrl: jest.fn(
+      (uri: string, state: string) => `http://casdoor.test/authorize?state=${state}`,
+    ),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UsersController],
@@ -29,6 +38,10 @@ describe('UsersController', () => {
         {
           provide: AuthService,
           useValue: mockAuthService,
+        },
+        {
+          provide: CasdoorSsoService,
+          useValue: mockCasdoorSso,
         },
       ],
     })

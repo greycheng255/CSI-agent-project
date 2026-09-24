@@ -57,6 +57,21 @@ describe('SettlementsService（T20/T21：备数据 + 划款交关联方）', () 
     // 划款动作只交给关联方：服务内无任何资金执行逻辑
   });
 
+  it('无里程碑 / 权重全零 → 422 VALIDATION_MILESTONE_WEIGHT_INVALID（§3.2.8 结算依据）', async () => {
+    mockOrdersRepo.findOne.mockResolvedValue({
+      id: 'o1',
+      workspaceId: 'ws-1',
+      finalPriceCny: 7800,
+      milestones: null,
+    });
+    mockSettleRepo.findOne.mockResolvedValueOnce(null);
+    await expect(service.trigger('o1')).rejects.toMatchObject({
+      status: 422,
+      errorCode: 'VALIDATION_MILESTONE_WEIGHT_INVALID',
+    });
+    expect(mockSettleRepo.save).not.toHaveBeenCalled();
+  });
+
   it('权重和≠100% → 400；重复触发 → 409', async () => {
     mockOrdersRepo.findOne.mockResolvedValue({
       id: 'o1',

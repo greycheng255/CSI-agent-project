@@ -1,4 +1,5 @@
 import {
+  hasSettlementBasis,
   isWeightsSumValid,
   settlementAmount,
 } from './milestone-math';
@@ -14,6 +15,14 @@ describe('milestone-math（T20：里程碑结算公式）', () => {
     expect(isWeightsSumValid([{ weight: 0.4 }])).toBe(false);
     expect(isWeightsSumValid([{ weight: 1.1 }])).toBe(false);
     expect(isWeightsSumValid([])).toBe(true); // 无里程碑不校验
+  });
+
+  it('结算依据校验（§3.2.8）：至少 1 个权重非零的里程碑', () => {
+    expect(hasSettlementBasis([{ weight: 1 }])).toBe(true);
+    expect(hasSettlementBasis([{ weight: 0 }, { weight: 0.5 }])).toBe(true);
+    expect(hasSettlementBasis([])).toBe(false);
+    expect(hasSettlementBasis([{ weight: 0 }])).toBe(false);
+    expect(hasSettlementBasis([{ key: 'm1' }])).toBe(false); // 缺省权重 = 0
   });
 
   it('仅 verified_passed 里程碑计入结算', () => {

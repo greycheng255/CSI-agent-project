@@ -57,7 +57,7 @@ export default function OpenNotebookOAuthCallback() {
               replace
               className="mt-5 inline-flex min-h-10 items-center rounded-xl bg-[var(--brand-600)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-700)]"
             >
-              返回智能体集市
+              返回智能体工具
             </Link>
           </>
         )}

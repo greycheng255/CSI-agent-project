@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import AnimatedNumber from '../components/reactbits/AnimatedNumber';
 import {
   Wallet,
   ArrowDownToLine,
@@ -86,7 +87,7 @@ const withdrawalStatusView: Record<
   },
   COMPLETED: {
     label: '已完成',
-    badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]',
+    badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[color:var(--state-success-border)]',
   },
   REJECTED: {
     label: '已拒绝',
@@ -130,6 +131,9 @@ export default function MyBalance({ embedded }: { embedded?: boolean }) {
   >('ALIPAY');
   const [withdrawAccount, setWithdrawAccount] = useState('');
   const [withdrawSubmitting, setWithdrawSubmitting] = useState(false);
+  // 提现实名信息（轻量实名）
+  const [withdrawIdCardName, setWithdrawIdCardName] = useState('');
+  const [withdrawIdCardNumber, setWithdrawIdCardNumber] = useState('');
 
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -269,6 +273,14 @@ export default function MyBalance({ embedded }: { embedded?: boolean }) {
       setMsg({ ok: false, text: '请填写收款账号信息' });
       return;
     }
+    if (!withdrawIdCardName.trim()) {
+      setMsg({ ok: false, text: '请填写真实姓名（实名信息用于提现打款核对）' });
+      return;
+    }
+    if (!/^\d{17}[\dXx]$/.test(withdrawIdCardNumber.trim())) {
+      setMsg({ ok: false, text: '请填写正确的18位身份证号' });
+      return;
+    }
     setWithdrawSubmitting(true);
     try {
       const res = await fetch(`${API_BASE}/api/v1/balance/withdrawals`, {
@@ -278,6 +290,8 @@ export default function MyBalance({ embedded }: { embedded?: boolean }) {
           amountCny: amount,
           paymentMethod: withdrawMethod,
           accountInfo: withdrawAccount.trim(),
+          idCardName: withdrawIdCardName.trim(),
+          idCardNumber: withdrawIdCardNumber.trim(),
         }),
       });
       const data = await res.json();
@@ -313,8 +327,8 @@ export default function MyBalance({ embedded }: { embedded?: boolean }) {
         <div
           className={`flex items-center gap-2 rounded-xl border p-3 text-sm ${
             msg.ok
-              ? 'border-[#bde9c9] bg-[var(--state-success-surface)] text-[var(--state-success-text)]'
-              : 'border-[#ffc6c1] bg-[var(--state-error-surface)] text-[var(--state-error)]'
+              ? 'border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] text-[var(--state-success-text)]'
+              : 'border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] text-[var(--state-error)]'
           }`}
         >
           {msg.ok ? (
@@ -345,25 +359,25 @@ export default function MyBalance({ embedded }: { embedded?: boolean }) {
           <div className="py-4 sm:px-5 sm:first:pl-5">
             <dt className="text-xs text-[var(--text-500)]">可用余额</dt>
             <dd className="mt-1 text-2xl font-semibold tabular-nums text-[var(--text-900)]">
-              {balance ? cny(balance.availableCny) : '¥0.00'}
+              <AnimatedNumber value={(balance?.availableCny ?? 0) / 100} prefix="¥" decimals={2} />
             </dd>
           </div>
           <div className="py-4 sm:px-5">
             <dt className="text-xs text-[var(--text-500)]">冻结中</dt>
             <dd className="mt-1 text-2xl font-semibold tabular-nums text-[var(--state-warning)]">
-              {balance ? cny(balance.frozenCny) : '¥0.00'}
+              <AnimatedNumber value={(balance?.frozenCny ?? 0) / 100} prefix="¥" decimals={2} />
             </dd>
           </div>
           <div className="py-4 sm:px-5">
             <dt className="text-xs text-[var(--text-500)]">累计收入</dt>
             <dd className="mt-1 text-2xl font-semibold tabular-nums text-[var(--brand-700)]">
-              {balance ? cny(balance.totalIncomeCny) : '¥0.00'}
+              <AnimatedNumber value={(balance?.totalIncomeCny ?? 0) / 100} prefix="¥" decimals={2} />
             </dd>
           </div>
           <div className="py-4 sm:px-5">
             <dt className="text-xs text-[var(--text-500)]">累计提现</dt>
             <dd className="mt-1 text-2xl font-semibold tabular-nums text-[var(--text-600)]">
-              {balance ? cny(balance.totalWithdrawalCny) : '¥0.00'}
+              <AnimatedNumber value={(balance?.totalWithdrawalCny ?? 0) / 100} prefix="¥" decimals={2} />
             </dd>
           </div>
         </dl>
@@ -423,6 +437,45 @@ export default function MyBalance({ embedded }: { embedded?: boolean }) {
             </h3>
           </div>
           <form onSubmit={handleWithdraw} className="space-y-4 px-5 py-5">
+            <div className="flex items-start gap-2 rounded-lg border border-blue-500/20 bg-[var(--brand-50)] p-3 text-xs text-[var(--brand-700)]">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                为保障资金安全，提现需填写真实姓名与身份证号进行实名核对，平台将加密保存。
+              </span>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-[var(--text-600)]">
+                真实姓名
+              </label>
+              <input
+                type="text"
+                value={withdrawIdCardName}
+                onChange={(e) => setWithdrawIdCardName(e.target.value)}
+                placeholder="请输入与身份证一致的姓名"
+                className="input-cs mt-1 w-full"
+                required
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-[var(--text-600)]">
+                身份证号
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={withdrawIdCardNumber}
+                onChange={(e) =>
+                  setWithdrawIdCardNumber(
+                    e.target.value
+                      .replace(/[^\dXx]/g, '')
+                      .slice(0, 18),
+                  )
+                }
+                placeholder="请输入18位身份证号"
+                className="input-cs mt-1 w-full"
+                required
+              />
+            </div>
             <div>
               <label className="text-xs font-medium text-[var(--text-600)]">
                 提现金额（元，最低 100）

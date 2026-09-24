@@ -12,6 +12,7 @@ import { AgentStatusBadge } from '../components/agents/AgentStatusBadge';
 import { useAuthStore } from '../store/authStore';
 import type { Agent, AgentApprovalStatus } from '../types/agent';
 import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { useConfirm } from '../components/ui/confirm-context';
 
 const tabs: Array<{ key: 'all' | AgentApprovalStatus; label: string }> = [
   { key: 'pending_review', label: '待审核' },
@@ -29,6 +30,8 @@ export default function AdminAgents() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actingId, setActingId] = useState<string | null>(null);
+
+  const confirm = useConfirm();
 
   const fetchAgents = useCallback(async () => {
     setLoading(true);
@@ -61,11 +64,33 @@ export default function AdminAgents() {
   const runAction = async (agent: Agent, action: 'approve' | 'reject' | 'disable') => {
     let comment = '';
     if (action === 'reject') {
-      comment = window.prompt('请输入驳回原因') || '';
-      if (!comment.trim()) return;
+      const result = await confirm({
+        title: '驳回 Agent 审核',
+        description: `确认驳回 ${agent.name} 的审核申请吗？`,
+        tone: 'danger',
+        confirmText: '驳回',
+        requireReason: { label: '驳回原因', placeholder: '说明驳回理由...' },
+      });
+      if (!result.confirmed) return;
+      comment = result.reason ?? '';
     }
-    if (action === 'approve' && !window.confirm(`确认通过 ${agent.name} 的审核吗？`)) return;
-    if (action === 'disable' && !window.confirm(`确认禁用 ${agent.name} 吗？`)) return;
+    if (action === 'approve') {
+      const { confirmed } = await confirm({
+        title: '通过审核',
+        description: `确认通过 ${agent.name} 的审核吗？`,
+        confirmText: '通过审核',
+      });
+      if (!confirmed) return;
+    }
+    if (action === 'disable') {
+      const { confirmed } = await confirm({
+        title: '禁用 Agent',
+        description: `确认禁用 ${agent.name} 吗？`,
+        tone: 'danger',
+        confirmText: '禁用',
+      });
+      if (!confirmed) return;
+    }
 
     setActingId(agent.id);
     setError('');
@@ -146,7 +171,7 @@ export default function AdminAgents() {
                   <button
                     onClick={() => runAction(agent, 'approve')}
                     disabled={actingId === agent.id || agent.approvalStatus === 'approved'}
-                    className="inline-flex min-h-10 items-center gap-1 rounded-full border border-[#bde9c9] bg-[var(--state-success-surface)] px-4 text-sm font-medium text-[var(--state-success-text)] disabled:opacity-50"
+                    className="inline-flex min-h-10 items-center gap-1 rounded-full border border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] px-4 text-sm font-medium text-[var(--state-success-text)] disabled:opacity-50"
                   >
                     <CheckCircle2 className="h-4 w-4" />
                     通过
@@ -154,7 +179,7 @@ export default function AdminAgents() {
                   <button
                     onClick={() => runAction(agent, 'reject')}
                     disabled={actingId === agent.id || agent.approvalStatus === 'rejected'}
-                    className="inline-flex min-h-10 items-center gap-1 rounded-full border border-[#ffc6c1] bg-[var(--state-error-surface)] px-4 text-sm font-medium text-[var(--state-error)] disabled:opacity-50"
+                    className="inline-flex min-h-10 items-center gap-1 rounded-full border border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] px-4 text-sm font-medium text-[var(--state-error)] disabled:opacity-50"
                   >
                     <XCircle className="h-4 w-4" />
                     驳回

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { cssNumber, cssSeconds } from '../components/reactbits/animVars';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -85,7 +87,7 @@ function AgentMarketCard({
           <span
             className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
               runnable
-                ? 'bg-[color:var(--state-success-surface)] text-[#237a3b]'
+                ? 'bg-[color:var(--state-success-surface)] text-[var(--state-success-text)]'
                 : 'bg-[color:var(--background-100)] text-[color:var(--text-400)]'
             }`}
           >
@@ -113,7 +115,7 @@ function AgentMarketCard({
 
       <div className="mt-auto flex items-center gap-4 border-t border-[color:var(--border)] pt-4 text-xs text-[color:var(--text-400)]">
         <span className="flex items-center gap-1.5">
-          <Star className="h-3.5 w-3.5 text-[#d97706]" />
+          <Star className="h-3.5 w-3.5 text-[var(--state-warning)]" />
           {agent.rating.toFixed(1)}
         </span>
         <span className="flex items-center gap-1.5">
@@ -133,6 +135,12 @@ function AgentMarketCard({
 }
 
 export default function AgentMarketHub() {
+  const reduceMotion = useReducedMotion();
+  // 卡片入场动画参数：集中调于 styles/animations.css
+  const cardDuration = cssSeconds('--anim-card-duration', 0.35);
+  const cardStagger = cssSeconds('--anim-card-stagger', 0.05);
+  const cardMaxStagger = Math.max(0, cssNumber('--anim-card-max-stagger-count', 8));
+  const cardY = cssNumber('--anim-card-y', 14);
   const accountId = useAuthStore(
     (state) => state.user?.id || state.admin?.id || 'anonymous',
   );
@@ -256,10 +264,10 @@ export default function AgentMarketHub() {
         </span>
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-[-0.02em] text-[color:var(--text-800)]">
-            智能体集市
+            智能体工具
           </h1>
           <p className="mt-1 text-sm text-[color:var(--text-500)]">
-            选择专业智能体，配置任务后直接生成内容或执行工作流
+            直接调用智能体完成任务或工作流：选择专业智能体，配置参数后即可生成内容或执行流程
           </p>
         </div>
       </header>
@@ -267,7 +275,7 @@ export default function AgentMarketHub() {
       <div className="mt-7 grid items-start gap-6 lg:grid-cols-[264px_minmax(0,1fr)]">
         <aside
           className={`${mobileFiltersOpen ? 'block' : 'hidden'} lg:sticky lg:top-20 lg:block`}
-          aria-label="智能体集市筛选条件"
+          aria-label="智能体工具筛选条件"
         >
           <div className="rounded-2xl border border-[color:var(--border)] bg-white p-5">
             <div className="flex items-center justify-between gap-3">
@@ -466,7 +474,7 @@ export default function AgentMarketHub() {
             loading ? (
               <div
                 className="grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] gap-4"
-                aria-label="正在加载智能体集市"
+                aria-label="正在加载智能体工具"
               >
                 {Array.from({ length: 8 }, (_, index) => (
                   <MarketCardSkeleton key={index} />
@@ -497,8 +505,16 @@ export default function AgentMarketHub() {
             </div>
           ) : (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] gap-4">
-              {filteredAgents.map((agent) => (
-                <AgentMarketCard key={agent.id} agent={agent} directory={directory} />
+              {filteredAgents.map((agent, agentIndex) => (
+                <motion.div
+                  key={agent.id}
+                  initial={reduceMotion ? false : { opacity: 0, y: cardY }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: cardDuration, ease: 'easeOut', delay: Math.min(agentIndex, cardMaxStagger) * cardStagger }}
+                  className="anim-card-enter anim-card-hover"
+                >
+                  <AgentMarketCard agent={agent} directory={directory} />
+                </motion.div>
               ))}
             </div>
           )}

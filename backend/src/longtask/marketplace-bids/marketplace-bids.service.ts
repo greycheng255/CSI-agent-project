@@ -21,6 +21,10 @@ import {
 const SEAT_FULL_WINDOW_MS = 72 * 60 * 60 * 1000; // 72h 雇主决策倒计时
 const INDUSTRY_AVG_RATING = 3.5; // 行业平均分占位（信誉体系立项前），0-5
 
+/** task_id 为 uuid 列，非 uuid 输入不落库查询（否则 PG 22P02 抛 500） */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export interface SubmitBidInput {
   taskId: string;
   workspaceId: string;
@@ -232,6 +236,7 @@ export class MarketplaceBidsService {
 
   /** 当前轮已提交竞标（供选标/驳回/大厅展示） */
   async listSubmitted(taskId: string): Promise<MarketplaceBid[]> {
+    if (!UUID_RE.test(taskId ?? '')) return [];
     const task = await this.tasksRepo.findOne({ where: { id: taskId } });
     if (!task || task.status === 'draft') return [];
     return this.bidsRepo.find({

@@ -7,6 +7,7 @@ import { API_BASE } from '../config/api';
 import { formatShanghaiDate } from '../utils/date';
 import { listMyMarketplaceTasks } from '../api/longtaskApi';
 import type { MyMarketplaceTask } from '../api/longtaskApi';
+import RecommendedWorkspaces from '../components/RecommendedWorkspaces';
 
 type TaskStatus = 'OPEN' | 'CLOSED' | 'CANCELED';
 
@@ -95,7 +96,7 @@ function taskStatusView(status: TaskStatus) {
     case 'OPEN':
       return {
         label: '招募中',
-        badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]',
+        badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[color:var(--state-success-border)]',
         icon: <Clock className="w-4 h-4" />,
       };
     case 'CLOSED':
@@ -124,7 +125,7 @@ function orderStatusView(status: OrderStatus) {
     case 'PENDING_PAYMENT':
       return {
         label: '待支付',
-        badge: 'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border border-[#f3d79a]',
+        badge: 'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border border-[color:var(--state-warning-border)]',
         description: '请选择Agent并支付',
       };
     case 'IN_PROGRESS':
@@ -136,31 +137,31 @@ function orderStatusView(status: OrderStatus) {
     case 'DELIVERED':
       return {
         label: '待验收',
-        badge: 'bg-[#f1f0ff] text-[#514fc4] border border-[#d9d7ff]',
+        badge: 'bg-[var(--brand-50)] text-[var(--brand-600)] border border-[color:var(--brand-200)]',
         description: 'Agent已提交交付物',
       };
     case 'ACCEPTED':
       return {
         label: '已验收',
-        badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]',
+        badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[color:var(--state-success-border)]',
         description: '等待系统打款',
       };
     case 'COMPLETED':
       return {
         label: '已完成',
-        badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]',
+        badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[color:var(--state-success-border)]',
         description: '任务已完成，资金已释放',
       };
     case 'REJECTED':
       return {
         label: '已拒绝',
-        badge: 'bg-[var(--state-error-surface)] text-[var(--state-error)] border border-[#ffc6c1]',
+        badge: 'bg-[var(--state-error-surface)] text-[var(--state-error)] border border-[color:var(--state-error-border)]',
         description: '交付物未通过验收',
       };
     case 'ARBITRATING':
       return {
         label: '仲裁中',
-        badge: 'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border border-[#f3d79a]',
+        badge: 'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border border-[color:var(--state-warning-border)]',
         description: '正在处理争议',
       };
     case 'REFUNDED':
@@ -303,7 +304,7 @@ export default function MyOrders() {
             <Plus className="h-4 w-4" />
             发布新任务
           </Link>
-          <Link to="/market" className="btn-cs btn-ghost-dark btn-sm">任务大厅</Link>
+          <Link to="/market" className="btn-cs btn-ghost-dark btn-sm">任务市场</Link>
         </>}
       />
 
@@ -349,7 +350,7 @@ export default function MyOrders() {
             </button>
           </div>
           {longTasks.map((task) => (
-            <LongTaskCard key={task.id} task={task} />
+            <LongTaskCard key={task.id} task={task} token={token ?? null} />
           ))}
         </section>
       ) : null)}
@@ -614,9 +615,9 @@ export default function MyOrders() {
 
 /** 长任务任务状态 → 用户可读文案（任务大厅 7 态，PRD 附录 D.1） */
 const LONG_TASK_STATUS: Record<string, { label: string; cls: string }> = {
-  open: { label: '竞标中', cls: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]' },
+  open: { label: '竞标中', cls: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[color:var(--state-success-border)]' },
   selected: { label: '已选标', cls: 'bg-[var(--brand-50)] text-[var(--brand-700)] border border-[var(--brand-200)]' },
-  completed: { label: '已完成', cls: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]' },
+  completed: { label: '已完成', cls: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[color:var(--state-success-border)]' },
   expired: { label: '已过期', cls: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]' },
   closed: { label: '已关闭', cls: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]' },
   cancelled: { label: '已取消', cls: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]' },
@@ -624,7 +625,13 @@ const LONG_TASK_STATUS: Record<string, { label: string; cls: string }> = {
 };
 
 /** 「我的任务」页长任务卡片：竞标动态（谁投了标、报价）+ 选标/签约入口 */
-function LongTaskCard({ task }: { task: MyMarketplaceTask }) {
+function LongTaskCard({
+  task,
+  token,
+}: {
+  task: MyMarketplaceTask;
+  token: string | null;
+}) {
   const status = LONG_TASK_STATUS[task.status] ?? {
     label: task.status,
     cls: 'bg-[var(--background-100)] text-[var(--text-600)] border border-[color:var(--border)]',
@@ -732,6 +739,11 @@ function LongTaskCard({ task }: { task: MyMarketplaceTask }) {
           </Link>
         </div>
       </div>
+
+      {/* 招募中展示「平台推荐工作室」（默认折叠、展开时才请求） */}
+      {task.status === 'open' && (
+        <RecommendedWorkspaces taskId={task.id} token={token} className="mt-4" />
+      )}
     </div>
   );
 }

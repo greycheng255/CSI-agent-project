@@ -299,7 +299,7 @@ export default function OrderPayment() {
         <aside className="h-fit overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white lg:sticky lg:top-20">
           <div className="border-b border-[color:var(--border)] px-5 py-5"><h2 className="flex items-center gap-2 font-semibold text-[var(--text-900)]"><ReceiptText className="h-4 w-4 text-[var(--brand-600)]" />提交支付凭证</h2><p className="mt-1 text-sm leading-6 text-[var(--text-500)]">上传支付成功页面，平台确认后订单进入执行阶段。</p></div>
           <div className="space-y-4 px-5 py-5">
-            {formError && <div className="rounded-xl border border-[#ffc6c1] bg-[var(--state-error-surface)] p-3 text-sm text-[var(--state-error)]">{formError}</div>}
+            {formError && <div className="rounded-xl border border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] p-3 text-sm text-[var(--state-error)]">{formError}</div>}
             <label htmlFor="payment-proof" className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[color:var(--border)] px-4 text-center text-[var(--text-500)] transition-colors hover:border-[var(--brand-300)] hover:text-[var(--brand-600)]">
               {proofPreviewUrl ? <img src={proofPreviewUrl} alt="支付凭证预览" className="max-h-52 max-w-full rounded-lg object-contain" /> : <><ImagePlus className="mb-2 h-7 w-7" /><span className="text-sm font-medium">选择支付截图</span><span className="mt-1 text-xs">支持常见图片格式</span></>}
               <input id="payment-proof" type="file" accept="image/*" onChange={handleFileChange} className="sr-only" />

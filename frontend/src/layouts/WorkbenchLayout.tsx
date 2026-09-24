@@ -1,8 +1,18 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { isWorkbenchNavigationItemActive, userWorkbenchAccountNavigation, userWorkbenchNavigation } from '../config/workbenchNavigation';
 import { useAuthStore } from '../store/authStore';
 import AdminWorkbenchLayout from './AdminWorkbenchLayout';
 import WorkbenchShell from './WorkbenchShell';
+import PageFade from '../components/PageFade';
+
+function FadedOutlet() {
+  const location = useLocation();
+  return (
+    <PageFade key={location.pathname}>
+      <Outlet />
+    </PageFade>
+  );
+}
 
 export default function WorkbenchLayout() {
   const { user, admin } = useAuthStore();
@@ -19,7 +29,7 @@ export default function WorkbenchLayout() {
       accountItems={userWorkbenchAccountNavigation}
       isItemActive={isWorkbenchNavigationItemActive}
     >
-      <Outlet />
+      <FadedOutlet />
     </WorkbenchShell>
   );
 }

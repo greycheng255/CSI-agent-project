@@ -16,7 +16,7 @@ export default function MockAlipayCheckout() {
   );
   const [subject] = useState(
     () => new URLSearchParams(window.location.search).get('subject') ||
-      'CSI 任务订单',
+      '碳硅 Genesis 任务订单',
   );
   const [submitting, setSubmitting] = useState(false);
   const [paid, setPaid] = useState(false);
@@ -87,8 +87,8 @@ export default function MockAlipayCheckout() {
 
   return (
     <div className="min-h-screen bg-[linear-gradient(160deg,#eef6ff_0%,#f7fbff_55%,#ffffff_100%)] px-4 py-10">
-      <div className="mx-auto w-full max-w-md overflow-hidden rounded-2xl border border-[#b8dcff] bg-white shadow-sm">
-        <div className="flex items-center gap-3 border-b border-[#e3f0ff] bg-[linear-gradient(135deg,#1677ff_0%,#3b8cff_100%)] px-5 py-4 text-white">
+      <div className="mx-auto w-full max-w-md overflow-hidden rounded-2xl border border-[color:var(--alipay-border)] bg-white shadow-sm">
+        <div className="flex items-center gap-3 border-b border-[color:var(--alipay-hairline)] bg-[linear-gradient(135deg,var(--alipay-brand)_0%,var(--alipay-brand-light)_100%)] px-5 py-4 text-white">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20 text-lg font-bold">
             支
           </span>

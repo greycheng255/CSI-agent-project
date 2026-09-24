@@ -133,11 +133,11 @@ export function OnlineAlipayPayment({
   };
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-[#b8dcff] bg-[linear-gradient(135deg,#f5fbff_0%,#ffffff_65%)]">
+    <section className="overflow-hidden rounded-2xl border border-[color:var(--alipay-border)] bg-[linear-gradient(135deg,var(--alipay-canvas)_0%,#ffffff_65%)]">
       <div className="flex flex-col gap-5 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div>
           <div className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#1677ff] text-lg font-bold text-white">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--alipay-brand)] text-lg font-bold text-white">
               支
             </span>
             <div>
@@ -161,7 +161,7 @@ export function OnlineAlipayPayment({
             </span>
           </div>
           {payment?.status === 'PENDING' && (
-            <p className="mt-3 text-sm text-[#0f63b5]">
+            <p className="mt-3 text-sm text-[var(--alipay-brand-dark)]">
               支付订单已创建，请在支付宝页面完成付款；本页会自动确认结果。
             </p>
           )}

@@ -6,6 +6,8 @@ import { API_BASE } from '../config/api';
 import { CardSection } from '../components/agents/CardSection';
 import { disableAgent, enableAgent } from '../api/agentsApi';
 import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { useToast } from '../components/ui/toast-context';
+import { useConfirm } from '../components/ui/confirm-context';
 
 type AgentStatus = 'ONLINE' | 'OFFLINE';
 
@@ -133,7 +135,7 @@ function getPlatformExecutionState(agent: Agent, hasActiveApiKey: boolean) {
     return {
       label: '不可用',
       className: 'text-[var(--state-error)]',
-      panelClassName: 'bg-[var(--state-error-surface)] border-[#ffc6c1]',
+      panelClassName: 'bg-[var(--state-error-surface)] border-[color:var(--state-error-border)]',
       description: '请检查审核状态或禁用状态',
     };
   }
@@ -141,7 +143,7 @@ function getPlatformExecutionState(agent: Agent, hasActiveApiKey: boolean) {
     return {
       label: '待启动',
       className: 'text-[var(--state-warning)]',
-      panelClassName: 'bg-[var(--state-warning-surface)] border-[#f3d79a]',
+      panelClassName: 'bg-[var(--state-warning-surface)] border-[color:var(--state-warning-border)]',
       description: '点击启动后参与任务处理',
     };
   }
@@ -149,14 +151,14 @@ function getPlatformExecutionState(agent: Agent, hasActiveApiKey: boolean) {
     return {
       label: '凭证未创建',
       className: 'text-[var(--state-warning)]',
-      panelClassName: 'bg-[var(--state-warning-surface)] border-[#f3d79a]',
+      panelClassName: 'bg-[var(--state-warning-surface)] border-[color:var(--state-warning-border)]',
       description: '进入 Agent API Keys 创建执行凭证',
     };
   }
   return {
     label: '可执行',
     className: 'text-[var(--state-success-text)]',
-    panelClassName: 'bg-[var(--state-success-surface)] border-[#bde9c9]',
+    panelClassName: 'bg-[var(--state-success-surface)] border-[color:var(--state-success-border)]',
     description: '平台已准备好执行条件',
   };
 }
@@ -166,7 +168,7 @@ function getExternalExecutionState(agent: Agent, result?: HealthCheckResult | nu
     return {
       label: '缺少 Webhook',
       className: 'text-[var(--state-warning)]',
-      panelClassName: 'bg-[var(--state-warning-surface)] border-[#f3d79a]',
+      panelClassName: 'bg-[var(--state-warning-surface)] border-[color:var(--state-warning-border)]',
       description: '请补充 webhookUrl',
     };
   }
@@ -177,14 +179,14 @@ function getExternalExecutionState(agent: Agent, result?: HealthCheckResult | nu
     return {
       label: 'Webhook 异常',
       className: 'text-[var(--state-error)]',
-      panelClassName: 'bg-[var(--state-error-surface)] border-[#ffc6c1]',
+      panelClassName: 'bg-[var(--state-error-surface)] border-[color:var(--state-error-border)]',
       description: '请检查服务地址和网络访问',
     };
   }
   return {
     label: 'Webhook 已配置',
     className: 'text-[var(--state-success-text)]',
-    panelClassName: 'bg-[var(--state-success-surface)] border-[#bde9c9]',
+    panelClassName: 'bg-[var(--state-success-surface)] border-[color:var(--state-success-border)]',
     description: agent.webhookUrl,
   };
 }
@@ -203,6 +205,8 @@ export default function AgentDetail() {
   const navigate = useNavigate();
   const { user, token, admin } = useAuthStore();
   const apiBase = API_BASE;
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [agent, setAgent] = useState<Agent | null>(null);
   const [bids, setBids] = useState<BidItem[]>([]);
@@ -296,7 +300,7 @@ export default function AgentDetail() {
       setAgent(updated);
       setSkillsText(Array.isArray(updated.skills) ? updated.skills.join(',') : '');
     } catch {
-      alert('保存 skills 失败，请检查后端服务。');
+      toast.error('保存 skills 失败，请检查后端服务。');
     } finally {
       setSaving(false);
     }
@@ -304,8 +308,13 @@ export default function AgentDetail() {
 
   const handleToggleActive = async () => {
     if (!agent?.id) return;
-    if (agent.isActive !== false && !window.confirm(`确认下线 ${agent.name} 吗？下线后将不会出现在智能体广场。`)) {
-      return;
+    if (agent.isActive !== false) {
+      const { confirmed } = await confirm({
+        title: `确认下线 ${agent.name}`,
+        description: '下线后将不会出现在智能体市场。',
+        confirmText: '确认下线',
+      });
+      if (!confirmed) return;
     }
     setTogglingActive(true);
     try {
@@ -315,7 +324,7 @@ export default function AgentDetail() {
       setAgent(prev => prev ? { ...prev, ...updated } : updated);
       fetchHealthStatus();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '上下线操作失败');
+      toast.error('上下线操作失败', err instanceof Error ? err.message : undefined);
     } finally {
       setTogglingActive(false);
     }
@@ -334,14 +343,14 @@ export default function AgentDetail() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        alert(err?.message || '创建失败');
+        toast.error('创建失败', err?.message);
         return;
       }
       const data = (await res.json()) as { apiKey?: string };
       setNewApiKey(typeof data.apiKey === 'string' ? data.apiKey : null);
       fetchAll();
     } catch {
-      alert('创建失败，请检查后端服务。');
+      toast.error('创建失败，请检查后端服务。');
     } finally {
       setCreatingKey(false);
     }
@@ -388,12 +397,12 @@ export default function AgentDetail() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        alert(err?.message || '吊销失败');
+        toast.error('吊销失败', err?.message);
         return;
       }
       fetchAll();
     } catch {
-      alert('吊销失败');
+      toast.error('吊销失败');
     } finally {
       setRevokingKeyId(null);
     }
@@ -417,7 +426,7 @@ export default function AgentDetail() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        alert(err?.message || '保存失败');
+        toast.error('保存失败', err?.message);
         return;
       }
       const updated = (await res.json()) as Agent;
@@ -425,9 +434,9 @@ export default function AgentDetail() {
       setPaymentQrUrl(updated.paymentQrUrl || '');
       setPaymentQrType(updated.paymentQrType || 'alipay');
       setPaymentAccount(updated.paymentAccount || '');
-      alert('收款信息保存成功！');
+      toast.success('收款信息保存成功！');
     } catch {
-      alert('保存失败，请检查后端服务。');
+      toast.error('保存失败，请检查后端服务。');
     } finally {
       setSavingPayment(false);
     }
@@ -444,7 +453,7 @@ export default function AgentDetail() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        alert(err?.message || '健康检查失败');
+        toast.error('健康检查失败', err?.message);
         return;
       }
       const data = await res.json();
@@ -452,7 +461,7 @@ export default function AgentDetail() {
       // 同时刷新 Agent 信息
       fetchAll();
     } catch {
-      alert('健康检查失败，请检查后端服务。');
+      toast.error('健康检查失败，请检查后端服务。');
     } finally {
       setHealthCheckLoading(false);
     }
@@ -534,7 +543,7 @@ export default function AgentDetail() {
             <span
               className={`px-2 py-0.5 rounded text-xs border ${
                 agent.status === 'ONLINE'
-                  ? 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border-[#bde9c9]'
+                  ? 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border-[color:var(--state-success-border)]'
                   : 'bg-[var(--background-100)] text-[var(--text-600)] border-[color:var(--border)]'
               }`}
             >
@@ -590,8 +599,8 @@ export default function AgentDetail() {
             {/* Agent 在线状态 */}
             <div className={`p-4 rounded-lg border ${
               agent.status === 'ONLINE' 
-                ? 'bg-[var(--state-success-surface)] border-[#bde9c9]'
-                : 'bg-[var(--state-error-surface)] border-[#ffc6c1]'
+                ? 'bg-[var(--state-success-surface)] border-[color:var(--state-success-border)]'
+                : 'bg-[var(--state-error-surface)] border-[color:var(--state-error-border)]'
             }`}>
               <div className="flex items-center gap-2 mb-2">
                 {agent.status === 'ONLINE' ? (
@@ -658,8 +667,8 @@ export default function AgentDetail() {
             {/* Skills 状态 */}
             <div className={`p-4 rounded-lg border ${
               Array.isArray(agent.skills) && agent.skills.length > 0
-                ? 'bg-[var(--state-success-surface)] border-[#bde9c9]'
-                : 'bg-[var(--state-warning-surface)] border-[#f3d79a]'
+                ? 'bg-[var(--state-success-surface)] border-[color:var(--state-success-border)]'
+                : 'bg-[var(--state-warning-surface)] border-[color:var(--state-warning-border)]'
             }`}>
               <div className="flex items-center gap-2 mb-2">
                 {Array.isArray(agent.skills) && agent.skills.length > 0 ? (
@@ -738,7 +747,7 @@ export default function AgentDetail() {
                 <div className="mt-3 space-y-2">
                   <div className="text-xs text-[var(--state-error)] font-bold">检测到的问题</div>
                   {healthCheckResult.errors.map((error, index) => (
-                    <div key={index} className="flex items-start gap-2 p-2 bg-[var(--state-error-surface)] border border-[#ffc6c1] rounded">
+                    <div key={index} className="flex items-start gap-2 p-2 bg-[var(--state-error-surface)] border border-[color:var(--state-error-border)] rounded">
                       <AlertTriangle className="w-3 h-3 text-[var(--state-error)] mt-0.5" />
                       <span className="text-xs text-[var(--state-error)]">{error}</span>
                     </div>
@@ -750,7 +759,7 @@ export default function AgentDetail() {
 
           {/* 连续失败提示 */}
           {(agent.consecutiveFailures || 0) > 0 && (
-            <div className="mt-3 p-3 bg-[var(--state-warning-surface)] border border-[#f3d79a] rounded-lg">
+            <div className="mt-3 p-3 bg-[var(--state-warning-surface)] border border-[color:var(--state-warning-border)] rounded-lg">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-[var(--state-warning)]" />
                 <span className="text-xs text-[var(--state-warning)]">
@@ -818,10 +827,10 @@ export default function AgentDetail() {
           <span
             className={`px-2 py-0.5 rounded text-xs border ${
               executionState.className === 'text-[var(--state-success-text)]'
-                ? 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border-[#bde9c9]'
+                ? 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border-[color:var(--state-success-border)]'
                 : executionState.className === 'text-[var(--state-error)]'
-                ? 'bg-[var(--state-error-surface)] text-[var(--state-error)] border-[#ffc6c1]'
-                : 'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border-[#f3d79a]'
+                ? 'bg-[var(--state-error-surface)] text-[var(--state-error)] border-[color:var(--state-error-border)]'
+                : 'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border-[color:var(--state-warning-border)]'
             }`}
           >
             {executionState.label}
@@ -1029,10 +1038,10 @@ export default function AgentDetail() {
           <div>
             <div className="text-lg font-bold text-[var(--text-900)] flex items-center gap-2">
               <Key className="w-5 h-5 text-[var(--state-warning)]" />
-              Agent API Keys
+              接口密钥
             </div>
             <div className="text-xs text-[var(--text-500)] mt-1">
-              用于 Agent 以 Bearer 方式鉴权提交报价。创建后只展示一次，请及时保存。
+              用于智能体提交报价时的身份验证。创建后只展示一次，请及时保存。
             </div>
           </div>
           <button
@@ -1048,7 +1057,7 @@ export default function AgentDetail() {
           <input
             value={newKeyName}
             onChange={(e) => setNewKeyName(e.target.value)}
-            placeholder="key 名称（例如 platform-executor）"
+            placeholder="密钥名称（例如 platform-executor）"
             className="flex-1 bg-white border border-[color:var(--border)] rounded-lg px-4 py-3 text-[var(--text-900)] focus:outline-none focus:border-[var(--state-warning)]"
           />
           <button
@@ -1058,13 +1067,13 @@ export default function AgentDetail() {
             className="px-4 py-3 bg-yellow-500 text-white font-bold rounded hover:bg-yellow-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {creatingKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
-            创建 Key
+            创建密钥
           </button>
         </div>
 
         {newApiKey && (
-          <div className="mt-4 border border-[#f3d79a] rounded-lg p-4 bg-[var(--background-100)]">
-            <div className="text-xs text-[var(--state-warning)] font-bold mb-2">新 Key（仅展示一次）</div>
+          <div className="mt-4 border border-[color:var(--state-warning-border)] rounded-lg p-4 bg-[var(--background-100)]">
+            <div className="text-xs text-[var(--state-warning)] font-bold mb-2">新密钥（仅展示一次）</div>
             <div className="flex items-center gap-2">
               <div className="flex-1 font-mono text-xs text-[var(--text-900)] break-all">{newApiKey}</div>
               <button
@@ -1217,10 +1226,10 @@ export default function AgentDetail() {
                     <div
                       className={`px-2 py-0.5 rounded text-xs border ${
                         d.status === 'SUCCESS'
-                          ? 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border-[#bde9c9]'
+                          ? 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border-[color:var(--state-success-border)]'
                           : d.status === 'FAILED'
-                            ? 'bg-[var(--state-error-surface)] text-[var(--state-error)] border-[#ffc6c1]'
-                            : 'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border-[#f3d79a]'
+                            ? 'bg-[var(--state-error-surface)] text-[var(--state-error)] border-[color:var(--state-error-border)]'
+                            : 'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border-[color:var(--state-warning-border)]'
                       }`}
                     >
                       {d.status}

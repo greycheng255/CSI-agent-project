@@ -13,6 +13,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import AnimatedNumber from '../components/reactbits/AnimatedNumber';
 import { API_BASE } from '../config/api';
 import { getActiveToken, useAuthStore } from '../store/authStore';
 
@@ -169,18 +170,20 @@ export default function Dashboard() {
             </div>
             <div className="grid grid-cols-2 divide-x divide-y divide-[color:var(--border)] md:grid-cols-3 xl:grid-cols-6 xl:divide-y-0">
               {[
-                { label: '总营收', value: `¥${data.summary.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: DollarSign, tone: 'text-[var(--state-success-text)] bg-[var(--state-success-surface)]' },
-                { label: '总任务', value: data.summary.totalTasks, icon: ClipboardList, tone: 'text-[var(--brand-600)] bg-[var(--brand-50)]' },
-                { label: '总报价', value: data.summary.totalBids, icon: TrendingUp, tone: 'text-[#5856d6] bg-[#f1f0ff]' },
-                { label: '总订单', value: data.summary.totalOrders, icon: Activity, tone: 'text-[var(--state-warning)] bg-[var(--state-warning-surface)]' },
-                { label: '在线 Agent', value: data.summary.onlineAgents, icon: Bot, tone: 'text-[var(--brand-600)] bg-[var(--brand-50)]' },
-                { label: '完成率', value: `${data.summary.completionRate}%`, icon: BarChart3, tone: 'text-[var(--state-success-text)] bg-[var(--state-success-surface)]' },
+                { label: '总营收', num: data.summary.totalRevenue, prefix: '¥', decimals: 2, icon: DollarSign, tone: 'text-[var(--state-success-text)] bg-[var(--state-success-surface)]' },
+                { label: '总任务', num: data.summary.totalTasks, icon: ClipboardList, tone: 'text-[var(--brand-600)] bg-[var(--brand-50)]' },
+                { label: '总报价', num: data.summary.totalBids, icon: TrendingUp, tone: 'text-[var(--brand-500)] bg-[var(--brand-50)]' },
+                { label: '总订单', num: data.summary.totalOrders, icon: Activity, tone: 'text-[var(--state-warning)] bg-[var(--state-warning-surface)]' },
+                { label: '在线 Agent', num: data.summary.onlineAgents, icon: Bot, tone: 'text-[var(--brand-600)] bg-[var(--brand-50)]' },
+                { label: '完成率', num: data.summary.completionRate, suffix: '%', icon: BarChart3, tone: 'text-[var(--state-success-text)] bg-[var(--state-success-surface)]' },
               ].map((metric) => (
                 <div key={metric.label} className="min-w-0 p-5">
                   <span className={`mb-5 flex h-9 w-9 items-center justify-center rounded-lg ${metric.tone}`}>
                     <metric.icon className="h-4 w-4" />
                   </span>
-                  <p className="truncate text-2xl font-bold tabular-nums text-[var(--text-900)]">{metric.value}</p>
+                  <p className="truncate text-2xl font-bold tabular-nums text-[var(--text-900)]">
+                    <AnimatedNumber value={metric.num} prefix={metric.prefix ?? ''} suffix={metric.suffix ?? ''} decimals={metric.decimals ?? 0} />
+                  </p>
                   <p className="mt-1 text-xs text-[var(--text-500)]">{metric.label}</p>
                 </div>
               ))}
@@ -194,7 +197,7 @@ export default function Dashboard() {
             </div>
             <div className="grid lg:grid-cols-3">
               <TrendChart data={data.trends.tasks} label="任务趋势" color="bg-[var(--brand-500)]" />
-              <TrendChart data={data.trends.bids} label="报价趋势" color="bg-[#5856d6]" />
+              <TrendChart data={data.trends.bids} label="报价趋势" color="bg-[var(--brand-500)]" />
               <TrendChart data={data.trends.orders} label="订单趋势" color="bg-[var(--state-success)]" />
             </div>
           </section>

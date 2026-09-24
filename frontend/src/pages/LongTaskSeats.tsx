@@ -16,6 +16,7 @@ import type {
   WorkspaceShowcaseData,
 } from '../api/longtaskApi';
 import { WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { useConfirm } from '../components/ui/confirm-context';
 import { useAuthStore } from '../store/authStore';
 
 /** 雇主侧竞标列表排序维度（PRD §5.6.1：默认综合分，支持手动切换） */
@@ -42,6 +43,7 @@ const toNum = (value: number | string | null | undefined): number => {
 export default function LongTaskSeats() {
   const { id } = useParams();
   const { user, token } = useAuthStore();
+  const confirm = useConfirm();
   const [task, setTask] = useState<MarketplaceTaskInfo | null>(null);
   const [seats, setSeats] = useState<MarketplaceSeatBid[]>([]);
   const [loading, setLoading] = useState(true);
@@ -267,9 +269,13 @@ export default function LongTaskSeats() {
   // 雇主选标（PRD §5.6.2）：仅任务发布者可操作，选标后不可反悔
   async function handleSelectBid(bidId: string) {
     if (!id || !token) return;
-    if (!window.confirm('确认选择该工作室的方案吗？选标后将立即锁定并创建项目，不可反悔。')) {
-      return;
-    }
+    const { confirmed } = await confirm({
+      title: '确认选标',
+      description: '确认选择该工作室的方案吗？选标后将立即锁定并创建项目，不可反悔。',
+      tone: 'danger',
+      confirmText: '确认选标',
+    });
+    if (!confirmed) return;
     setActionBusy(true);
     setActionMsg('');
     try {
@@ -288,9 +294,13 @@ export default function LongTaskSeats() {
   // 雇主全部驳回（PRD §5.6.3）：清空当前轮竞标并重开
   async function handleRejectAll() {
     if (!id || !token) return;
-    if (!window.confirm('全部驳回将清空当前轮全部竞标并重新开放竞标，确定执行吗？')) {
-      return;
-    }
+    const { confirmed } = await confirm({
+      title: '全部驳回',
+      description: '全部驳回将清空当前轮全部竞标并重新开放竞标，确定执行吗？',
+      tone: 'danger',
+      confirmText: '确认驳回',
+    });
+    if (!confirmed) return;
     setActionBusy(true);
     setActionMsg('');
     try {

@@ -223,7 +223,7 @@ export default function MyWorkspace() {
           <p className="max-w-md text-sm leading-relaxed text-[var(--text-500)]">
             工作室是你运营智能体、参与竞标与交付的业务主体。开通后可配置门面信息（简介/能力/服务承诺/案例），雇主将通过工作室展示页了解你。
           </p>
-          {notify && <p className="text-sm text-[var(--danger-600,#c0392b)]">{notify}</p>}
+          {notify && <p className="text-sm text-[var(--state-error)]">{notify}</p>}
           <button onClick={handleCreate} disabled={saving} className="btn-cs btn-primary btn-sm mt-2">
             {saving ? '开通中…' : '立即开通'}
           </button>
@@ -348,7 +348,7 @@ export default function MyWorkspace() {
                   </span>
                   <button
                     type="button"
-                    className="shrink-0 text-xs text-[var(--danger-600,#c0392b)] hover:underline"
+                    className="shrink-0 text-xs text-[var(--state-error)] hover:underline"
                     onClick={() => setCases(cases.filter((_, i) => i !== index))}
                   >
                     移除

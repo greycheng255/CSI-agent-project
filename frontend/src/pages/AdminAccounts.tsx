@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { Shield, Users, Plus, X, Loader2, Edit3, RefreshCw, FileText, Clock, Search, Terminal } from 'lucide-react';
@@ -218,7 +218,7 @@ export default function AdminAccounts() {
   };
 
   const levelLabel = (l: string) => l === 'SUPER' ? '超级管理员' : l === 'OPERATOR' ? '运营' : '管理员';
-  const levelColor = (l: string) => l === 'SUPER' ? 'text-[var(--state-warning)] bg-[var(--state-warning-surface)] border-[#f3d79a]' : l === 'OPERATOR' ? 'text-[var(--brand-700)] bg-[var(--brand-50)] border-[var(--brand-200)]' : 'text-[#514fc4] bg-[#f1f0ff] border-[#d9d7ff]';
+  const levelColor = (l: string) => l === 'SUPER' ? 'text-[var(--state-warning)] bg-[var(--state-warning-surface)] border-[color:var(--state-warning-border)]' : l === 'OPERATOR' ? 'text-[var(--brand-700)] bg-[var(--brand-50)] border-[var(--brand-200)]' : 'text-[var(--brand-600)] bg-[var(--brand-50)] border-[color:var(--brand-200)]';
   const statusColor = (s: string) => s === 'ACTIVE' ? 'text-[var(--state-success-text)] bg-[var(--state-success-surface)]' : 'text-[var(--state-error)] bg-[var(--state-error-surface)]';
 
   if (!admin) return <Navigate to="/login" replace />;
@@ -285,7 +285,7 @@ export default function AdminAccounts() {
           <h2 className="mb-4 text-lg font-semibold text-[var(--text-900)]">新建管理员</h2>
           <form onSubmit={handleCreate} className="space-y-4">
             {createMsg && (
-              <div className={`p-3 rounded-lg text-sm ${createOk ? 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]' : 'bg-[var(--state-error-surface)] text-[var(--state-error)] border border-[#ffc6c1]'}`}>
+              <div className={`p-3 rounded-lg text-sm ${createOk ? 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[color:var(--state-success-border)]' : 'bg-[var(--state-error-surface)] text-[var(--state-error)] border border-[color:var(--state-error-border)]'}`}>
                 {createMsg}
               </div>
             )}
@@ -369,7 +369,7 @@ export default function AdminAccounts() {
                   <td className="py-3 px-4">
                     <div className="flex flex-wrap gap-1 max-w-[200px]">
                       {a.permissions?.slice(0, 3).map((p) => (
-                        <span key={p} className="px-1.5 py-0.5 bg-[var(--state-warning-surface)] text-[var(--state-warning)] text-[10px] rounded border border-[#f3d79a]">
+                        <span key={p} className="px-1.5 py-0.5 bg-[var(--state-warning-surface)] text-[var(--state-warning)] text-[10px] rounded border border-[color:var(--state-warning-border)]">
                           {p === '*' ? '全部' : p.split(':')[1] || p}
                         </span>
                       ))}
@@ -408,7 +408,7 @@ export default function AdminAccounts() {
               </button>
             </div>
             {editMsg && (
-              <div className={`mb-4 p-3 rounded-lg text-sm ${editOk ? 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]' : 'bg-[var(--state-error-surface)] text-[var(--state-error)] border border-[#ffc6c1]'}`}>
+              <div className={`mb-4 p-3 rounded-lg text-sm ${editOk ? 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[color:var(--state-success-border)]' : 'bg-[var(--state-error-surface)] text-[var(--state-error)] border border-[color:var(--state-error-border)]'}`}>
                 {editMsg}
               </div>
             )}

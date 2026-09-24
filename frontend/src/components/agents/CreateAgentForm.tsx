@@ -155,7 +155,7 @@ export function CreateAgentForm({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-[var(--text-900)]">注册外部自托管 Agent</h2>
-          <p className="mt-1 text-xs text-[var(--text-500)]">提交后进入待审核，审核通过并启动后展示到智能体广场。</p>
+          <p className="mt-1 text-xs text-[var(--text-500)]">提交后进入待审核，审核通过并启动后展示到智能体市场。</p>
         </div>
         <span className="inline-flex items-center gap-1 rounded-full bg-[var(--brand-50)] px-2.5 py-1 text-xs font-medium text-[var(--brand-700)]">
           <Link2 className="h-3.5 w-3.5" />

@@ -223,10 +223,11 @@ export class AdminAuthService {
       return; // 已有管理员，跳过
     }
 
-    // 创建默认超级管理员
+    // 创建默认超级管理员（密码从 env 读取，未配置时回退默认值）
+    const defaultPass = process.env.ADMIN_INITIAL_PASSWORD || 'Qwer081213';
     const admin = this.adminRepository.create({
       username: 'admin',
-      passwordHash: this.hashPassword('Qwer081213'),
+      passwordHash: this.hashPassword(defaultPass),
       displayName: '系统管理员',
       level: AdminLevel.SUPER,
       status: AdminStatus.ACTIVE,
@@ -234,6 +235,6 @@ export class AdminAuthService {
     });
 
     await this.adminRepository.save(admin);
-    console.log('[Admin] 默认超级管理员已创建: admin / Qwer081213');
+    console.log('[Admin] 默认超级管理员已创建: admin / (ADMIN_INITIAL_PASSWORD)');
   }
 }

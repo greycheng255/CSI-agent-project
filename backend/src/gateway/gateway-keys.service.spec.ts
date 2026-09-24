@@ -4,6 +4,7 @@ import { GatewayApiKey } from './gateway-key.entity';
 
 describe('GatewayKeysService（K1-K4）', () => {
   let repo: { findOne: jest.Mock; find: jest.Mock; save: jest.Mock };
+  let wsRepo: { findOne: jest.Mock };
   let svc: GatewayKeysService;
 
   const savedRows: GatewayApiKey[] = [];
@@ -29,11 +30,31 @@ describe('GatewayKeysService（K1-K4）', () => {
         return row;
       }),
     };
-    svc = new GatewayKeysService(repo as never);
+    // K1 workspace 归属校验默认放行（org 匹配）
+    wsRepo = {
+      findOne: jest.fn(async (args: any) => ({ id: args.where.id, orgId: '11111111-2222-4333-8444-555555555556' })),
+    };
+    svc = new GatewayKeysService(repo as never, wsRepo as never);
+  });
+
+  it('K1 入参校验：非 UUID → 422 INVALID_ARGUMENT；workspace 不存在/归属不符 → 404 WORKSPACE_NOT_FOUND', async () => {
+    await expect(svc.issue('', 'ws-1')).rejects.toMatchObject({ status: 422 });
+    await expect(svc.issue('11111111-2222-4333-8444-555555555556', 'ws-1')).rejects.toMatchObject({ status: 422 });
+    wsRepo.findOne.mockResolvedValueOnce(null);
+    await expect(
+      svc.issue('11111111-2222-4333-8444-555555555556', '11111111-2222-4333-8444-555555555555'),
+    ).rejects.toMatchObject({ status: 404 });
+    wsRepo.findOne.mockResolvedValueOnce({ id: 'x', orgId: 'org-other' });
+    await expect(
+      svc.issue('11111111-2222-4333-8444-555555555556', '11111111-2222-4333-8444-555555555555'),
+    ).rejects.toMatchObject({ status: 404 });
   });
 
   it('K1 签发：sk-csi- 明文仅返回一次；重复签发幂等返回同一 key（existing=true）', async () => {
-    const first = await svc.issue('org-1', 'ws-1');
+    const first = await svc.issue(
+      '11111111-2222-4333-8444-555555555556',
+      '11111111-2222-4333-8444-555555555555',
+    );
     expect(first.key).toMatch(/^sk-csi-[A-Za-z0-9_-]{30,}$/);
     expect(first.existing).toBe(false);
     // 库内只有密文，明文可解密还原且哈希一致
@@ -42,7 +63,7 @@ describe('GatewayKeysService（K1-K4）', () => {
     expect(decryptKey(row.keyCiphertext)).toBe(first.key);
     expect(row.keyHash).toBe(createHash('sha256').update(first.key).digest('hex'));
 
-    const again = await svc.issue('org-1', 'ws-1');
+    const again = await svc.issue('11111111-2222-4333-8444-555555555556', '11111111-2222-4333-8444-555555555555');
     expect(again.existing).toBe(true);
     expect(again.key).toBe(first.key);
     expect(again.key_id).toBe(first.key_id);
@@ -50,7 +71,7 @@ describe('GatewayKeysService（K1-K4）', () => {
   });
 
   it('K4 轮换：旧 key 置 rotated，新 key active 且明文不同', async () => {
-    const first = await svc.issue('org-1', 'ws-1');
+    const first = await svc.issue('11111111-2222-4333-8444-555555555556', '11111111-2222-4333-8444-555555555555');
     const rotated = await svc.rotate(first.key_id);
     expect(rotated.key).not.toBe(first.key);
     expect(rotated.existing).toBe(false);
@@ -65,10 +86,10 @@ describe('GatewayKeysService（K1-K4）', () => {
   });
 
   it('K3 吊销：active → revoked；validate 对吊销 key 返回 valid=false（K2）', async () => {
-    const key = await svc.issue('org-1', 'ws-1');
+    const key = await svc.issue('11111111-2222-4333-8444-555555555556', '11111111-2222-4333-8444-555555555555');
     expect((await svc.validate(key.key)).valid).toBe(true);
-    expect((await svc.validate(key.key)).workspace_id).toBe('ws-1');
-    expect((await svc.validate(key.key)).org_id).toBe('org-1');
+    expect((await svc.validate(key.key)).workspace_id).toBe('11111111-2222-4333-8444-555555555555');
+    expect((await svc.validate(key.key)).org_id).toBe('11111111-2222-4333-8444-555555555556');
 
     await svc.revoke(key.key_id);
     expect(savedRows[0].status).toBe('revoked');

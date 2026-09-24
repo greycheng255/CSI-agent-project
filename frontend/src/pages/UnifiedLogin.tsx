@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, Loader2, LogIn } from 'lucide-react';
 import {
+  getSsoAuthorizeUrl,
   loginWithAccount,
   loginWithSms,
   sendSmsCode,
@@ -23,6 +24,7 @@ export default function UnifiedLogin() {
   const [countdown, setCountdown] = useState(0);
   const [debugCodeEnabled, setDebugCodeEnabled] = useState(import.meta.env.DEV);
   const [error, setError] = useState('');
+  const [ssoLoading, setSsoLoading] = useState(false);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -41,6 +43,35 @@ export default function UnifiedLogin() {
 
   const validatePhone = (phone: string) => /^1[3-9]\d{9}$/.test(phone);
 
+  /** Casdoor SSO 登录：生成 state 防 CSRF，记下续跳目标，跳 Casdoor authorize */
+  const handleSsoLogin = async () => {
+    setError('');
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    const state = Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    const requestedRedirect = searchParams.get('redirect');
+    const safeRedirect =
+      requestedRedirect?.startsWith('/') && !requestedRedirect.startsWith('//')
+        ? requestedRedirect
+        : '/';
+    sessionStorage.setItem('csi_sso_state', state);
+    sessionStorage.setItem('csi_sso_redirect', safeRedirect);
+
+    setSsoLoading(true);
+    try {
+      const { authorizeUrl } = await getSsoAuthorizeUrl(
+        `${window.location.origin}/callback`,
+        state,
+      );
+      window.location.href = authorizeUrl;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'SSO 跳转失败，请稍后重试');
+      setSsoLoading(false);
+    }
+  };
+
   const handleSendCode = async () => {
     const phone = account.trim();
     setError('');
@@ -53,7 +84,8 @@ export default function UnifiedLogin() {
     try {
       const result = await sendSmsCode(phone, 'login');
       setCountdown(result.retryAfterSeconds);
-      setDebugCodeEnabled(result.debugCodeEnabled);
+      // 仅本地开发环境（DEV）才允许展示调试验证码；生产构建下始终为 false
+      setDebugCodeEnabled(import.meta.env.DEV && result.debugCodeEnabled);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '验证码发送失败，请稍后重试');
     } finally {
@@ -106,9 +138,9 @@ export default function UnifiedLogin() {
           <div className="icon-tile-cs mx-auto mb-4">
             <LogIn className="h-6 w-6" />
           </div>
-          <h1 className="text-2xl font-bold text-[var(--foreground)]">登录 CSi</h1>
+          <h1 className="text-2xl font-bold text-[var(--foreground)]">登录碳硅 Genesis</h1>
           <p className="mt-2 text-sm leading-6 text-[var(--text-500)]">
-            登录 CSi，连接碳基需求与硅基算力
+            登录碳硅 Genesis，连接碳基需求与硅基算力
           </p>
         </div>
 
@@ -199,7 +231,7 @@ export default function UnifiedLogin() {
                   {sendingCode ? <Loader2 className="h-4 w-4 animate-spin" /> : countdown > 0 ? `${countdown}s` : '获取验证码'}
                 </button>
               </div>
-              {debugCodeEnabled && (
+              {import.meta.env.DEV && debugCodeEnabled && (
                 <p className="mt-2 text-xs text-[var(--text-400)]">
                   调试模式可直接使用验证码 121212
                 </p>
@@ -222,6 +254,28 @@ export default function UnifiedLogin() {
             )}
           </button>
         </form>
+
+        <div className="my-5 flex items-center gap-3">
+          <div className="h-px flex-1 bg-[var(--border)]" />
+          <span className="text-xs text-[var(--text-400)]">或</span>
+          <div className="h-px flex-1 bg-[var(--border)]" />
+        </div>
+
+        <button
+          type="button"
+          onClick={handleSsoLogin}
+          disabled={loading || ssoLoading}
+          className="btn-cs btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {ssoLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              正在跳转 SSO
+            </>
+          ) : (
+            'SSO 登录（Casdoor）'
+          )}
+        </button>
 
         <div className="mt-6 text-center text-sm text-[var(--text-500)]">
           没有账号？{' '}

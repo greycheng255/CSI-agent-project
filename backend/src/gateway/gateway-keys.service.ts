@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ContractError } from '../longtask/contract/errors';
 import { GatewayApiKey } from './gateway-key.entity';
+import { Workspace } from '../longtask/workspaces/workspace.entity';
 
 /** 每个状态查询的 workspace 单活跃 key */
 const ACTIVE = 'active';
@@ -74,13 +75,34 @@ export class GatewayKeysService {
   constructor(
     @InjectRepository(GatewayApiKey)
     private readonly keysRepo: Repository<GatewayApiKey>,
+    @InjectRepository(Workspace)
+    private readonly workspacesRepo: Repository<Workspace>,
   ) {}
 
   /**
    * K1 签发（幂等）：workspace 已有 active key → 解密原样返回（existing=true）；
    * 无则生成 `sk-csi-<base64url>`。明文仅此响应出现一次落 daemon 内存。
+   * 入参校验（K1 error hygiene，结构化替代裸 500）：
+   * - org_id/workspace_id 缺失或非 UUID → 422 INVALID_ARGUMENT
+   * - workspace 不存在 / org 未绑定 / 与 org_id 不符 → 404 WORKSPACE_NOT_FOUND
    */
   async issue(orgId: string, workspaceId: string): Promise<IssuedKey> {
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!orgId || !UUID_RE.test(orgId) || !workspaceId || !UUID_RE.test(workspaceId)) {
+      throw new ContractError(
+        422,
+        'INVALID_ARGUMENT',
+        `org_id/workspace_id 必须为合法 UUID（org_id=${orgId || '(空)'} workspace_id=${workspaceId || '(空)'}）`,
+      );
+    }
+    const workspace = await this.workspacesRepo.findOne({ where: { id: workspaceId } });
+    if (!workspace || !workspace.orgId || workspace.orgId !== orgId) {
+      throw new ContractError(
+        404,
+        'WORKSPACE_NOT_FOUND',
+        `workspace 不存在或未绑定该 org: workspace_id=${workspaceId} org_id=${orgId}`,
+      );
+    }
     const existing = await this.keysRepo.findOne({
       where: { workspaceId, status: ACTIVE },
     });

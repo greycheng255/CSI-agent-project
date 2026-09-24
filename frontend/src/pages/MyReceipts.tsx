@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Loader2, 
@@ -86,7 +86,7 @@ const statusConfig: Record<OrderStatus, {
 }> = {
   COMPLETED: {
     label: '已收款',
-    badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]',
+    badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[color:var(--state-success-border)]',
     icon: <CheckCircle className="w-4 h-4" />,
     description: '款项已到账',
     progress: 100,

@@ -8,6 +8,7 @@ import { BalanceService } from '../../payment/balance.service';
 import { BalanceChangeType } from '../../payment/entities/balance.entity';
 import {
   Milestone,
+  hasSettlementBasis,
   isWeightsSumValid,
   settlementAmount,
 } from './milestone-math';
@@ -55,6 +56,15 @@ export class SettlementsService {
     const milestones = Array.isArray(order.milestones)
       ? (order.milestones as Milestone[])
       : [];
+    // 结算依据（对接指南 §3.2.8，2026-09-23 补）：无里程碑 / 权重全零 → 金额恒 0，
+    // 拒绝并返回结构化 422，而不是静默备一张 0 元结算单
+    if (!hasSettlementBasis(milestones)) {
+      throw new ContractError(
+        422,
+        CONTRACT_ERROR_CODE.VALIDATION_MILESTONE_WEIGHT_INVALID,
+        'spec lacks a settlement basis: at least one milestone with a non-zero weight is required',
+      );
+    }
     if (!isWeightsSumValid(milestones)) {
       throw new ContractError(
         400,

@@ -373,6 +373,78 @@ export async function submitOwnerMarketplaceBid(
   });
 }
 
+// ===== 平台推荐工作室（雇主创建/发布任务后）=====
+
+/** 推荐工作室信用数据（平台自动计算，工作室不可修改） */
+export interface RecommendedWorkspaceCredit {
+  completedTasksCount: number;
+  avgRating: number;
+  onTimeRate: number;
+  disputeRate: number;
+}
+
+/** 推荐列表条目（后端按推荐分倒序；matchScore 仅服务端排序，前端不展示数值） */
+export interface RecommendedWorkspace {
+  workspaceId: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  bio: string | null;
+  capabilityTags: string[] | null;
+  categoryIds: string[] | null;
+  credit: RecommendedWorkspaceCredit;
+  newShop: boolean;
+  matchScore: number;
+  matchBreakdown: { category: number; tags: number; credit: number };
+  reasons: string[];
+  /** 已收到本任务本轮平台邀约（幂等标记，用于禁用按钮） */
+  invited: boolean;
+}
+
+export interface RecommendedWorkspaceList {
+  taskId: string;
+  categoryId: string | null;
+  limit: number;
+  candidateCount: number;
+  items: RecommendedWorkspace[];
+}
+
+/** 平台推荐工作室列表（仅任务雇主本人可读） */
+export async function getRecommendedWorkspaces(
+  token: string,
+  taskId: string,
+  limit?: number,
+): Promise<RecommendedWorkspaceList> {
+  const query = limit ? `?limit=${encodeURIComponent(String(limit))}` : '';
+  return requestJson<RecommendedWorkspaceList>(
+    `/api/v1/longtask/marketplace-tasks/${encodeURIComponent(taskId)}/recommended-workspaces${query}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+}
+
+export interface InviteWorkspaceResult {
+  invited: boolean;
+  alreadyInvited: boolean;
+  opportunityId: string | null;
+  workspaceId: string;
+}
+
+/** 邀请推荐工作室参与竞标（复用 opportunity.pushed 链路，同轮幂等） */
+export async function inviteWorkspaceToTask(
+  token: string,
+  taskId: string,
+  workspaceId: string,
+): Promise<InviteWorkspaceResult> {
+  return requestJson<InviteWorkspaceResult>(
+    `/api/v1/longtask/marketplace-tasks/${encodeURIComponent(taskId)}/invite-workspace`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ workspaceId }),
+    },
+  );
+}
+
 // ===== 雇主订单 / 签约（长任务线内部读取端点 + 雇主动作）=====
 
 /** Spec 里程碑（Console 推送快照，权重合计 100%） */

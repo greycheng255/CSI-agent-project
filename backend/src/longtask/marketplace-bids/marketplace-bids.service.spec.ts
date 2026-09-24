@@ -45,7 +45,7 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
 
   function openTask(overrides: Partial<MarketplaceTask> = {}) {
     return {
-      id: 'task-1',
+      id: '33333333-3333-4333-8333-333333333333',
       status: 'open',
       seatLimit: 3,
       seatTaken: 0,
@@ -65,7 +65,7 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
     mockBidsRepo.save.mockImplementation((v) => v);
 
     const result = await service.submit({
-      taskId: 'task-1',
+      taskId: '33333333-3333-4333-8333-333333333333',
       workspaceId: 'ws-1',
       priceCny: 1000,
     });
@@ -82,7 +82,7 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
     mockBidsRepo.save.mockImplementation((v) => v);
 
     const result = await service.submit({
-      taskId: 'task-1',
+      taskId: '33333333-3333-4333-8333-333333333333',
       workspaceId: 'ws-1',
       priceCny: 1000,
     });
@@ -98,7 +98,7 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
       openTask({ seatTaken: 3 }),
     );
     await expect(
-      service.submit({ taskId: 'task-1', workspaceId: 'ws-9', priceCny: 1 }),
+      service.submit({ taskId: '33333333-3333-4333-8333-333333333333', workspaceId: 'ws-9', priceCny: 1 }),
     ).rejects.toMatchObject({ status: 409 });
   });
 
@@ -106,7 +106,7 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
     mockTasksRepo.findOne.mockResolvedValueOnce(openTask());
     mockBidsRepo.findOne.mockResolvedValueOnce({ id: 'b1' });
     await expect(
-      service.submit({ taskId: 'task-1', workspaceId: 'ws-1', priceCny: 1 }),
+      service.submit({ taskId: '33333333-3333-4333-8333-333333333333', workspaceId: 'ws-1', priceCny: 1 }),
     ).rejects.toMatchObject({ status: 409 });
   });
 
@@ -116,7 +116,7 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
       .mockResolvedValueOnce(null) // 当前轮无重复
       .mockResolvedValueOnce({ id: 'b-old', status: 'rejected' }); // 历史已驳回
     await expect(
-      service.submit({ taskId: 'task-1', workspaceId: 'ws-1', priceCny: 1 }),
+      service.submit({ taskId: '33333333-3333-4333-8333-333333333333', workspaceId: 'ws-1', priceCny: 1 }),
     ).rejects.toMatchObject({ status: 409 });
   });
 
@@ -128,7 +128,7 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
     mockBidsRepo.save.mockImplementation((v) => ({ ...v, id: 'b-new' }));
     mockWorkspacesRepo.findOne.mockResolvedValue({ id: 'ws-1', name: 'A' });
     const result = await service.submit({
-      taskId: 'task-1',
+      taskId: '33333333-3333-4333-8333-333333333333',
       workspaceId: 'ws-1',
       priceCny: 100,
     });
@@ -159,7 +159,7 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
     mockBidsRepo.find.mockResolvedValueOnce([
       {
         id: 'b1',
-        marketplaceTaskId: 'task-1',
+        marketplaceTaskId: '33333333-3333-4333-8333-333333333333',
         bidRound: 1,
         workspaceId: 'ws-1',
         priceCny: 900,
@@ -169,7 +169,7 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
       },
       {
         id: 'b2',
-        marketplaceTaskId: 'task-1',
+        marketplaceTaskId: '33333333-3333-4333-8333-333333333333',
         bidRound: 1,
         workspaceId: 'ws-2',
         priceCny: 700,
@@ -184,7 +184,7 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
         : { id: 'ws-2', name: 'B 工作室', avgRating: 3, completedTasksCount: 1, displayStatus: 'active' },
     );
 
-    const ranked = await service.rank('task-1', Date.parse('2026-08-27T00:00:00Z'));
+    const ranked = await service.rank('33333333-3333-4333-8333-333333333333', Date.parse('2026-08-27T00:00:00Z'));
     // 复算综合分：b1(ws-1)=0.4×1.0 + 0.3×(-0.125) + 0.3×1 = 0.6625
     //             b2(ws-2 新店取行业均值 3.5)=0.4×0.7 + 0.3×0.125 + 0.3×1 = 0.6175
     expect(ranked[0].bid.id).toBe('b1');
@@ -200,7 +200,7 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
     mockBidsRepo.find.mockResolvedValueOnce([
       {
         id: 'b1',
-        marketplaceTaskId: 'task-1',
+        marketplaceTaskId: '33333333-3333-4333-8333-333333333333',
         bidRound: 1,
         workspaceId: 'ws-1',
         priceCny: 900,
@@ -216,14 +216,14 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
       completedTasksCount: 10,
       displayStatus: 'frozen',
     });
-    const ranked = await service.rank('task-1');
+    const ranked = await service.rank('33333333-3333-4333-8333-333333333333');
     expect(ranked[0].platformRecommended).toBe(false);
   });
 
   it('服务类错误实例断言（ContractError 贯通）', async () => {
     mockTasksRepo.findOne.mockResolvedValueOnce(openTask({ seatTaken: 3 }));
     await expect(
-      service.submit({ taskId: 'task-1', workspaceId: 'ws-9', priceCny: 1 }),
+      service.submit({ taskId: '33333333-3333-4333-8333-333333333333', workspaceId: 'ws-9', priceCny: 1 }),
     ).rejects.toBeInstanceOf(ContractError);
   });
 
@@ -243,7 +243,7 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
       mockBidsRepo.save.mockImplementation((v) => ({ ...v, id: 'bid-1' }));
 
       const result = await service.submitByOwner({
-        taskId: 'task-1',
+        taskId: '33333333-3333-4333-8333-333333333333',
         workspaceId: 'ws-1',
         ownerId: 'owner-A',
         priceCny: 1000,
@@ -259,7 +259,7 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
       mockWorkspacesRepo.findOne.mockResolvedValueOnce(null);
       await expect(
         service.submitByOwner({
-          taskId: 'task-1',
+          taskId: '33333333-3333-4333-8333-333333333333',
           workspaceId: 'ws-x',
           ownerId: 'owner-A',
           priceCny: 1000,
@@ -274,7 +274,7 @@ describe('MarketplaceBidsService（T8/T9：席位 + 幂等 + 排序）', () => {
       });
       await expect(
         service.submitByOwner({
-          taskId: 'task-1',
+          taskId: '33333333-3333-4333-8333-333333333333',
           workspaceId: 'ws-1',
           ownerId: 'owner-A',
           priceCny: 1000,

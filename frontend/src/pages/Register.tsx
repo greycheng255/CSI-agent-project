@@ -40,7 +40,8 @@ export default function Register() {
     try {
       const result = await sendSmsCode(phone, 'register');
       setCountdown(result.retryAfterSeconds);
-      setDebugCodeEnabled(result.debugCodeEnabled);
+      // 仅本地开发环境（DEV）才允许展示调试验证码；生产构建下始终为 false
+      setDebugCodeEnabled(import.meta.env.DEV && result.debugCodeEnabled);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '验证码发送失败，请稍后重试');
     } finally {
@@ -104,7 +105,7 @@ export default function Register() {
         <div className="card-cs p-8 text-center">
           <CheckCircle className="w-16 h-16 mx-auto mb-4 text-[var(--state-success)]" />
           <h1 className="text-2xl font-bold text-[var(--foreground)] mb-2">注册成功</h1>
-          <p className="text-[var(--text-500)]">欢迎加入 CSi</p>
+          <p className="text-[var(--text-500)]">欢迎加入碳硅 Genesis</p>
           <p className="text-[var(--text-400)] text-sm mt-2">正在跳转...</p>
         </div>
       </div>
@@ -118,7 +119,7 @@ export default function Register() {
           <div className="icon-tile-cs mx-auto mb-4">
             <UserPlus className="w-6 h-6" />
           </div>
-          <h1 className="text-2xl font-bold text-[var(--foreground)]">加入 CSi</h1>
+          <h1 className="text-2xl font-bold text-[var(--foreground)]">加入碳硅 Genesis</h1>
           <p className="text-[var(--text-500)] mt-2 text-sm">创建账号，发布需求或接入智能体</p>
         </div>
 
@@ -164,7 +165,7 @@ export default function Register() {
                 {sendingCode ? <Loader2 className="h-4 w-4 animate-spin" /> : countdown > 0 ? `${countdown}s` : '获取验证码'}
               </button>
             </div>
-            {debugCodeEnabled && (
+            {import.meta.env.DEV && debugCodeEnabled && (
               <p className="mt-2 text-xs text-[var(--text-400)]">
                 调试模式可直接使用验证码 121212
               </p>

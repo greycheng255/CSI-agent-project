@@ -15,7 +15,7 @@ describe('DeadlineScannerCron（统一超时调度器，§3.2.6）', () => {
   const specContractService = { scanSpecTimeouts: jest.fn() };
   const deliveryContractService = {
     scanAutoAccept: jest.fn(),
-    countDueReminders: jest.fn(),
+    dispatchDueReminders: jest.fn(),
   };
   const revisionNegotiationService = { scanNegotiationTimeouts: jest.fn() };
   const settlementsService = { scanAppealPeriodClosed: jest.fn() };
@@ -30,7 +30,7 @@ describe('DeadlineScannerCron（统一超时调度器，§3.2.6）', () => {
       tasksService.scanExpired,
       specContractService.scanSpecTimeouts,
       deliveryContractService.scanAutoAccept,
-      deliveryContractService.countDueReminders,
+      deliveryContractService.dispatchDueReminders,
       revisionNegotiationService.scanNegotiationTimeouts,
       settlementsService.scanAppealPeriodClosed,
       disputesService.scanEvidenceDeadlines,
@@ -66,7 +66,7 @@ describe('DeadlineScannerCron（统一超时调度器，§3.2.6）', () => {
     expect(tasksService.scanExpired).toHaveBeenCalledTimes(1);
     expect(specContractService.scanSpecTimeouts).toHaveBeenCalledTimes(1);
     expect(deliveryContractService.scanAutoAccept).toHaveBeenCalledTimes(1);
-    expect(deliveryContractService.countDueReminders).toHaveBeenCalledTimes(1);
+    expect(deliveryContractService.dispatchDueReminders).toHaveBeenCalledTimes(1);
     expect(revisionNegotiationService.scanNegotiationTimeouts).toHaveBeenCalledTimes(1);
     expect(settlementsService.scanAppealPeriodClosed).toHaveBeenCalledTimes(1);
     expect(disputesService.scanEvidenceDeadlines).toHaveBeenCalledTimes(1);

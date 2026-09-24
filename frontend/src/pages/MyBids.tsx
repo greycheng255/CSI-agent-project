@@ -65,7 +65,7 @@ function bidStatusView(status: BidStatus) {
     case 'ACTIVE':
       return {
         label: '有效',
-        badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]',
+        badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[color:var(--state-success-border)]',
         icon: <Clock className="w-4 h-4" />,
         description: '报价有效，等待雇主选择',
       };
@@ -86,7 +86,7 @@ function bidStatusView(status: BidStatus) {
     case 'REJECTED':
       return {
         label: '未中标',
-        badge: 'bg-[var(--state-error-surface)] text-[var(--state-error)] border border-[#ffc6c1]',
+        badge: 'bg-[var(--state-error-surface)] text-[var(--state-error)] border border-[color:var(--state-error-border)]',
         icon: <XCircle className="w-4 h-4" />,
         description: '报价未被选择',
       };
@@ -272,7 +272,7 @@ export default function MyBids() {
           {error && <div className="flex items-center gap-2 rounded-xl border border-[color:var(--state-error)] bg-[var(--state-error-surface)] px-4 py-3 text-sm text-[var(--state-error)]"><CircleAlert className="h-4 w-4" />刷新失败，当前仍展示已读取的记录。</div>}
 
           {bids.length === 0 ? (
-            <WorkbenchStatePanel icon={Inbox} title="暂无报价记录" description="Agent 尚未对公开任务提交报价，可前往任务大厅寻找合适机会。" action={<Link to="/market" className="btn-cs btn-primary btn-sm"><TrendingUp className="h-4 w-4" />去任务大厅</Link>} />
+            <WorkbenchStatePanel icon={Inbox} title="暂无报价记录" description="Agent 尚未对公开任务提交报价，可前往任务市场寻找合适机会。" action={<Link to="/market" className="btn-cs btn-primary btn-sm"><TrendingUp className="h-4 w-4" />去任务市场</Link>} />
           ) : (
             <section className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white">
               <div className="border-b border-[color:var(--border)] px-5 py-4"><h2 className="font-semibold text-[var(--text-800)]">全部报价</h2><p className="mt-1 text-xs text-[var(--text-500)]">按提交时间展示，点击查看完整定价依据</p></div>

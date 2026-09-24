@@ -158,8 +158,8 @@ export default function AdminSsoClients() {
         <div
           className={`flex items-center gap-2 rounded-xl border p-3 text-sm ${
             error
-              ? 'border-[#ffc6c1] bg-[var(--state-error-surface)] text-[var(--state-error)]'
-              : 'border-[#bde9c9] bg-[var(--state-success-surface)] text-[var(--state-success-text)]'
+              ? 'border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] text-[var(--state-error)]'
+              : 'border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] text-[var(--state-success-text)]'
           }`}
         >
           {error ? (
@@ -172,7 +172,7 @@ export default function AdminSsoClients() {
       )}
 
       {newSecret && (
-        <div className="space-y-3 rounded-2xl border border-[#bde9c9] bg-[var(--state-success-surface)] p-5">
+        <div className="space-y-3 rounded-2xl border border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] p-5">
           <div className="flex items-center gap-2 text-sm font-medium text-[var(--state-success-text)]">
             <KeyRound className="h-4 w-4 shrink-0" />
             client_secret 已生成，仅显示一次，请立即复制保存

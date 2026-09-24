@@ -25,7 +25,7 @@ const ADVISORY_LOCK_KEY = 728193401;
  *   - 修订协商 2 天 → 默认 C（revision.scanNegotiationTimeouts）
  *   - 售后申诉期 7 天关闭 → settlement.appeal_period_closed（settlements.scanAppealPeriodClosed）
  *   - 纠纷举证 3 天窗口 → disputes.scanEvidenceDeadlines
- *   - 5/9/13 天催办点位计数（催办消息由 Console 经 #9 推送，M 侧仅记录）
+ *   - 5/9/13 天催办点位 → 微信真投递（delivery.dispatchDueReminders）
  *   - 内存登记表到期项摘除（timeoutScanner.scanDue，DB 扫描为权威口径）
  *
  * 可用 LONGTASK_DEADLINE_SCANNER_ENABLED=false 整体关闭（如灰度/单实例维护窗口）。
@@ -73,9 +73,7 @@ export class DeadlineScannerCron {
         taskExpired: await this.tasksService.scanExpired(now),
         specTimeout: await this.specContractService.scanSpecTimeouts(now),
         autoAccept: await this.deliveryContractService.scanAutoAccept(now),
-        reminders: await this.deliveryContractService.countDueReminders(
-          now.getTime(),
-        ),
+        reminders: await this.deliveryContractService.dispatchDueReminders(now),
         negotiation: await this.revisionNegotiationService.scanNegotiationTimeouts(
           now,
         ),

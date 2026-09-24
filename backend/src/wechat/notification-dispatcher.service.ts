@@ -30,6 +30,57 @@ export interface EnqueueInput {
   data: Record<string, unknown>;
 }
 
+/** 各业务事件的模板关键字声明（喂给 dispatcher.enqueue 的 data 键集） */
+export const NOTIFICATION_TEMPLATE_SCHEMA: Record<string, string[]> = {
+  'bid.won': ['taskTitle', 'orderId', 'marketplaceTaskId'],
+  'escrow.paid': ['orderId', 'amountCny'],
+  'settlement.completed': ['orderId', 'amountCny'],
+  'delivery.reminder': [
+    'orderId',
+    'submissionId',
+    'submissionSeq',
+    'remainingDays',
+    'day',
+    'urgent',
+  ],
+  'employer.mention': ['orderId', 'mentionId', 'fromDisplayName', 'preview'],
+};
+
+export interface PayloadValidation {
+  ok: boolean;
+  /** true=阻断（payload 结构错误，应修复代码）；false=仅告警（字段缺失待模板核对） */
+  blocking: boolean;
+  reason?: string;
+}
+
+/**
+ * 模板字段映射校验（P0）：
+ * - 阻断：data 含嵌套对象/数组（微信模板 value 只接受标量，否则投递成 "[object Object]"）
+ * - 告警：已知事件的必需关键字缺失（模板关键字以公众号后台为准，正式上线前需试推核对）
+ */
+export function validateNotificationPayload(
+  eventType: string,
+  data: Record<string, unknown>,
+): PayloadValidation {
+  for (const [k, v] of Object.entries(data)) {
+    if (v !== null && typeof v === 'object') {
+      return { ok: false, blocking: true, reason: `field ${k} must be scalar` };
+    }
+  }
+  const required = NOTIFICATION_TEMPLATE_SCHEMA[eventType];
+  if (required) {
+    const missing = required.filter((f) => !(f in data));
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        blocking: false,
+        reason: `event ${eventType} missing fields: ${missing.join(',')}`,
+      };
+    }
+  }
+  return { ok: true, blocking: false };
+}
+
 /**
  * 业务通知调度（微信渠道，照抄 webhook-dispatcher 的 at-least-once + 退避 + 死信模式）。
  * enqueue：反查 user.openid；无 openid → 记 skipped（不重试）。
@@ -47,6 +98,26 @@ export class NotificationDispatcherService {
   ) {}
 
   async enqueue(input: EnqueueInput): Promise<void> {
+    const validation = validateNotificationPayload(input.eventType, input.data);
+    if (!validation.ok && validation.blocking) {
+      await this.saveRow(
+        input,
+        'skipped',
+        null,
+        null,
+        `invalid-template-fields:${validation.reason}`,
+      );
+      this.logger.error(
+        `notification blocked: event=${input.eventType} user=${input.userId} reason=${validation.reason}`,
+      );
+      return;
+    }
+    if (!validation.ok) {
+      this.logger.warn(
+        `notification field-warning: event=${input.eventType} user=${input.userId} reason=${validation.reason}`,
+      );
+    }
+
     const user = await this.usersRepo.findOne({ where: { id: input.userId } });
     const openid = user?.wechatOpenid ?? null;
 

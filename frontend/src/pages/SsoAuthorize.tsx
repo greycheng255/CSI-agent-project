@@ -111,7 +111,7 @@ export default function SsoAuthorize() {
           <>
             <h1 className="text-2xl font-bold text-[var(--foreground)]">正在授权</h1>
             <p className="mt-2 text-sm leading-6 text-[var(--text-500)]">
-              正在使用 CSi 账号登录 <span className="font-mono">{clientId}</span>
+              正在使用碳硅 Genesis 账号登录 <span className="font-mono">{clientId}</span>
             </p>
             <div className="mt-6 flex items-center justify-center gap-2 text-sm text-[var(--text-500)]">
               <Loader2 className="h-4 w-4 animate-spin" />

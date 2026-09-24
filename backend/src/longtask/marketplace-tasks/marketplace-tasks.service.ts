@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThanOrEqual, Repository } from 'typeorm';
 import {
@@ -9,6 +9,7 @@ import {
   CONTRACT_ERROR_CODE,
   ContractError,
 } from '../contract/errors';
+import { OpportunityPushService } from './opportunity-push.service';
 
 export interface CreateMarketplaceTaskInput {
   employerUserId?: string | null;
@@ -27,6 +28,10 @@ export interface CreateMarketplaceTaskInput {
 const DEFAULT_SEAT_LIMIT = 20;
 const DEFAULT_TTL_DAYS = 30;
 
+/** id 为 uuid 列，非 uuid 输入在查询前拒绝为 400（否则 PG 22P02 抛 500） */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Marketplace Task 7 态状态机服务（PRD 附录 D.1）。
  * 转移边：
@@ -36,9 +41,12 @@ const DEFAULT_TTL_DAYS = 30;
  */
 @Injectable()
 export class MarketplaceTasksService {
+  private readonly logger = new Logger(MarketplaceTasksService.name);
+
   constructor(
     @InjectRepository(MarketplaceTask)
     private readonly repo: Repository<MarketplaceTask>,
+    private readonly opportunityPush: OpportunityPushService,
   ) {}
 
   async create(
@@ -95,7 +103,9 @@ export class MarketplaceTasksService {
     task.expiresAt = new Date(
       Date.now() + (ttlDays ?? DEFAULT_TTL_DAYS) * 24 * 60 * 60 * 1000,
     );
-    return this.repo.save(task);
+    const saved = await this.repo.save(task);
+    await this.pushOpportunities(saved.id);
+    return saved;
   }
 
   /** 雇主/平台关闭：open → closed */
@@ -155,7 +165,27 @@ export class MarketplaceTasksService {
     task.seatFullDeadline = null;
     task.seatFullLockedAt = null;
     task.lastReopenedAt = new Date();
-    return this.repo.save(task);
+    const saved = await this.repo.save(task);
+    await this.pushOpportunities(saved.id);
+    return saved;
+  }
+
+  /**
+   * 商机 Push 接线（PRD §5.1 模式一）：发布/重开竞标后按类目推送给
+   * 匹配的活跃工作室。best-effort：失败仅告警，不影响任务状态流转；
+   * 同轮同模式由 opportunity_dispatches 唯一约束去重，重复调用安全。
+   */
+  private async pushOpportunities(taskId: string): Promise<void> {
+    try {
+      const pushed = await this.opportunityPush.pushTask(taskId);
+      if (pushed > 0) {
+        this.logger.log(`opportunity push: task=${taskId} pushed=${pushed}`);
+      }
+    } catch (err) {
+      this.logger.warn(
+        `opportunity push failed (task=${taskId}): ${String(err)}`,
+      );
+    }
   }
 
   /** 完成：selected → completed */
@@ -179,6 +209,8 @@ export class MarketplaceTasksService {
   }
 
   findById(id: string): Promise<MarketplaceTask | null> {
+    // 非 uuid 输入不落库查询，保持 null 语义（否则 PG 22P02 抛 500）
+    if (!UUID_RE.test(id ?? '')) return Promise.resolve(null);
     return this.repo.findOne({ where: { id } });
   }
 
@@ -274,7 +306,14 @@ export class MarketplaceTasksService {
     return { tasks: mapped, next_cursor: null, has_more: false };
   }
 
-  private async getOrThrow(id: string): Promise<MarketplaceTask> {
+  async getOrThrow(id: string): Promise<MarketplaceTask> {
+    if (!UUID_RE.test(id ?? '')) {
+      throw new ContractError(
+        400,
+        CONTRACT_ERROR_CODE.VALIDATION_INVALID_PAYLOAD,
+        `invalid marketplace task id: ${id}`,
+      );
+    }
     const task = await this.repo.findOne({ where: { id } });
     if (!task) {
       throw new ContractError(

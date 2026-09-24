@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThanOrEqual, Repository } from 'typeorm';
 import { MarketplaceDelivery } from './delivery.entity';
@@ -10,7 +10,8 @@ import {
   ContractError,
 } from '../contract/errors';
 import { CONSOLE_WEBHOOK, consoleWebhookUrl } from '../contract/console-endpoints';
-import { dueReminderDays } from './delivery-reminders';
+import { NotificationDeliveryService } from '../../wechat/notification-delivery.service';
+import { dueReminderDays, DELIVERY_REMINDER_DAYS } from './delivery-reminders';
 
 const AUTO_ACCEPT_WINDOW_MS = 14 * 24 * 60 * 60 * 1000; // §3.2.6：14 天自动验收归 Marketplace
 const AFTER_SALE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 售后申诉期 7 天
@@ -20,16 +21,20 @@ export interface SubmitDeliverableInput {
   metadata?: Record<string, unknown> | null;
   artifactUrls?: string[] | null;
   submissionSeq?: number;
+  gatesAllPassed?: boolean | null;
 }
 
 /**
  * 场景五 交付验收（T17）：
  * - C→M #13：接收交付物（仅 metadata + 签名 URL），启动 14 天验收计时
  * - M→C #14：投递 delivery.accepted / rejected / revision_requested / auto_accepted
- * - 14 天到期 → 自动验收 + 写 7 天售后申诉期；5/9/13 天三级催办
+ * - 14 天到期 → 自动验收 + 写 7 天售后申诉期；5/9/13 天三级催办（微信真投递）
+ * - 自动验收兜底（PRD §9.4）：仅当 platforms Gate 全过且三级催办已发（可选强制）才放行
  */
 @Injectable()
 export class DeliveryContractService {
+  private readonly logger = new Logger(DeliveryContractService.name);
+
   constructor(
     @InjectRepository(MarketplaceDelivery)
     private readonly deliveryRepo: Repository<MarketplaceDelivery>,
@@ -37,6 +42,7 @@ export class DeliveryContractService {
     private readonly ordersRepo: Repository<MarketplaceOrder>,
     private readonly negotiationService: RevisionNegotiationService,
     private readonly dispatcher: WebhookDispatcherService,
+    private readonly notify: NotificationDeliveryService,
   ) {}
 
   async submitDeliverable(
@@ -65,6 +71,8 @@ export class DeliveryContractService {
       artifactUrls: input.artifactUrls ?? null,
       status: 'submitted',
       reviewRound: 0,
+      gatesAllPassed: input.gatesAllPassed ?? null,
+      reminderDaysSent: [],
       submittedAt: now,
       acceptDeadline: new Date(now.getTime() + AUTO_ACCEPT_WINDOW_MS),
     });
@@ -146,7 +154,7 @@ export class DeliveryContractService {
     return saved;
   }
 
-  /** 14 天到期：无操作 → 自动验收（PRD §9.4 三条硬约束由 Console 保证，平台按计时触发） */
+  /** 14 天到期：无操作 → 自动验收（PRD §9.4）。Gate 全过才放行；三级催办可配置强制校验 */
   async scanAutoAccept(now: Date): Promise<number> {
     const pending = await this.deliveryRepo.find({
       where: {
@@ -154,7 +162,15 @@ export class DeliveryContractService {
         acceptDeadline: LessThanOrEqual(now),
       },
     });
+    let accepted = 0;
     for (const delivery of pending) {
+      const eligibility = this.isAutoAcceptEligible(delivery);
+      if (!eligibility.ok) {
+        this.logger.warn(
+          `auto-accept skip: delivery=${delivery.id} reason=${eligibility.reason}`,
+        );
+        continue;
+      }
       delivery.status = 'auto_accepted';
       await this.deliveryRepo.save(delivery);
 
@@ -183,8 +199,9 @@ export class DeliveryContractService {
           auto_accepted_at: new Date().toISOString(),
         },
       );
+      accepted++;
     }
-    return pending.length;
+    return accepted;
   }
 
   /** 雇主订单详情：按提交序倒序列出该订单全部交付物 */
@@ -205,14 +222,74 @@ export class DeliveryContractService {
   }
 
   /**
-   * 观察口径：统计处于 5/9/13 天催办点的待验收交付数。
-   * 催办消息由 Console 侧 deadline_scanner 经 #9 通道推送（集成指南 §3.2 场景五），M 侧只做计数与日志。
+   * 三级催办真投递：对处于 5/9/13 天点位、且该点催办尚未发送的待验收交付，
+   * 向雇主推送微信提醒并记账（reminder_days_sent），供自动验收第 2 条硬约束使用。
    */
-  async countDueReminders(nowMs = Date.now()): Promise<number> {
+  async dispatchDueReminders(now: Date): Promise<number> {
     const rows = await this.deliveryRepo.find({
       where: { status: 'submitted' },
     });
-    return rows.filter((d) => this.dueReminders(d, nowMs).length > 0).length;
+    let sent = 0;
+    for (const delivery of rows) {
+      const due = this.dueReminders(delivery, now.getTime());
+      for (const day of due) {
+        if (delivery.reminderDaysSent.includes(day)) continue;
+        const order = await this.ordersRepo.findOne({
+          where: { id: delivery.orderId },
+        });
+        if (!order?.employerUserId) continue;
+        await this.notify.notifyDeliveryReminder(
+          order.employerUserId,
+          {
+            orderId: order.id,
+            submissionSeq: delivery.submissionSeq,
+            submissionId: delivery.id,
+            remainingDays: AUTO_ACCEPT_WINDOW_MS / 86_400_000 - day,
+            day,
+          },
+        );
+        delivery.reminderDaysSent = [...delivery.reminderDaysSent, day];
+        await this.deliveryRepo.save(delivery);
+        sent++;
+      }
+    }
+    return sent;
+  }
+
+  /**
+   * Console 回填空送：按 delivery_id 更新 Gate 判定（PRD §9.4 第 1 条硬约束）。
+   * 幂等：仅对仍未自动验收的 submitted 交付生效；已终态交付忽略。
+   */
+  async updateGateResult(
+    deliveryId: string,
+    gatesAllPassed: boolean,
+  ): Promise<MarketplaceDelivery | null> {
+    const delivery = await this.deliveryRepo.findOne({
+      where: { id: deliveryId },
+    });
+    if (!delivery || delivery.status !== 'submitted') return delivery ?? null;
+    delivery.gatesAllPassed = gatesAllPassed;
+    return this.deliveryRepo.save(delivery);
+  }
+
+  /**
+   * 自动验收放行判定（PRD §9.4 三条硬约束，M 侧落地部分）：
+   * 1. 平台确定性 Gate（G1/G2/G3/G6）全部通过 —— gates_all_passed === true 才放行
+   * 2. 三级催办（5/9/13）已发送 —— LONGTASK_REQUIRE_REMINDERS_BEFORE_AUTO_ACCEPT=true 时强制
+   */
+  private isAutoAcceptEligible(
+    delivery: MarketplaceDelivery,
+  ): { ok: boolean; reason?: string } {
+    if (delivery.gatesAllPassed !== true) {
+      return { ok: false, reason: 'gates-not-all-passed' };
+    }
+    if (
+      process.env.LONGTASK_REQUIRE_REMINDERS_BEFORE_AUTO_ACCEPT === 'true' &&
+      !DELIVERY_REMINDER_DAYS.every((d) => delivery.reminderDaysSent?.includes(d))
+    ) {
+      return { ok: false, reason: 'reminders-not-all-sent' };
+    }
+    return { ok: true };
   }
 
   private async getOrThrowOrder(orderId: string): Promise<MarketplaceOrder> {

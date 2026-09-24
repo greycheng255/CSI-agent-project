@@ -355,4 +355,55 @@ export class EntitlementPortalController {
     await this.llmConfigRepo.delete({ orgId: this.orgId(req) });
     return { configured: false, onellm_portal_url: ONELLM_PORTAL_URL };
   }
+
+  /**
+   * 连通性探测（配置向导「测试连接」）：代用户请求上游 /models，
+   * 验证服务地址与密钥可用性。纯探测不落库；浏览器直连上游有 CORS 限制，故走后端代理。
+   * error_kind：auth(401/403) / quota(402) / not_found(404,网关无模型列表) / upstream(其他) / unreachable(网络不可达)
+   */
+  @Post('my/llm-config/probe')
+  async probeLlmConfig(
+    @Body() body: { base_url?: string; api_key?: string },
+  ) {
+    const baseUrl = (body?.base_url ?? '').trim().replace(/\/+$/, '');
+    const apiKey = (body?.api_key ?? '').trim();
+    if (!baseUrl || !apiKey) {
+      throw new ContractError(400, 'VALIDATION_INVALID_PAYLOAD', 'base_url 与 api_key 均必填');
+    }
+    if (!/^https?:\/\//i.test(baseUrl) || baseUrl.length > 255) {
+      throw new ContractError(400, 'VALIDATION_INVALID_PAYLOAD', 'base_url 需为合法 http(s) 地址');
+    }
+
+    const v1 = /\/v\d+$/.test(baseUrl) ? baseUrl : `${baseUrl}/v1`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch(`${v1}/models`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: controller.signal,
+      });
+      if (res.ok) {
+        const data = (await res.json().catch(() => null)) as
+          | { data?: Array<{ id?: string }> }
+          | null;
+        const models: string[] = Array.isArray(data?.data)
+          ? data.data.map((m) => String(m?.id ?? '')).filter(Boolean).slice(0, 50)
+          : [];
+        return { ok: true, error_kind: null, status: res.status, model_count: models.length, models };
+      }
+      const errorKind =
+        res.status === 401 || res.status === 403
+          ? 'auth'
+          : res.status === 402
+            ? 'quota'
+            : res.status === 404
+              ? 'not_found'
+              : 'upstream';
+      return { ok: false, error_kind: errorKind, status: res.status, model_count: 0, models: [] };
+    } catch {
+      return { ok: false, error_kind: 'unreachable', status: 0, model_count: 0, models: [] };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 }

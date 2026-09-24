@@ -89,6 +89,33 @@ describe('NotificationDispatcherService（微信公众号通知调度）', () =>
       await service.enqueue(input);
       expect(mockOutboxRepo.save).not.toHaveBeenCalled();
     });
+
+    it('data 含嵌套对象/数组 → 阻断并落 skipped invalid-template-fields', async () => {
+      mockUsersRepo.findOne.mockResolvedValue({
+        id: 'user-1',
+        wechatOpenid: 'openid-1',
+      });
+      await service.enqueue({
+        ...input,
+        data: { orderId: 'o1', nested: { a: 1 } },
+      });
+      const saved = mockOutboxRepo.save.mock.calls[0][0];
+      expect(saved.status).toBe('skipped');
+      expect(saved.lastError).toContain('invalid-template-fields');
+      expect(saved.lastError).toContain('nested');
+    });
+
+    it('已知事件缺必需字段 → 仅告警不阻断，仍落 pending', async () => {
+      mockUsersRepo.findOne.mockResolvedValue({
+        id: 'user-1',
+        wechatOpenid: 'openid-1',
+      });
+      mockOutboxRepo.findOne.mockResolvedValue(null);
+      // 竞标/催办等已知事件不传命名为 taskTitle 的必需字段，只发告警
+      await service.enqueue(input);
+      const saved = mockOutboxRepo.save.mock.calls[0][0];
+      expect(saved.status).toBe('pending');
+    });
   });
 
   describe('processDue', () => {

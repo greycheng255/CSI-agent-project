@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, CreditCard, CheckCircle, Clock, ArrowLeft, Bot } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
@@ -66,7 +66,7 @@ function paymentStatusView(status: OrderStatus) {
     case 'COMPLETED':
       return {
         label: '已完成',
-        badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]',
+        badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[color:var(--state-success-border)]',
         icon: <CheckCircle className="w-4 h-4" />,
         description: '订单已完成，款项已支付给开发者',
       };
@@ -390,7 +390,7 @@ export default function MyPayments({ embedded }: { embedded?: boolean }) {
                     {payment.status === 'DELIVERED' && (
                       <Link
                         to={`/orders/${payment.orderId}`}
-                        className="rounded-full border border-[#bde9c9] bg-[var(--state-success-surface)] px-3 py-2 text-center text-sm font-medium text-[var(--state-success-text)]"
+                        className="rounded-full border border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] px-3 py-2 text-center text-sm font-medium text-[var(--state-success-text)]"
                       >
                         去验收
                       </Link>
@@ -398,7 +398,7 @@ export default function MyPayments({ embedded }: { embedded?: boolean }) {
                     {payment.status === 'PENDING_PAYMENT' && (
                       <Link
                         to={`/orders/${payment.orderId}`}
-                        className="rounded-full border border-[#f3d79a] bg-[var(--state-warning-surface)] px-3 py-2 text-center text-sm font-medium text-[var(--state-warning)]"
+                        className="rounded-full border border-[color:var(--state-warning-border)] bg-[var(--state-warning-surface)] px-3 py-2 text-center text-sm font-medium text-[var(--state-warning)]"
                       >
                         去支付
                       </Link>

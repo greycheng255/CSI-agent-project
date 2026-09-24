@@ -1,6 +1,7 @@
 import {
   Injectable,
   UnauthorizedException,
+  BadRequestException,
   Logger,
   Inject,
   forwardRef,
@@ -18,6 +19,18 @@ import {
   type SmsVerificationScene,
 } from './sms-verification.service';
 import { CasdoorSyncService } from './casdoor-sync.service';
+import { CasdoorSsoService } from './casdoor-sso.service';
+import { encryptIdCard, maskIdCard } from './kyc-crypto';
+
+/** 18 位身份证校验位验证（GB 11643-1999 加权算法） */
+const ID_WEIGHTS = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
+const ID_CHECK_CODES = ['1', '0', 'X', '9', '8', '7', '6', '5', '4', '3', '2'];
+function isValidIdCard(id: string): boolean {
+  const v = (id ?? '').trim().toUpperCase();
+  if (!/^\d{17}[\dX]$/.test(v)) return false;
+  const sum = ID_WEIGHTS.reduce((acc, w, i) => acc + w * Number(v[i]), 0);
+  return ID_CHECK_CODES[sum % 11] === v[17];
+}
 
 type AuthDto = {
   phone: string;
@@ -51,6 +64,7 @@ export class UsersService {
     private readonly workspacesService: WorkspacesService,
     private readonly smsVerificationService: SmsVerificationService,
     private readonly casdoorSync: CasdoorSyncService,
+    private readonly casdoorSso: CasdoorSsoService,
   ) {}
 
   private hashPassword(password: string): string {
@@ -108,7 +122,8 @@ export class UsersService {
 
     await this.usersRepository.save(user);
     this.logger.log(`新用户注册成功: ${user.id} (${user.phone}) org=${user.orgId}`);
-    await this.casdoorSync.syncUser(user);
+    // 同步真实密码至 Casdoor，保证 SSO 与平台密码一致
+    await this.casdoorSync.syncUser(user, data.password);
 
     await this.ensureDefaultAgent(user);
 
@@ -239,6 +254,69 @@ export class UsersService {
   }
 
   /**
+   * Casdoor SSO 登录（OIDC 授权码）。
+   * 验签通过后按 properties.genesis_user_id 关联平台用户（兜底 name=手机号）。
+   * Casdoor 账号均由平台同步产生；未找到关联用户视为数据不一致，拒绝并提示走短信登录。
+   */
+  async loginWithSso(data: { code: string; redirectUri: string }) {
+    if (
+      typeof data?.code !== 'string' ||
+      typeof data?.redirectUri !== 'string' ||
+      !data.code ||
+      !data.redirectUri
+    ) {
+      throw new UnauthorizedException('code 与 redirectUri 不能为空');
+    }
+    if (!this.casdoorSso.isConfigured()) {
+      throw new UnauthorizedException('SSO 未配置（缺少 CASDOOR_* 环境变量）');
+    }
+
+    const redirectUri = this.casdoorSso.resolveRedirectUri(data.redirectUri);
+    const { claims, platformUserId, phone } =
+      await this.casdoorSso.resolvePlatformIdentity(data.code, redirectUri);
+
+    let user: User | null = null;
+    if (platformUserId) {
+      user = await this.usersRepository.findOne({
+        where: { id: platformUserId },
+      });
+    }
+    if (!user && phone) {
+      user = await this.usersRepository.findOne({ where: { phone } });
+    }
+    if (!user) {
+      this.logger.warn(
+        `SSO 登录拒绝: casdoor sub=${claims.sub} 未关联平台用户 (genesis_user_id=${platformUserId ?? '无'} phone=${phone ?? '无'})`,
+      );
+      throw new UnauthorizedException(
+        '该 Casdoor 账号未关联平台用户，请使用短信验证码登录',
+      );
+    }
+
+    this.logger.log(
+      `SSO 登录成功: user=${user.id} phone=${user.phone} casdoor_sub=${claims.sub}`,
+    );
+    const token = await this.authService.issueUserToken(user, {
+      name: `sso:${claims.sub.slice(0, 8)}`,
+      clientId: 'casdoor',
+    });
+    await this.ensureDefaultAgent(user);
+    await this.ensureDefaultWorkspace(user);
+
+    return {
+      message: '登录成功',
+      token,
+      user: {
+        id: user.id,
+        orgId: user.orgId,
+        phone: user.phone,
+        displayName: user.displayName,
+        kycStatus: user.kycStatus,
+      },
+    };
+  }
+
+  /**
    * 获取用户信息
    */
   async getUserInfo(userId: string) {
@@ -299,6 +377,61 @@ export class UsersService {
   }
 
   /**
+   * 提交实名认证（持久化）：姓名 + 身份证号（AES-256-GCM 加密落库），通过后 kycStatus=VERIFIED。
+   * 幂等：已 VERIFIED 直接返回。提交即通过为公测简化口径，接入三方核身后改为 PENDING。
+   */
+  async submitKyc(
+    userId: string,
+    realName: string,
+    idCardNumber: string,
+  ) {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+    });
+    if (!user) {
+      throw new UnauthorizedException('用户不存在');
+    }
+
+    if (user.kycStatus === KycStatus.VERIFIED) {
+      return {
+        message: '已通过实名认证',
+        user: {
+          id: user.id,
+          phone: user.phone,
+          displayName: user.displayName,
+          kycStatus: user.kycStatus,
+        },
+      };
+    }
+
+    const name = (realName ?? '').trim();
+    if (name.length < 2 || name.length > 30) {
+      throw new BadRequestException('请输入真实的姓名（2-30 个字符）');
+    }
+    if (!isValidIdCard(idCardNumber ?? '')) {
+      throw new BadRequestException('身份证号格式不正确');
+    }
+
+    user.idCardName = name;
+    user.idCardNumberCipher = encryptIdCard((idCardNumber ?? '').trim().toUpperCase());
+    user.kycStatus = KycStatus.VERIFIED;
+    await this.usersRepository.save(user);
+
+    this.logger.log(`KYC 提交成功: user=${user.id}`);
+
+    return {
+      message: '实名认证已通过',
+      user: {
+        id: user.id,
+        phone: user.phone,
+        displayName: user.displayName,
+        kycStatus: user.kycStatus,
+        idCardMasked: maskIdCard(idCardNumber.trim()),
+      },
+    };
+  }
+
+  /**
    * 修改用户密码
    */
   async changePassword(
@@ -324,6 +457,39 @@ export class UsersService {
 
     user.passwordHash = this.hashPassword(newPassword);
     await this.usersRepository.save(user);
+    // 改密后同步 Casdoor（SSO 口径一致）；失败仅告警不阻断
+    await this.casdoorSync.syncPasswordHash(user);
+  }
+
+  /**
+   * 短信验证码设置密码（供短信登录自动建号用户打通 SSO）。
+   * 短信建号用户无平台密码，无法走 changePassword 改密链路；
+   * 该接口以短信验证码（login 场景）验证本人身份后直接设置平台密码，并同步 Casdoor。
+   */
+  async setPasswordBySms(data: {
+    userId: string;
+    verificationCode: string;
+    newPassword: string;
+  }): Promise<void> {
+    const { userId, verificationCode, newPassword } = data;
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('用户不存在');
+    }
+    if (!user.phone) {
+      throw new UnauthorizedException('该账号未绑定手机号，无法使用短信验证码设置密码');
+    }
+    if (typeof newPassword !== 'string' || newPassword.length < 6) {
+      throw new UnauthorizedException('新密码长度至少6位');
+    }
+    // 以验证码验证本人身份（与本机短信登录同一场景）
+    this.smsVerificationService.verifyCode(user.phone, 'login', verificationCode);
+
+    user.passwordHash = this.hashPassword(newPassword);
+    await this.usersRepository.save(user);
+    // 同步 Casdoor 密码，使该账号可用新密码走 SSO
+    await this.casdoorSync.syncPasswordHash(user);
+    this.logger.log(`短信验证码设置密码成功并同步Casdoor: user=${user.id}`);
   }
 
   private async ensureDefaultAgent(user: User) {

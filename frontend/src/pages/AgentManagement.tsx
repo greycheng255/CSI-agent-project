@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { Bot, Plus, Activity, Settings, ExternalLink, Code2, Terminal, DollarSign, RefreshCw, Loader2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -7,6 +7,8 @@ import { CreateAgentForm } from '../components/agents/CreateAgentForm';
 import { AgentStatusBadge } from '../components/agents/AgentStatusBadge';
 import { disableAgent, enableAgent } from '../api/agentsApi';
 import { WorkbenchPageHeader } from '../components/workbench/WorkbenchPrimitives';
+import { useToast } from '../components/ui/toast-context';
+import { useConfirm } from '../components/ui/confirm-context';
 
 type AgentStatus = 'ONLINE' | 'OFFLINE';
 
@@ -168,10 +170,10 @@ function getExecutionDisplay(agent: Agent, health?: HealthCheckState): Execution
   if (!agent.webhookUrl) {
     return {
       endpointLabel: '外部自管 Agent',
-      statusLabel: '缺少 Webhook',
+      statusLabel: '未设置接收地址',
       statusClassName: 'bg-yellow-500/10 text-yellow-400',
-      detail: '未配置 webhookUrl',
-      title: '还没有配置任务接收地址。请进入 Agent 控制台补充 webhookUrl，否则平台无法把任务推送给你的自管 Agent。',
+      detail: '未配置任务接收地址',
+      title: '还没有设置任务接收地址。请进入 Agent 控制台完成配置，否则平台无法把任务推送给你的智能体。',
     };
   }
 
@@ -183,24 +185,24 @@ function getExecutionDisplay(agent: Agent, health?: HealthCheckState): Execution
   if (webhookHasIssue) {
     return {
       endpointLabel: '外部自管 Agent',
-      statusLabel: 'Webhook 异常',
+      statusLabel: '接收地址异常',
       statusClassName: 'bg-red-500/10 text-red-400',
       detail: agent.webhookUrl,
-      title: '平台暂时无法确认该 Webhook 可用。请检查服务地址、网络访问权限，以及接口是否能正常响应。',
+      title: '平台暂时无法确认该接收地址可用。请检查服务地址、网络访问权限，以及接口是否能正常响应。',
     };
   }
 
   return {
     endpointLabel: '外部自管 Agent',
-    statusLabel: 'Webhook 已配置',
+    statusLabel: '接收地址正常',
     statusClassName: 'bg-green-500/10 text-green-400',
     detail: agent.webhookUrl,
-    title: '平台会把匹配到的任务推送到该 Webhook 地址。请确保你的 Agent 服务能正常接收并处理平台推送。',
+    title: '平台会把匹配到的任务推送到该接收地址。请确保你的智能体服务能正常接收并处理平台推送。',
   };
 }
 
 function getExecutionCheckLabel(agent: Agent) {
-  return isSystemDefaultAgent(agent) ? '平台执行状态' : 'Webhook 配置';
+  return isSystemDefaultAgent(agent) ? '平台执行状态' : '任务接收配置';
 }
 
 function getExecutionCheckPassed(agent: Agent, health?: HealthCheckState) {
@@ -213,6 +215,8 @@ export default function AgentManagement() {
   const { user, admin } = useAuthStore();
   const navigate = useNavigate();
   const apiBase = API_BASE;
+  const toast = useToast();
+  const confirm = useConfirm();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -303,13 +307,13 @@ export default function AgentManagement() {
       
       // 显示检查结果
       if (data.errors && data.errors.length > 0) {
-        alert(`健康检查完成，发现问题：\n${data.errors.join('\n')}`);
+        toast.warning('健康检查完成，发现问题', data.errors.join('\n'));
       } else {
-        alert('健康检查完成：执行端配置正常');
+        toast.success('健康检查完成：执行端配置正常');
       }
     } catch (err) {
       console.error('Health check error:', err);
-      alert('健康检查失败：' + (err instanceof Error ? err.message : '请检查网络'));
+      toast.error('健康检查失败', err instanceof Error ? err.message : '请检查网络');
     } finally {
       setHealthCheckingAgent(null);
     }
@@ -317,8 +321,13 @@ export default function AgentManagement() {
 
   const toggleAgentActive = async (agent: Agent) => {
     if (!agent.id) return;
-    if (agent.isActive !== false && !window.confirm(`确认下线 ${agent.name} 吗？下线后将不会出现在智能体广场。`)) {
-      return;
+    if (agent.isActive !== false) {
+      const { confirmed } = await confirm({
+        title: `确认下线 ${agent.name}`,
+        description: '下线后将不会出现在智能体市场。',
+        confirmText: '确认下线',
+      });
+      if (!confirmed) return;
     }
     setTogglingAgent(agent.id);
     try {
@@ -327,7 +336,7 @@ export default function AgentManagement() {
         : await disableAgent(agent.id);
       setAgents(prev => prev.map(item => item.id === updated.id ? { ...item, ...updated } : item));
     } catch (err) {
-      alert(err instanceof Error ? err.message : '上下线操作失败');
+      toast.error('上下线操作失败', err instanceof Error ? err.message : undefined);
     } finally {
       setTogglingAgent(null);
     }
@@ -374,12 +383,12 @@ export default function AgentManagement() {
   const handleSubmitBid = async () => {
     if (!bidAgent?.id) return;
     if (!selectedTaskId) {
-      alert('请选择任务');
+      toast.warning('请选择任务');
       return;
     }
     const price = parseInt(priceCny, 10);
     if (!Number.isFinite(price) || price <= 0) {
-      alert('请输入正确的报价金额');
+      toast.warning('请输入正确的报价金额');
       return;
     }
 
@@ -397,13 +406,13 @@ export default function AgentManagement() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        alert(err?.message || '报价失败');
+        toast.error('报价失败', err?.message);
         return;
       }
-      alert('报价已提交');
+      toast.success('报价已提交');
       setShowBid(false);
     } catch {
-      alert('报价失败，请检查网络');
+      toast.error('报价失败，请检查网络');
     } finally {
       setSubmittingBid(false);
     }
@@ -479,7 +488,7 @@ export default function AgentManagement() {
                   {loadingTasks ? (
                     <option value="">读取任务中...</option>
                   ) : marketTasks.length === 0 ? (
-                    <option value="">暂无 OPEN 任务</option>
+                    <option value="">暂无进行中的任务</option>
                   ) : (
                     marketTasks.map((t) => (
                       <option key={t.id} value={t.id}>
@@ -652,7 +661,7 @@ spec:
             </div>
           </div>
 
-          <div className="mt-6 rounded-xl border border-[#f3d79a] bg-[var(--state-warning-surface)] p-4">
+          <div className="mt-6 rounded-xl border border-[color:var(--state-warning-border)] bg-[var(--state-warning-surface)] p-4">
             <h3 className="mb-2 text-sm font-semibold text-[var(--state-warning)]">关键配置</h3>
             <ul className="space-y-1 text-xs text-[var(--text-600)]">
               <li>• 开发者账号: <span className="text-[var(--text-800)]">注册时选择"我是开发者"即可</span></li>
@@ -672,7 +681,7 @@ spec:
         <CreateAgentForm
           onCancel={() => setShowCreate(false)}
           onCreated={() => {
-            alert('外部自托管 Agent 已提交审核，审核通过并启动后会进入智能体广场。');
+            toast.success('外部自托管 Agent 已提交审核，审核通过并启动后会进入智能体市场。');
             setShowCreate(false);
             fetchAgents();
           }}
@@ -706,7 +715,7 @@ spec:
                       agent.approvalStatus === 'approved'
                         ? '审核已通过，Agent 具备进入平台发现和接单流程的资格'
                         : agent.approvalStatus === 'pending_review'
-                          ? '等待管理员审核，审核通过前不会进入智能体广场'
+                          ? '等待管理员审核，审核通过前不会进入智能体市场'
                           : agent.approvalStatus === 'rejected'
                             ? '审核已驳回，需要修改资料后重新提交'
                             : agent.approvalStatus === 'disabled'
@@ -721,16 +730,16 @@ spec:
                   className={`flex items-center gap-1 rounded border px-2 py-1 ${
                     agent.isActive === false
                       ? 'border-[color:var(--border)] bg-[var(--background-100)]'
-                      : 'border-[#bde9c9] bg-[var(--state-success-surface)]'
+                      : 'border-[color:var(--state-success-border)] bg-[var(--state-success-surface)]'
                   }`}
-                  title={agent.isActive === false ? '当前已停止接单，不会出现在智能体广场' : '当前已启动，可被平台发现和接单'}
+                  title={agent.isActive === false ? '当前已停止接单，不会出现在智能体市场' : '当前已启动，可被平台发现和接单'}
                 >
                   <span className="text-xs text-[var(--text-500)]">启动状态</span>
                   <span
                     className={`rounded border px-2 py-0.5 text-xs ${
                       agent.isActive === false
                         ? 'border-[color:var(--border)] bg-white text-[var(--text-600)]'
-                        : 'border-[#bde9c9] bg-white text-[var(--state-success-text)]'
+                        : 'border-[color:var(--state-success-border)] bg-white text-[var(--state-success-text)]'
                     }`}
                   >
                     {agent.isActive === false ? '已停止' : '已启动'}
@@ -740,8 +749,8 @@ spec:
                   <button
                     onClick={() => toggleAgentActive(agent)}
                     disabled={togglingAgent === agent.id}
-                    className="flex items-center gap-1 rounded-lg border border-[#ffc6c1] px-2 py-1 text-xs text-[var(--state-error)] transition-colors hover:bg-[var(--state-error-surface)] disabled:opacity-50"
-                    title="下线后不再出现在智能体广场"
+                    className="flex items-center gap-1 rounded-lg border border-[color:var(--state-error-border)] px-2 py-1 text-xs text-[var(--state-error)] transition-colors hover:bg-[var(--state-error-surface)] disabled:opacity-50"
+                    title="下线后不再出现在智能体市场"
                   >
                     {togglingAgent === agent.id ? '处理中' : '停止'}
                   </button>
@@ -752,11 +761,11 @@ spec:
                       togglingAgent === agent.id ||
                       (!isSystemDefaultAgent(agent) && agent.approvalStatus !== 'approved')
                     }
-                    className="flex items-center gap-1 rounded-lg border border-[#bde9c9] px-2 py-1 text-xs text-[var(--state-success-text)] transition-colors hover:bg-[var(--state-success-surface)] disabled:opacity-50"
+                    className="flex items-center gap-1 rounded-lg border border-[color:var(--state-success-border)] px-2 py-1 text-xs text-[var(--state-success-text)] transition-colors hover:bg-[var(--state-success-surface)] disabled:opacity-50"
                     title={
                       !isSystemDefaultAgent(agent) && agent.approvalStatus !== 'approved'
                         ? '审核通过后才能启动展示'
-                        : '启动后进入智能体广场'
+                        : '启动后进入智能体市场'
                     }
                   >
                     {togglingAgent === agent.id
@@ -873,7 +882,7 @@ spec:
                 <AgentStatusBadge type="agentType" value={getDisplayAgentType(agent)} />
                 {isSystemDefaultAgent(agent) && (
                   <>
-                    <span className="rounded-lg bg-[#f1f0ff] px-2 py-1 text-xs text-[#514fc4]">
+                    <span className="rounded-lg bg-[var(--brand-50)] px-2 py-1 text-xs text-[var(--brand-600)]">
                       系统创建
                     </span>
                     <span className="rounded-lg bg-[var(--brand-50)] px-2 py-1 text-xs text-[var(--brand-700)]">

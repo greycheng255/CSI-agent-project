@@ -102,7 +102,7 @@ export class EntitlementService {
     base_url: string;
     api_key: string;
     key_prefix: string;
-    source: 'byok' | 'plan_builtin';
+    source: 'byok' | 'plan_builtin' | 'env_default';
   } | null> {
     // 1. BYOK 优先
     const row = await this.dataSource
@@ -138,6 +138,19 @@ export class EntitlementService {
         source: 'plan_builtin',
       };
     }
+    // 3. env 平台默认兜底（OPENAI_BASE_URL/OPENAI_API_KEY，或 LINGKE_*）：
+    //    改 .env 重建容器后，未自配 BYOK/无 plan 内置的 org 自动跟随平台上游
+    const envBaseUrl = process.env.OPENAI_BASE_URL?.trim();
+    const envApiKey =
+      process.env.OPENAI_API_KEY?.trim() || process.env.LINGKE_API_KEY?.trim() || '';
+    if (envBaseUrl && envApiKey) {
+      return {
+        base_url: envBaseUrl,
+        api_key: envApiKey,
+        key_prefix: `${envApiKey.slice(0, 8)}…`,
+        source: 'env_default',
+      };
+    }
     return null;
   }
 
@@ -164,36 +177,45 @@ export class EntitlementService {
     const { subscription, plan } = await this.getActiveSubscription(orgId);
     const period = await this.ensureCurrentPeriod(subscription, plan);
     const freeGrant = await this.freeGrantRepo.findOne({ where: { orgId } });
-    const paidRemaining =
-      plan.totalTokens === UNLIMITED
+    // E3 口径（M 修复）：total/used/remaining 三元组全口径自洽——
+    // total = paid 总量 + 生效中 free 总量；used = paid 已用 + free 已用；
+    // remaining = total - used（恒 ≤ total，修复此前 remaining 含 free 而 total 只含
+    // paid 导致的 remaining > total 自相矛盾）。数值一律 number（bigint 列直出为字符串）。
+    const freeOn = this.freeActive(freeGrant);
+    const paidTotalTokens =
+      plan.totalTokens === UNLIMITED ? UNLIMITED : Number(plan.totalTokens);
+    const totalTokens =
+      paidTotalTokens === UNLIMITED
         ? UNLIMITED
-        : Number(period.totalTokens) - Number(period.usedTokens);
-    const freeRemaining = this.freeRemaining(freeGrant);
+        : paidTotalTokens + (freeOn ? Number(freeGrant!.totalTokens) : 0);
+    const usedTokens =
+      Number(period.usedTokens) + (freeOn ? Number(freeGrant!.usedTokens) : 0);
     const remainingTokens =
-      paidRemaining === UNLIMITED
-        ? UNLIMITED
-        : paidRemaining + Math.max(freeRemaining, 0);
+      totalTokens === UNLIMITED ? UNLIMITED : Math.max(totalTokens - usedTokens, 0);
+    const freeRemaining = this.freeRemaining(freeGrant);
     // credits 维度：媒体生成。可用额 = 总量 - 已用 - 冻结中（预扣费占用）
     const frozenCredits = await this.frozenCredits(orgId);
-    const paidCreditsRemaining =
-      plan.totalCredits === UNLIMITED
+    const paidTotalCredits =
+      plan.totalCredits === UNLIMITED ? UNLIMITED : Number(plan.totalCredits);
+    const totalCredits =
+      paidTotalCredits === UNLIMITED
         ? UNLIMITED
-        : Number(period.totalCredits) - Number(period.usedCredits);
-    const freeCreditsRemaining = this.freeCreditsRemaining(freeGrant);
+        : paidTotalCredits + (freeOn ? Number(freeGrant!.totalCredits) : 0);
+    const usedCredits =
+      Number(period.usedCredits) + (freeOn ? Number(freeGrant!.usedCredits) : 0);
     const remainingCredits =
-      paidCreditsRemaining === UNLIMITED
-        ? UNLIMITED
-        : paidCreditsRemaining + Math.max(freeCreditsRemaining, 0);
+      totalCredits === UNLIMITED ? UNLIMITED : Math.max(totalCredits - usedCredits, 0);
+    const freeCreditsRemaining = this.freeCreditsRemaining(freeGrant);
     return {
       exhausted: remainingTokens !== UNLIMITED && remainingTokens <= 0,
       remaining_tokens: remainingTokens,
-      total_tokens: plan.totalTokens,
-      used_tokens: Number(period.usedTokens),
+      total_tokens: totalTokens,
+      used_tokens: usedTokens,
       period_start: period.periodStart,
       period_end: period.periodEnd,
       remaining_credits: remainingCredits,
-      total_credits: plan.totalCredits,
-      used_credits: Number(period.usedCredits),
+      total_credits: totalCredits,
+      used_credits: usedCredits,
       frozen_credits: frozenCredits,
       available_credits:
         remainingCredits === UNLIMITED

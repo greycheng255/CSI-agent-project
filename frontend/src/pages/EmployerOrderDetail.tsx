@@ -31,11 +31,12 @@ import type {
   EmployerOrderSpecChange,
 } from '../api/longtaskApi';
 import { WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { useConfirm } from '../components/ui/confirm-context';
 import { useAuthStore } from '../store/authStore';
 
 const CONTRACT_LABEL: Record<string, string> = {
   signing: '签约中',
-  awaiting_confirmation: '待确认 Spec',
+  awaiting_confirmation: '待确认方案',
   signed: '已签约',
   cancelled: '已取消',
 };
@@ -103,6 +104,7 @@ function formatWeight(weight?: number): string {
 export default function EmployerOrderDetail() {
   const { id } = useParams();
   const { token } = useAuthStore();
+  const confirm = useConfirm();
   const [detail, setDetail] = useState<EmployerOrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -155,7 +157,7 @@ export default function EmployerOrderDetail() {
       <WorkbenchStatePanel
         icon={Gavel}
         title="登录后查看订单"
-        description="签约、Spec 确认与验收只能由订单雇主本人操作。"
+        description="签约、方案确认与验收只能由订单雇主本人操作。"
       />
     );
   }
@@ -239,7 +241,7 @@ export default function EmployerOrderDetail() {
                   ¥{order.finalPriceCny}
                 </span>
               )}
-              <span>Spec 版本 v{order.specVersion}</span>
+              <span>方案版本 v{order.specVersion}</span>
               {order.specRejectionCount > 0 && (
                 <span>已驳回 {order.specRejectionCount} 次</span>
               )}
@@ -307,12 +309,12 @@ export default function EmployerOrderDetail() {
             <p className="mt-3 text-sm text-[var(--text-600)]">
               已支付 ¥{order.finalPriceCny ?? '—'} 入平台托管
               {order.paidAt ? `（${new Date(order.paidAt).toLocaleString()}）` : ''}
-              ，等待工作室侧创建项目并推送 Spec。
+              ，等待工作室侧创建项目并推送交付方案。
             </p>
           ) : (
             <>
               <p className="mt-3 text-sm text-[var(--text-500)]">
-                支付订单金额到平台托管后，工作室侧将开始执行并推送 Spec；资金在验收通过后才会结算给工作室。
+                支付订单金额到平台托管后，工作室侧将开始执行并推送交付方案；资金在验收通过后才会结算给工作室。
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <span className="text-2xl font-bold text-[var(--text-900)]">
@@ -321,17 +323,16 @@ export default function EmployerOrderDetail() {
                 <button
                   type="button"
                   disabled={busy || order.finalPriceCny == null}
-                  onClick={() => {
-                    if (
-                      !window.confirm(
-                        `确认用余额支付 ¥${order.finalPriceCny} 到平台托管吗？`,
-                      )
-                    ) {
-                      return;
-                    }
+                  onClick={async () => {
+                    const { confirmed } = await confirm({
+                      title: '余额支付托管',
+                      description: `确认用余额支付 ¥${order.finalPriceCny} 到平台托管吗？`,
+                      confirmText: '确认支付',
+                    });
+                    if (!confirmed) return;
                     void runAction(
                       () => employerPayWithBalance(token, order.id),
-                      '托管支付成功，等待工作室侧推送 Spec。',
+                      '托管支付成功，等待工作室侧推送交付方案。',
                     );
                   }}
                   className="btn-cs btn-primary min-h-11 disabled:cursor-not-allowed disabled:opacity-60"
@@ -353,7 +354,7 @@ export default function EmployerOrderDetail() {
       {/* Spec 快照与里程碑（场景四 #11/#12） */}
       <section className="rounded-2xl border border-[color:var(--border)] bg-white p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-semibold text-[var(--text-800)]">Spec 与里程碑</h2>
+          <h2 className="font-semibold text-[var(--text-800)]">交付方案与里程碑</h2>
           {order.specDeadline && canConfirmSpec && (
             <span className="text-xs text-[var(--text-500)]">
               确认截止 {new Date(order.specDeadline).toLocaleString()}
@@ -363,7 +364,7 @@ export default function EmployerOrderDetail() {
 
         {order.specVersion === 0 ? (
           <p className="mt-3 text-sm text-[var(--text-500)]">
-            等待 Console 推送 Spec（提交后开启 7 天雇主确认计时）。
+            等待工作室推送交付方案（提交后开启 7 天确认计时）。
           </p>
         ) : (
           <>
@@ -372,7 +373,7 @@ export default function EmployerOrderDetail() {
             </pre>
             {order.specHash && (
               <p className="mt-2 break-all text-xs text-[var(--text-400)]">
-                spec_hash: {order.specHash}
+                方案指纹: {order.specHash}
               </p>
             )}
             {order.milestones && order.milestones.length > 0 && (
@@ -417,12 +418,12 @@ export default function EmployerOrderDetail() {
                 onClick={() =>
                   runAction(
                     () => employerSpecAction(token, order.id, 'confirmed'),
-                    '已确认 Spec，订单进入执行阶段。',
+                    '已确认方案，订单进入执行阶段。',
                   )
                 }
                 className="btn-cs btn-primary min-h-11 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                确认 Spec
+                确认方案
               </button>
               <button
                 type="button"
@@ -436,12 +437,12 @@ export default function EmployerOrderDetail() {
                         'rejected',
                         rejectReason.trim() || null,
                       ),
-                    '已驳回 Spec，等待对方修订。',
+                    '已驳回方案，等待对方修订。',
                   )
                 }
                 className="btn-cs min-h-11 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                驳回 Spec
+                驳回方案
               </button>
               {busy && <Loader2 className="h-4 w-4 animate-spin text-[var(--text-400)]" />}
             </div>
@@ -464,7 +465,7 @@ export default function EmployerOrderDetail() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 font-semibold text-[var(--text-800)]">
             <FileEdit className="h-5 w-5 text-[var(--brand-600)]" />
-            Spec 变更
+            方案变更记录
           </h2>
           {specChanges.length > 0 && (
             <span className="rounded-full bg-[var(--background-100)] px-2.5 py-0.5 text-xs font-medium text-[var(--text-600)]">
@@ -493,8 +494,8 @@ export default function EmployerOrderDetail() {
                         decision,
                       ),
                     decision === 'confirmed'
-                      ? '已确认新增需求，等待对方推送新版 Spec。'
-                      : '已拒绝该新增需求，原 Spec 继续执行。',
+                      ? '已确认新增需求，等待对方推送新版方案。'
+                      : '已拒绝该新增需求，原方案继续执行。',
                   )
                 }
               />
@@ -659,14 +660,14 @@ export default function EmployerOrderDetail() {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => {
-                  if (
-                    !window.confirm(
-                      '发起协商取消后将通知对方在 3 天内响应，确定发起吗？',
-                    )
-                  ) {
-                    return;
-                  }
+                onClick={async () => {
+                  const { confirmed } = await confirm({
+                    title: '发起协商取消',
+                    description: '发起协商取消后将通知对方在 3 天内响应，确定发起吗？',
+                    tone: 'danger',
+                    confirmText: '确认发起',
+                  });
+                  if (!confirmed) return;
                   void runAction(
                     () => employerRequestCancel(token, order.id),
                     '已发起协商取消，等待对方响应。',
@@ -698,14 +699,14 @@ export default function EmployerOrderDetail() {
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => {
-                    if (
-                      !window.confirm(
-                        '发起纠纷后进入 3 天举证窗口，平台将介入仲裁，确定发起吗？',
-                      )
-                    ) {
-                      return;
-                    }
+                  onClick={async () => {
+                    const { confirmed } = await confirm({
+                      title: '发起纠纷',
+                      description: '发起纠纷后进入 3 天举证窗口，平台将介入仲裁，确定发起吗？',
+                      tone: 'danger',
+                      confirmText: '确认发起',
+                    });
+                    if (!confirmed) return;
                     void runAction(
                       () =>
                         employerRaiseDispute(
@@ -908,7 +909,7 @@ function SpecChangeCard({
             onClick={() => onConfirm('rejected')}
             className="btn-cs min-h-10 text-sm disabled:cursor-not-allowed disabled:opacity-60"
           >
-            拒绝（维持原 Spec）
+            拒绝（维持原方案）
           </button>
           {busy && <Loader2 className="h-4 w-4 animate-spin text-[var(--text-400)]" />}
         </div>

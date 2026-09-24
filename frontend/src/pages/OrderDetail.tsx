@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
@@ -21,6 +21,8 @@ import DeliveryHistory from '../components/DeliveryHistory';
 import DeliveryForm from '../components/DeliveryForm';
 import AcceptanceChecklist from '../components/AcceptanceChecklist';
 import { acceptDelivery, rejectDelivery } from '../api/deliveryApi';
+import { useToast } from '../components/ui/toast-context';
+import { useConfirm } from '../components/ui/confirm-context';
 import type { Delivery } from '../types/delivery';
 import { formatShanghaiDateTime } from '../utils/date';
 
@@ -266,6 +268,8 @@ export default function OrderDetail() {
   const { user } = useAuthStore();
   const apiBase = API_BASE;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
   
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
@@ -273,6 +277,7 @@ export default function OrderDetail() {
   const [rejecting, setRejecting] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [rejectReasonError, setRejectReasonError] = useState<string | null>(null);
   const [expandedPhases, setExpandedPhases] = useState<string[]>([]);
   const [helpMessage, setHelpMessage] = useState('');
   const [sendingHelp, setSendingHelp] = useState(false);
@@ -460,7 +465,7 @@ export default function OrderDetail() {
     setSendingHelp(true);
     // 模拟发送求助消息
     await new Promise(resolve => setTimeout(resolve, 1000));
-    alert('求助消息已发送给雇主');
+    toast.success('求助消息已发送给雇主');
     setHelpMessage('');
     setSendingHelp(false);
   };
@@ -469,7 +474,11 @@ export default function OrderDetail() {
   const handleRetry = async () => {
     if (!id) return;
     
-    const confirmed = window.confirm('确定要重新执行任务吗？系统将根据上次失败原因调整策略并重新生成代码。');
+    const { confirmed } = await confirm({
+      title: '重新执行任务',
+      description: '系统将根据上次失败原因调整策略并重新生成代码。',
+      confirmText: '重新执行',
+    });
     if (!confirmed) return;
     
     setRetrying(true);
@@ -485,15 +494,15 @@ export default function OrderDetail() {
       
       if (res.ok) {
         await res.json();
-        alert('重试已启动！系统将重新生成代码并执行。');
+        toast.success('重试已启动', '系统将重新生成代码并执行。');
         // 刷新订单状态
         fetchOrder();
       } else {
         const error = await res.json();
-        alert(`重试失败: ${error.error || '未知错误'}`);
+        toast.error('重试失败', error.error || '未知错误');
       }
     } catch {
-      alert('重试请求失败，请检查网络连接');
+      toast.error('重试请求失败', '请检查网络连接');
     } finally {
       setRetrying(false);
     }
@@ -515,16 +524,16 @@ export default function OrderDetail() {
   // 提交支付凭证
   const handleSubmitPayment = async () => {
     if (!user) {
-      alert('请先登录雇主账号再支付');
+      toast.warning('请先登录雇主账号再支付');
       navigate('/login');
       return;
     }
     if (!selectedCode) {
-      alert('请选择支付方式');
+      toast.warning('请选择支付方式');
       return;
     }
     if (!paymentProof) {
-      alert('请上传支付凭证截图');
+      toast.warning('请上传支付凭证截图');
       return;
     }
     
@@ -542,7 +551,7 @@ export default function OrderDetail() {
       
       if (!uploadRes.ok) {
         const err = await uploadRes.json().catch(() => null);
-        alert(err?.message || '上传支付凭证失败');
+        toast.error('上传支付凭证失败', err?.message);
         return;
       }
       
@@ -557,14 +566,14 @@ export default function OrderDetail() {
         fetchOrder();
         setPaymentProof(null);
         setPaymentProofPreview('');
-        alert('支付凭证已提交，等待平台确认');
+        toast.success('支付凭证已提交', '等待平台确认');
       } else {
         const err = await payRes.json().catch(() => null);
-        alert(err?.message || '支付确认失败');
+        toast.error('支付确认失败', err?.message);
       }
     } catch (err) {
       console.error(err);
-      alert('提交支付凭证失败');
+      toast.error('提交支付凭证失败');
     } finally {
       setUploadingProof(false);
     }
@@ -574,11 +583,18 @@ export default function OrderDetail() {
 
   const handleCancel = async () => {
     if (!user) {
-      alert('请先登录');
+      toast.warning('请先登录');
       navigate('/login');
       return;
     }
-    if (!confirm('确定要取消此订单吗？')) return;
+    const { confirmed } = await confirm({
+      title: '取消此订单',
+      description: '取消后订单将不再继续执行，此操作不可撤销。',
+      tone: 'danger',
+      confirmText: '取消订单',
+      cancelText: '再想想',
+    });
+    if (!confirmed) return;
     setCanceling(true);
     try {
       const res = await fetch(`${apiBase}/api/v1/orders/${id}/cancel`, {
@@ -588,13 +604,13 @@ export default function OrderDetail() {
       });
       if (res.ok) {
         fetchOrder();
-        alert('订单已取消');
+        toast.success('订单已取消');
       } else {
         const err = await res.json().catch(() => null);
-        alert(err?.message || '取消失败');
+        toast.error('取消失败', err?.message);
       }
     } catch {
-      alert('取消请求失败');
+      toast.error('取消请求失败');
     } finally {
       setCanceling(false);
     }
@@ -607,7 +623,7 @@ export default function OrderDetail() {
       case 'IN_PROGRESS':
         return { label: '进行中', cls: 'bg-[color:var(--brand-50)] text-[color:var(--brand-700)]' };
       case 'DELIVERED':
-        return { label: '待验收', cls: 'bg-[#f3efff] text-[#6544a5]' };
+        return { label: '待验收', cls: 'bg-[var(--brand-50)] text-[var(--brand-700)]' };
       case 'ACCEPTED':
         return { label: '已验收', cls: 'bg-[color:var(--state-success-surface)] text-[color:var(--state-success-text)]' };
       case 'PENDING_RELEASE':
@@ -671,7 +687,7 @@ export default function OrderDetail() {
         <Package className="mx-auto h-9 w-9 text-[color:var(--text-400)]" />
         <h1 className="mt-4 text-xl font-bold text-[color:var(--text-900)]">未找到订单</h1>
         <p className="mt-2 text-sm text-[color:var(--text-500)]">订单可能已取消，或当前链接无效。</p>
-        <Link to="/market" className="btn-cs btn-primary mt-6">返回任务大厅</Link>
+        <Link to="/market" className="btn-cs btn-primary mt-6">返回任务市场</Link>
       </div>
     );
   }
@@ -688,7 +704,7 @@ export default function OrderDetail() {
         className="inline-flex min-h-11 items-center gap-2 rounded-lg px-1 text-sm font-semibold text-[color:var(--brand-600)] transition-colors hover:text-[color:var(--brand-700)]"
       >
         <ArrowLeft className="h-4 w-4" />
-        {order.task?.id ? '返回任务详情' : '返回任务大厅'}
+        {order.task?.id ? '返回任务详情' : '返回任务市场'}
       </Link>
 
       <div className="mt-3 grid items-start gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(360px,1fr)] xl:gap-6">
@@ -861,7 +877,7 @@ export default function OrderDetail() {
                 userId={user?.id || ''}
                 onSuccess={() => {
                   fetchOrder();
-                  alert('交付提交成功！');
+                  toast.success('交付提交成功');
                 }}
                 onCancel={() => {}}
                 embedded
@@ -875,14 +891,19 @@ export default function OrderDetail() {
                 <div className="mt-4 flex flex-col gap-3 sm:flex-row">
                   <button
                     onClick={async () => {
-                      if (!window.confirm('确认验收此交付？资金将释放给开发者。')) return;
+                      const { confirmed } = await confirm({
+                        title: '确认验收此交付',
+                        description: '验收后资金将释放给开发者，此操作不可撤销。',
+                        confirmText: '确认验收',
+                      });
+                      if (!confirmed) return;
                       setAccepting(true);
                       try {
                         await acceptDelivery(order.id, user?.id || '');
                         fetchOrder();
-                        alert('验收成功！');
+                        toast.success('验收成功');
                       } catch (err) {
-                        alert(err instanceof Error ? err.message : '验收失败');
+                        toast.error('验收失败', err instanceof Error ? err.message : undefined);
                       } finally {
                         setAccepting(false);
                       }
@@ -901,29 +922,51 @@ export default function OrderDetail() {
                   </button>
                 </div>
                 <div id="reject-section" className="mt-4 border-t border-[color:var(--border)] pt-4">
-                  <label className="mb-2 block text-sm font-medium text-[color:var(--text-600)]">原因说明</label>
+                  <label htmlFor="reject-reason" className="mb-2 block text-sm font-medium text-[color:var(--text-600)]">
+                    原因说明
+                  </label>
                   <textarea
+                    id="reject-reason"
                     value={rejectReason}
-                    onChange={(event) => setRejectReason(event.target.value)}
+                    onChange={(event) => {
+                      setRejectReason(event.target.value);
+                      if (rejectReasonError) setRejectReasonError(null);
+                    }}
                     placeholder="说明需要修改的地方..."
-                    className="mb-3 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 py-2 text-sm text-[color:var(--text-800)] outline-none placeholder:text-[color:var(--text-500)] focus:border-[color:var(--state-error)] focus:ring-4 focus:ring-red-500/10"
+                    aria-invalid={Boolean(rejectReasonError)}
+                    aria-describedby={rejectReasonError ? 'reject-reason-error' : undefined}
+                    className={`mb-3 w-full rounded-xl border bg-white px-3 py-2 text-sm text-[color:var(--text-800)] outline-none placeholder:text-[color:var(--text-500)] focus:ring-4 focus:ring-red-500/10 ${
+                      rejectReasonError
+                        ? 'border-[color:var(--state-error)]'
+                        : 'border-[color:var(--border)] focus:border-[color:var(--state-error)]'
+                    }`}
                     rows={2}
                   />
+                  {rejectReasonError && (
+                    <p id="reject-reason-error" className="field-error mb-3" role="alert">
+                      {rejectReasonError}
+                    </p>
+                  )}
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <button
                       onClick={async () => {
                         if (!rejectReason.trim()) {
-                          alert('请填写退回原因');
+                          setRejectReasonError('请填写退回原因');
                           return;
                         }
-                        if (!window.confirm('退回给开发者修改？开发者可以重新提交交付。')) return;
+                        const { confirmed } = await confirm({
+                          title: '退回给开发者修改',
+                          description: '开发者可以重新提交交付。',
+                          confirmText: '退回修改',
+                        });
+                        if (!confirmed) return;
                         setRejecting(true);
                         try {
                           await rejectDelivery(order.id, user?.id || '', { reason: rejectReason, requireRevision: true });
                           fetchOrder();
-                          alert('已退回给开发者修改');
+                          toast.success('已退回给开发者修改');
                         } catch (err) {
-                          alert(err instanceof Error ? err.message : '操作失败');
+                          toast.error('操作失败', err instanceof Error ? err.message : undefined);
                         } finally {
                           setRejecting(false);
                         }
@@ -937,17 +980,23 @@ export default function OrderDetail() {
                     <button
                       onClick={async () => {
                         if (!rejectReason.trim()) {
-                          alert('请填写拒绝原因');
+                          setRejectReasonError('请填写拒绝原因');
                           return;
                         }
-                        if (!window.confirm('确认拒绝并发起仲裁？这将进入平台仲裁流程。')) return;
+                        const { confirmed } = await confirm({
+                          title: '拒绝并发起仲裁',
+                          description: '确认后该订单将进入平台仲裁流程，此操作不可撤销。',
+                          tone: 'danger',
+                          confirmText: '拒绝并仲裁',
+                        });
+                        if (!confirmed) return;
                         setRejecting(true);
                         try {
                           await rejectDelivery(order.id, user?.id || '', { reason: rejectReason, requireRevision: false });
                           fetchOrder();
-                          alert('已拒绝并发起仲裁');
+                          toast.success('已拒绝并发起仲裁');
                         } catch (err) {
-                          alert(err instanceof Error ? err.message : '操作失败');
+                          toast.error('操作失败', err instanceof Error ? err.message : undefined);
                         } finally {
                           setRejecting(false);
                         }

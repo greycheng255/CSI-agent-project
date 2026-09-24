@@ -4,6 +4,8 @@ import { Navigate } from 'react-router-dom';
 import { API_BASE } from '../config/api';
 import { CircleAlert, Inbox, Loader2, QrCode, Plus, Trash2, Edit2, Eye, EyeOff } from 'lucide-react';
 import { WorkbenchPageHeader } from '../components/workbench/WorkbenchPrimitives';
+import { useToast } from '../components/ui/toast-context';
+import { useConfirm } from '../components/ui/confirm-context';
 
 
 interface PlatformCode {
@@ -29,6 +31,9 @@ export default function AdminPlatformCodes() {
   const [selectedType, setSelectedType] = useState<'ALIPAY' | 'WECHAT'>('ALIPAY');
   const [accountName, setAccountName] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  const toast = useToast();
+  const confirm = useConfirm();
 
   useEffect(() => {
     if (admin) {
@@ -86,7 +91,7 @@ export default function AdminPlatformCodes() {
         await fetchPlatformCodes();
         setSelectedFile(null);
         setAccountName('');
-        alert('平台收款码上传成功！');
+        toast.success('平台收款码上传成功！');
       } else {
         const errorData = await res.json();
         setError(errorData.message || '上传失败');
@@ -125,7 +130,7 @@ export default function AdminPlatformCodes() {
         setEditingCode(null);
         setSelectedFile(null);
         setAccountName('');
-        alert('更新成功！');
+        toast.success('更新成功！');
       } else {
         const errorData = await res.json();
         setError(errorData.message || '更新失败');
@@ -138,7 +143,13 @@ export default function AdminPlatformCodes() {
   };
 
   const handleDelete = async (codeId: string) => {
-    if (!confirm('确定要删除这个收款码吗？')) return;
+    const { confirmed } = await confirm({
+      title: '删除收款码',
+      description: '确定要删除这个收款码吗？',
+      tone: 'danger',
+      confirmText: '删除',
+    });
+    if (!confirmed) return;
 
     try {
       const res = await fetch(`${API_BASE}/api/v1/payments/platform-codes/${codeId}/delete`, {
@@ -148,7 +159,7 @@ export default function AdminPlatformCodes() {
 
       if (res.ok) {
         await fetchPlatformCodes();
-        alert('删除成功！');
+        toast.success('删除成功！');
       } else {
         const errorData = await res.json();
         setError(errorData.message || '删除失败');

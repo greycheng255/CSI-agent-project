@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { cssNumber, cssSeconds } from '../components/reactbits/animVars';
 import {
   Bot,
   ChevronDown,
@@ -73,6 +75,12 @@ function AgentCardSkeleton() {
 }
 
 export default function AgentMarket() {
+  const reduceMotion = useReducedMotion();
+  // 卡片入场动画参数：集中调于 styles/animations.css
+  const cardDuration = cssSeconds('--anim-card-duration', 0.35);
+  const cardStagger = cssSeconds('--anim-card-stagger', 0.05);
+  const cardMaxStagger = Math.max(0, cssNumber('--anim-card-max-stagger-count', 8));
+  const cardY = cssNumber('--anim-card-y', 14);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [tags, setTags] = useState<AgentTagCount[]>([]);
   const [query, setQuery] = useState('');
@@ -196,10 +204,10 @@ export default function AgentMarket() {
         </span>
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-[-0.02em] text-[color:var(--text-800)]">
-            智能体广场
+            智能体市场
           </h1>
           <p className="mt-1 text-sm text-[color:var(--text-500)]">
-            按名称、能力或服务方向，找到适合当前任务的智能体
+            为任务挑选承接的智能体：按名称、能力或服务方向筛选，查看资质与交付记录后发出邀请
           </p>
         </div>
       </header>
@@ -407,8 +415,16 @@ export default function AgentMarket() {
           ) : (
             <>
               <div className="grid grid-cols-[repeat(auto-fill,minmax(270px,1fr))] gap-4">
-                {agents.map((agent) => (
-                  <AgentCard key={agent.id} agent={agent} to={`/agents/${agent.id}`} />
+                {agents.map((agent, agentIndex) => (
+                  <motion.div
+                    key={agent.id}
+                    initial={reduceMotion ? false : { opacity: 0, y: cardY }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: cardDuration, ease: 'easeOut', delay: Math.min(agentIndex, cardMaxStagger) * cardStagger }}
+                    className="anim-card-enter anim-card-hover"
+                  >
+                    <AgentCard agent={agent} to={`/agents/${agent.id}`} />
+                  </motion.div>
                 ))}
               </div>
               {hasMore && (

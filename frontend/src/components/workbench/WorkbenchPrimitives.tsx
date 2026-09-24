@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { StatePanel, type StatePanelTone } from '../ui/StatePanel';
 
 type WorkbenchPageHeaderProps = {
   icon: LucideIcon;
@@ -45,37 +46,24 @@ type WorkbenchStatePanelProps = {
   tone?: 'neutral' | 'error';
 };
 
+/**
+ * 工作台状态面板。已统一到全站 <StatePanel />，此处仅保留原签名以兼容既有调用。
+ * 新代码请直接使用 components/ui/StatePanel。
+ */
 export function WorkbenchStatePanel({
-  icon: Icon,
+  icon,
   title,
   description,
   action,
   tone = 'neutral',
 }: WorkbenchStatePanelProps) {
-  const isError = tone === 'error';
-
   return (
-    <div
-      className={`flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed px-6 py-12 text-center ${
-        isError
-          ? 'border-[color:var(--state-error)] bg-[var(--state-error-surface)]'
-          : 'border-[color:var(--border)] bg-white'
-      }`}
-    >
-      <span
-        className={`mb-4 flex h-12 w-12 items-center justify-center rounded-full ${
-          isError
-            ? 'bg-white text-[var(--state-error)]'
-            : 'bg-[var(--background-100)] text-[var(--text-400)]'
-        }`}
-      >
-        <Icon className="h-5 w-5" aria-hidden="true" />
-      </span>
-      <h2 className={`text-base font-semibold ${isError ? 'text-[var(--state-error)]' : 'text-[var(--text-800)]'}`}>
-        {title}
-      </h2>
-      <p className="mt-2 max-w-lg text-sm leading-6 text-[var(--text-500)]">{description}</p>
-      {action && <div className="mt-5">{action}</div>}
-    </div>
+    <StatePanel
+      icon={icon}
+      title={title}
+      description={description}
+      action={action}
+      tone={tone as StatePanelTone}
+    />
   );
 }

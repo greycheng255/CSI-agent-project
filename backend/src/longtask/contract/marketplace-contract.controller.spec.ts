@@ -21,6 +21,7 @@ describe('MarketplaceContractController（场景一~十端点）', () => {
   const tasks = {
     findOpen: jest.fn(),
     findById: jest.fn(),
+    getOrThrow: jest.fn(),
     pullTasks: jest.fn(),
   };
   const bids = { submit: jest.fn() };
@@ -36,7 +37,7 @@ describe('MarketplaceContractController（场景一~十端点）', () => {
     finalize: jest.fn(),
     toDispute: jest.fn(),
   };
-  const delivery = { submitDeliverable: jest.fn() };
+  const delivery = { submitDeliverable: jest.fn(), updateGateResult: jest.fn() };
   const negotiation = { start: jest.fn(), decide: jest.fn() };
   const specChange = {
     classify: jest.fn(),
@@ -67,6 +68,13 @@ describe('MarketplaceContractController（场景一~十端点）', () => {
     const query = { category: 'web', status: 'open', limit: '50' };
     controller.listTasks(query);
     expect(tasks.pullTasks).toHaveBeenCalledWith(query);
+  });
+
+  it('GET /tasks/:id 委托 getOrThrow（不存在 → 404，而非 200 空 body）', async () => {
+    tasks.getOrThrow.mockResolvedValue({ id: 't1' });
+    await expect(controller.getTask('t1')).resolves.toEqual({ id: 't1' });
+    expect(tasks.getOrThrow).toHaveBeenCalledWith('t1');
+    expect(tasks.findById).not.toHaveBeenCalled();
   });
 
   it('POST /tasks/:id/bids 转换 snake_case → service 入参', () => {
@@ -174,7 +182,20 @@ describe('MarketplaceContractController（场景一~十端点）', () => {
       metadata: { summary: 'x' },
       artifactUrls: ['u1'],
       submissionSeq: 2,
+      gatesAllPassed: null,
     });
+  });
+
+  it('场景五 deliverable gates 回填委托并校验出参', () => {
+    delivery.updateGateResult = jest.fn().mockReturnValue({ id: 'd1' });
+    controller.updateDeliverableGates('d1', { gates_all_passed: true });
+    expect(delivery.updateGateResult).toHaveBeenCalledWith('d1', true);
+
+    try {
+      controller.updateDeliverableGates('d1', { gates_all_passed: 'yes' });
+    } catch (e) {
+      expect((e as { status: number }).status).toBe(400);
+    }
   });
 
   it('场景六 start/decide：order_id 取自路径参数', () => {

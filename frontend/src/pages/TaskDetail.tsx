@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -19,6 +19,7 @@ import {
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
 import { BidDetailPanel } from '../components/BidDetailPanel';
+import { useToast } from '../components/ui/toast-context';
 import { formatShanghaiDateTime } from '../utils/date';
 
 interface Task {
@@ -114,6 +115,7 @@ export default function TaskDetail() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const apiBase = API_BASE;
+  const toast = useToast();
   const [task, setTask] = useState<Task | null>(null);
   const [bids, setBids] = useState<Bid[]>([]);
   const [order, setOrder] = useState<Order | null>(null);
@@ -195,16 +197,16 @@ export default function TaskDetail() {
 
   const handleSelectBid = async (bidId: string) => {
     if (!user) {
-      alert('请先登录');
+      toast.warning('请先登录');
       navigate('/login');
       return;
     }
     if (!task?.client?.id) {
-      alert('该任务缺少雇主信息，无法选标');
+      toast.warning('该任务缺少雇主信息，无法选标');
       return;
     }
     if (user.id !== task.client.id) {
-      alert('只有雇主才能选择报价');
+      toast.warning('只有雇主才能选择报价');
       return;
     }
     setSelectingBidId(bidId);
@@ -216,10 +218,10 @@ export default function TaskDetail() {
       });
       if (!res.ok) throw new Error('选标失败');
       const order = await res.json();
-      alert('选标成功！即将跳转至支付页面...');
+      toast.success('选标成功！即将跳转至支付页面...');
       navigate(`/orders/${order.id}?taskId=${id}`);
     } catch {
-      alert('选标失败，请重试');
+      toast.error('选标失败，请重试');
     } finally {
       setSelectingBidId(null);
     }
@@ -233,7 +235,7 @@ export default function TaskDetail() {
       case 'IN_PROGRESS':
         return { label: '进行中', badge: 'bg-[color:var(--brand-50)] text-[color:var(--brand-700)]', icon: <Loader2 className="h-4 w-4 animate-spin" /> };
       case 'DELIVERED':
-        return { label: '待验收', badge: 'bg-[#f3efff] text-[#6544a5]', icon: <Package className="h-4 w-4" /> };
+        return { label: '待验收', badge: 'bg-[var(--brand-50)] text-[var(--brand-700)]', icon: <Package className="h-4 w-4" /> };
       case 'ACCEPTED':
         return { label: '已验收', badge: 'bg-[color:var(--state-success-surface)] text-[color:var(--state-success-text)]', icon: <CheckCircle className="h-4 w-4" /> };
       case 'PENDING_RELEASE':
@@ -274,7 +276,7 @@ export default function TaskDetail() {
         className="inline-flex min-h-11 items-center gap-2 rounded-lg px-1 text-sm font-semibold text-[color:var(--brand-600)] transition-colors hover:text-[color:var(--brand-700)]"
       >
         <ArrowLeft className="h-4 w-4" />
-        返回任务大厅
+        返回任务市场
       </Link>
 
       <div className="mt-3 grid items-start gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(360px,1fr)] xl:gap-6">
@@ -442,7 +444,7 @@ export default function TaskDetail() {
                                   {statusView.label}
                                 </span>
                                 {bid.rankScore !== undefined && (
-                                  <span className="inline-flex min-h-7 items-center rounded-full bg-[#f3efff] px-2.5 text-xs font-semibold text-[#6544a5]">
+                                  <span className="inline-flex min-h-7 items-center rounded-full bg-[var(--brand-50)] px-2.5 text-xs font-semibold text-[var(--brand-700)]">
                                     排名分 {Math.round(bid.rankScore)}
                                   </span>
                                 )}

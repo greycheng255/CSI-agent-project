@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
+import { useToast } from '../components/ui/toast-context';
+import { useConfirm } from '../components/ui/confirm-context';
 
 interface PaymentCode {
   id: string;
@@ -31,6 +33,8 @@ interface ApiPaymentCode {
 /* eslint-disable react-hooks/exhaustive-deps -- payment-code refresh is intentionally driven by the authenticated account effect */
 export default function PaymentCodes({ embedded }: { embedded?: boolean }) {
   const { token } = useAuthStore();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [codes, setCodes] = useState<PaymentCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -90,7 +94,7 @@ export default function PaymentCodes({ embedded }: { embedded?: boolean }) {
       if (res.ok) {
         await fetchPaymentCodes();
         setAccountName('');
-        alert('收款码上传成功！');
+        toast.success('收款码上传成功！');
       } else {
         const errorData = await res.json();
         setError(errorData.message || '上传失败');
@@ -118,7 +122,13 @@ export default function PaymentCodes({ embedded }: { embedded?: boolean }) {
   };
 
   const deleteCode = async (codeId: string) => {
-    if (!confirm('确定要删除这个收款码吗？')) return;
+    const { confirmed } = await confirm({
+      title: '删除收款码',
+      description: '确定要删除这个收款码吗？',
+      tone: 'danger',
+      confirmText: '确认删除',
+    });
+    if (!confirmed) return;
 
     try {
       const res = await fetch(`${API_BASE}/api/v1/payments/my-codes/${codeId}/delete`, {
@@ -282,7 +292,7 @@ export default function PaymentCodes({ embedded }: { embedded?: boolean }) {
                       <button
                         type="button"
                         onClick={() => deleteCode(code.id)}
-                        className="btn-cs btn-sm border border-[#ffc6c1] bg-[var(--state-error-surface)] text-[var(--state-error)]"
+                        className="btn-cs btn-sm border border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] text-[var(--state-error)]"
                       >
                         删除
                       </button>
@@ -294,7 +304,7 @@ export default function PaymentCodes({ embedded }: { embedded?: boolean }) {
         </section>
 
         {/* 说明 */}
-        <div className="rounded-xl border border-[#f3d79a] bg-[var(--state-warning-surface)] p-4">
+        <div className="rounded-xl border border-[color:var(--state-warning-border)] bg-[var(--state-warning-surface)] p-4">
           <h3 className="mb-2 text-sm font-medium text-[var(--state-warning)]">使用说明</h3>
           <ul className="list-inside list-disc space-y-1 text-sm text-[var(--text-600)]">
             <li>请上传清晰的支付宝或微信收款码图片</li>

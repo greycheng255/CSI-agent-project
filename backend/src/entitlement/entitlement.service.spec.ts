@@ -155,15 +155,16 @@ describe('EntitlementService（DR-12 AI 网关订阅权益计费）', () => {
       });
     });
 
-    it('getQuota：paid 剩余 + 免费信封合并', async () => {
+    it('getQuota：total/used 全口径合并（paid+free），remaining 恒 ≤ total', async () => {
       const q = await service.getQuota('org-1');
       expect(q).toMatchObject({
         exhausted: false,
         remaining_tokens: 1_200, // 800 paid + 400 free
-        used_tokens: 200,
+        total_tokens: 1_500, // 1000 paid + 500 free（M 修复：total 含 free，与 remaining 自洽）
+        used_tokens: 300, // 200 paid + 100 free
         remaining_credits: 140, // 90 paid + 50 free
-        total_credits: 100,
-        used_credits: 0,
+        total_credits: 150, // 100 paid + 50 free
+        used_credits: 10, // 0 paid + 10 free
         frozen_credits: 0,
         available_credits: 140,
       });

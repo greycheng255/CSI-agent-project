@@ -46,3 +46,16 @@ CREATE TABLE IF NOT EXISTS sso_authorization_codes (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_sso_auth_codes_code_hash ON sso_authorization_codes(code_hash);
+
+-- 交付自动验收（PRD §9.4）：Gate 全过 + 5/9/13 天催办轨迹
+ALTER TABLE marketplace_deliveries ADD COLUMN IF NOT EXISTS gates_all_passed BOOLEAN;
+ALTER TABLE marketplace_deliveries ADD COLUMN IF NOT EXISTS reminder_days_sent INTEGER[] NOT NULL DEFAULT '{}';
+
+-- LLM 计费单价表（人民币分 / 百万 tokens，输入/输出分开计价），管理员在线改价
+CREATE TABLE IF NOT EXISTS llm_model_prices (
+  model_name VARCHAR(128) PRIMARY KEY,
+  input_price INT NOT NULL DEFAULT 0,
+  output_price INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

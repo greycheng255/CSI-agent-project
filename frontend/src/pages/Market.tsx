@@ -14,8 +14,10 @@ import {
   X,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { API_BASE } from '../config/api';
+import { cssNumber, cssSeconds } from '../components/reactbits/animVars';
 import { formatShanghaiDateTime } from '../utils/date';
 
 type StatusGroup = 'all' | 'bidding' | 'executing' | 'completed' | 'abnormal';
@@ -117,6 +119,12 @@ async function requestTaskMarket(url: string, signal: AbortSignal) {
 }
 
 export default function Market() {
+  const reduceMotion = useReducedMotion();
+  // 入场动画参数：集中调于 styles/animations.css（.anim-card-enter / .anim-card-hover）
+  const cardDuration = cssSeconds('--anim-card-duration', 0.35);
+  const cardStagger = cssSeconds('--anim-card-stagger', 0.05);
+  const cardMaxStaggerCount = Math.max(0, cssNumber('--anim-card-max-stagger-count', 8));
+  const cardY = cssNumber('--anim-card-y', 14);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -243,7 +251,7 @@ export default function Market() {
               <ShoppingBag className="h-5 w-5" />
             </span>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-[color:var(--text-900)]">任务大厅</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-[color:var(--text-900)]">任务市场</h1>
               <p className="mt-1 text-sm text-[color:var(--text-500)]">
                 浏览公开任务，选择与你能力和预算匹配的合作机会
               </p>
@@ -480,15 +488,18 @@ export default function Market() {
             </div>
           ) : (
             <div className="space-y-4">
-              {tasks.map((task) => {
+              {tasks.map((task, taskIndex) => {
                 const visibleTags = taskTags(task).slice(0, 5);
                 const seatLeft = Math.max(0, (task.seatLimit ?? 0) - (task.seatTaken ?? 0));
                 const openForBid = task.status === 'open';
 
                 return (
-                  <article
+                  <motion.article
                     key={task.id}
-                    className="group rounded-2xl border border-[color:var(--border)] bg-white p-5 transition-[border-color,box-shadow] hover:border-[color:var(--brand-200)] hover:shadow-[var(--shadow-sm)] md:p-6"
+                    initial={reduceMotion ? false : { opacity: 0, y: cardY }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: cardDuration, ease: 'easeOut', delay: Math.min(taskIndex, cardMaxStaggerCount) * cardStagger }}
+                    className="anim-card-enter anim-card-hover group rounded-2xl border border-[color:var(--border)] bg-white p-5 hover:border-[color:var(--brand-200)] hover:shadow-[var(--shadow-sm)] md:p-6"
                   >
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1">
@@ -584,7 +595,7 @@ export default function Market() {
                         <ChevronRight className="h-4 w-4" />
                       </Link>
                     </div>
-                  </article>
+                  </motion.article>
                 );
               })}
             </div>

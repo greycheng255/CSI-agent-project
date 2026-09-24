@@ -22,6 +22,7 @@ import {
   type AdminMCPInvocation,
   type AdminMCPTool,
 } from '../../api/adminMcpApi';
+import { useConfirm } from '../ui/confirm-context';
 
 type Diagnostic = {
   name: string;
@@ -131,6 +132,8 @@ export default function AdminMCPPlatformPanel() {
   const [statusFilter, setStatusFilter] = useState('');
   const [requestFilter, setRequestFilter] = useState('');
 
+  const confirm = useConfirm();
+
   const selectedTool = useMemo(
     () => tools.find((tool) => tool.name === selectedName),
     [selectedName, tools],
@@ -211,11 +214,14 @@ export default function AdminMCPPlatformPanel() {
         args.idempotency_key = `${requestId()}-${selectedTool.name.split('.').pop()}`;
         setArgsText(stringifyJson(args));
       }
-      if (
-        selectedTool.isWrite &&
-        !window.confirm(`确认执行写工具 ${selectedTool.name} 吗？`)
-      ) {
-        return;
+      if (selectedTool.isWrite) {
+        const { confirmed } = await confirm({
+          title: '执行写工具',
+          description: `确认执行写工具 ${selectedTool.name} 吗？`,
+          tone: 'danger',
+          confirmText: '确认执行',
+        });
+        if (!confirmed) return;
       }
       const data = await callAdminMCPTool({
         name: selectedTool.name,

@@ -236,7 +236,7 @@ export default function DeliveryHistory({
 
                   {delivery.evidenceBundle && (
                     <DetailBlock title="证据包">
-                      <pre className="overflow-x-auto rounded-lg bg-[#111827] p-3 text-xs text-slate-100">
+                      <pre className="overflow-x-auto rounded-lg bg-[var(--surface-code)] p-3 text-xs text-slate-100">
                         {JSON.stringify(delivery.evidenceBundle, null, 2)}
                       </pre>
                     </DetailBlock>
@@ -317,7 +317,7 @@ function Preview({ delivery }: { delivery: Delivery }) {
 
   if (preview.type === 'code') {
     return (
-      <pre className="overflow-x-auto rounded-lg bg-[#111827] p-3 text-sm text-slate-100">
+      <pre className="overflow-x-auto rounded-lg bg-[var(--surface-code)] p-3 text-sm text-slate-100">
         <code>{preview.content}</code>
       </pre>
     );

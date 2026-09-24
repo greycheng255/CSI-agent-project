@@ -20,6 +20,7 @@ export const EVENT_NOTIFICATION_LEVEL: Record<string, NotificationLevel> = {
   'delivery.auto_accepted': 'reminder',
   'delivery.rejected': 'reminder',
   'delivery.revision_requested': 'reminder',
+  'delivery.reminder': 'reminder',
   'revision.negotiation_started': 'reminder',
   'revision.negotiation_decided': 'info',
   'revision.negotiation_auto_accepted': 'urgent',

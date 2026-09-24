@@ -1,0 +1,124 @@
+/*
+ * ===== 碳硅前端动画调节中心 =====
+ * 所有 React Bits 集成动画的参数集中在此，改完重建前端即生效（无需翻组件代码）。
+ *
+ * 语义类名定位：
+ *   .anim-hero-title     首页 Hero 标题逐字动画（BlurText）
+ *   .anim-card-enter     任务大厅卡片交错入场（Market motion.article）
+ *   .anim-card-hover     任务卡 hover 上浮
+ *   .anim-page-fade      路由切换 fade-in（PageFade）
+ *   .anim-number         工作台统计数字滚动（AnimatedNumber）
+ *   .anim-rise           区块交错入场（首页各区块标题/内容，子元素用 --i 排序）
+ *   .anim-reveal         滚动 reveal（.reveal 规则 + 参数，本文件定义）
+ *   .state-icon-float    空状态图标浮动（index.css 中定义，此处仅时长变量）
+ *
+ * 注意：所有动画在 prefers-reduced-motion 下自动降级为静态。
+ */
+:root {
+  /* --- 首页 Hero 标题（.anim-hero-title） --- */
+  --anim-hero-char-duration: 0.30s;   /* 每字动画时长 */
+  --anim-hero-char-stagger: 24ms;     /* 字与字出场间隔 */
+  --anim-hero-char-delay: 100ms;      /* 整体起始延迟 */
+  --anim-hero-char-y: 4px;            /* 每字上移幅度 */
+  --anim-hero-char-blur: 2px;         /* 初始模糊量 */
+
+  /* --- 任务大厅卡片交错入场（.anim-card-enter） --- */
+  --anim-card-duration: 0.28s;        /* 单卡入场时长 */
+  --anim-card-stagger: 40ms;          /* 相邻卡片错开间隔 */
+  --anim-card-max-stagger-count: 8;   /* 超出该序号的卡片不再追加延迟（防长列表拖尾） */
+  --anim-card-y: 8px;                 /* 入场上移幅度 */
+
+  /* --- 任务卡 hover 上浮（.anim-card-hover） --- */
+  --anim-card-hover-lift: -1px;       /* hover 上浮距离 */
+  --anim-card-hover-ease: 0.18s;      /* hover 过渡时长 */
+
+  /* --- 路由切换 fade（.anim-page-fade） --- */
+  --anim-page-fade-duration: 0.22s;
+  --anim-page-fade-y: 6px;
+
+  /* --- 工作台数字滚动（.anim-number） --- */
+  --anim-number-duration: 1.2s;
+
+  /* --- 空状态图标浮动（.state-icon-float） --- */
+  --anim-state-float-duration: 3.2s;
+  --anim-state-float-distance: -4px;
+
+  /* --- CTA 行动带 / 区块交错入场（.anim-rise，首页各区块） --- */
+  --anim-rise-duration: 0.40s;        /* 单个元素入场时长 */
+  --anim-rise-stagger: 72ms;          /* 元素出场间隔（标题→副标题→说明…） */
+  --anim-rise-y: 14px;                /* 入场上移幅度 */
+  --anim-rise-blur: 3px;              /* 初始模糊量 */
+
+  /* --- 滚动 reveal（.reveal，首页卡片与整块内容） --- */
+  --anim-reveal-duration: 0.48s;
+  --anim-reveal-y: 16px;
+  --anim-reveal-blur: 3px;
+}
+
+/* --- 任务卡 hover 上浮：配合 .anim-card-enter 使用（替代原子类 hover:-translate-y-0.5） --- */
+.anim-card-hover {
+  transition: border-color var(--anim-card-hover-ease) ease,
+    box-shadow var(--anim-card-hover-ease) ease,
+    transform var(--anim-card-hover-ease) ease;
+}
+
+@media (hover: hover) {
+  .anim-card-hover:hover {
+    transform: translateY(var(--anim-card-hover-lift));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-card-hover,
+  .anim-card-hover:hover {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* --- 区块交错入场：容器加 .anim-rise，子元素加 .anim-rise-item 并用 --i 指定序号 ---
+ * 触发方式：容器进入视口后被加上 .in-view（由页面的 IntersectionObserver 统一驱动） */
+.anim-rise .anim-rise-item {
+  opacity: 0;
+  transform: translateY(var(--anim-rise-y));
+  filter: blur(var(--anim-rise-blur));
+  transition: opacity var(--anim-rise-duration) cubic-bezier(0.22, 1, 0.36, 1),
+    transform var(--anim-rise-duration) cubic-bezier(0.22, 1, 0.36, 1),
+    filter var(--anim-rise-duration) cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: calc(var(--i, 0) * var(--anim-rise-stagger));
+}
+
+.anim-rise.in-view .anim-rise-item {
+  opacity: 1;
+  transform: translateY(0);
+  filter: none;
+}
+
+/* --- 滚动 reveal：进入视口后加 .in-view（首页卡片与整块内容） ---
+ * 规则放在全局而非 landing.css，便于 /anim-tuning 调参台复用同一套效果 */
+.reveal {
+  opacity: 0;
+  transform: translateY(var(--anim-reveal-y)) scale(0.98);
+  filter: blur(var(--anim-reveal-blur));
+  transition: opacity var(--anim-reveal-duration) ease,
+    transform var(--anim-reveal-duration) ease,
+    filter var(--anim-reveal-duration) ease;
+}
+
+.reveal.in-view {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal.in-view,
+  .anim-rise .anim-rise-item,
+  .anim-rise.in-view .anim-rise-item {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+}

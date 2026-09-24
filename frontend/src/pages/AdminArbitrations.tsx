@@ -4,6 +4,7 @@ import { CircleAlert, Inbox, Loader2, Gavel, CheckCircle2, RefreshCw } from 'luc
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
 import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { useToast } from '../components/ui/toast-context';
 
 type ArbitrationStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
 type ArbitrationResolution = 'REFUND' | 'PAYOUT';
@@ -28,6 +29,7 @@ export default function AdminArbitrations() {
   const { admin, adminToken } = useAuthStore();
   const navigate = useNavigate();
   const apiBase = API_BASE;
+  const toast = useToast();
 
   const [items, setItems] = useState<ArbitrationItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +79,7 @@ export default function AdminArbitrations() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        alert(err?.message || '接手失败');
+        toast.error('接手失败', err?.message);
       }
     } finally {
       setActingId(null);
@@ -96,7 +98,7 @@ export default function AdminArbitrations() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        alert(err?.message || '裁决失败');
+        toast.error('裁决失败', err?.message);
       }
     } finally {
       setActingId(null);

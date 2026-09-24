@@ -18,6 +18,12 @@ import {
 import { Link, useNavigate } from 'react-router-dom';
 import { API_BASE } from '../config/api';
 import { useAuthStore } from '../store/authStore';
+import { apiErrorMessage } from '../utils/errors';
+import RecommendedWorkspaces from '../components/RecommendedWorkspaces';
+
+/** 联调后门：仅本地开发（DEV）且显式配置 VITE_ENABLE_MOCK_KYC=true 时生效，生产构建下始终关闭 */
+const mockKycEnabled =
+  import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCK_KYC === 'true';
 
 const fieldClass = 'min-h-12 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 text-sm text-[color:var(--text-800)] outline-none transition-colors placeholder:text-[color:var(--text-500)] focus:border-[color:var(--brand-400)] focus:ring-2 focus:ring-[color:var(--brand-100)]';
 const textareaClass = `${fieldClass} py-3 leading-6`;
@@ -26,6 +32,10 @@ const labelClass = 'mb-2 flex items-center gap-2 text-sm font-semibold text-[col
 export default function NewTask() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  /** 发布成功后的任务 id：用于即时拉取「平台推荐工作室」 */
+  const [createdTaskId, setCreatedTaskId] = useState<string | null>(null);
+  const [mockKycNotice, setMockKycNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   const navigate = useNavigate();
   const { user, token } = useAuthStore();
 
@@ -65,7 +75,7 @@ export default function NewTask() {
                 </Link>
                 <Link to="/market" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[color:var(--border)] px-5 text-sm font-semibold text-[color:var(--text-700)] transition-colors hover:border-[color:var(--brand-300)] hover:bg-[color:var(--brand-50)]">
                   <Search className="h-4 w-4" />
-                  先浏览任务大厅
+                  先浏览任务市场
                 </Link>
               </div>
             </header>
@@ -181,21 +191,62 @@ export default function NewTask() {
                 <dd className="font-semibold text-[color:var(--state-warning)]">待认证</dd>
               </div>
             </dl>
-            <button
-              type="button"
-              onClick={() => {
-                useAuthStore.getState().updateKyc('VERIFIED');
-                window.alert('模拟实名成功！');
-              }}
-              className="btn-cs btn-primary mt-6 w-full"
-            >
-              <UserCheck className="h-4 w-4" />
-              模拟完成实名认证
-            </button>
+            {mockKycEnabled ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  setMockKycNotice(null);
+                  try {
+                    const res = await fetch(`${API_BASE}/api/v1/users/kyc`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                      body: JSON.stringify({ realName: user.displayName || '联调测试用户', idCardNumber: '110101199003070011' }),
+                    });
+                    if (!res.ok) {
+                      const data = await res.json().catch(() => ({}));
+                      setMockKycNotice({ tone: 'error', message: data.message || '模拟实名失败，请稍后重试。' });
+                      return;
+                    }
+                    useAuthStore.getState().updateKyc('VERIFIED');
+                    setMockKycNotice({ tone: 'success', message: '模拟实名成功（已持久化），正在返回发布表单。' });
+                  } catch {
+                    setMockKycNotice({ tone: 'error', message: '网络异常，模拟实名失败。' });
+                  }
+                }}
+                className="btn-cs btn-primary mt-6 w-full"
+              >
+                <UserCheck className="h-4 w-4" />
+                模拟完成实名认证
+              </button>
+            ) : (
+              <Link to="/me" className="btn-cs btn-primary mt-6 w-full">
+                <UserCheck className="h-4 w-4" />
+                去完成实名认证
+              </Link>
+            )}
+            {mockKycEnabled && mockKycNotice && (
+              <div
+                role="status"
+                className={`mt-4 flex gap-3 rounded-xl px-4 py-3 text-xs leading-5 text-[color:var(--text-800)] ${
+                  mockKycNotice.tone === 'success'
+                    ? 'bg-[color:var(--state-success-surface,var(--brand-50))]'
+                    : 'bg-[color:var(--state-error-surface)]'
+                }`}
+              >
+                {mockKycNotice.tone === 'success' ? (
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--state-success-text,var(--brand-600))]" />
+                ) : (
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--state-error)]" />
+                )}
+                {mockKycNotice.message}
+              </div>
+            )}
             <Link to="/me" className="mt-2 flex min-h-10 items-center justify-center text-sm font-semibold text-[color:var(--brand-600)] hover:text-[color:var(--brand-700)]">
               前往个人中心
             </Link>
-            <p className="mt-4 text-xs leading-5 text-[color:var(--text-500)]">当前环境使用模拟认证流程，认证成功后会立即返回发布表单。</p>
+            {mockKycEnabled && (
+              <p className="mt-4 text-xs leading-5 text-[color:var(--text-500)]">当前环境使用模拟认证流程，认证成功后会立即返回发布表单。</p>
+            )}
           </aside>
         </div>
       </div>
@@ -233,17 +284,78 @@ export default function NewTask() {
         }),
       });
 
-      if (!response.ok) throw new Error('发布失败');
+      if (!response.ok) {
+        throw new Error(await apiErrorMessage(response, '任务发布失败，请稍后重试'));
+      }
 
-      window.alert('任务发布成功！已进入需求池等待智能体报价。');
-      navigate('/market');
+      const created = (await response.json().catch(() => null)) as
+        | { id?: string }
+        | null;
+      setCreatedTaskId(typeof created?.id === 'string' ? created.id : null);
+      setSubmitted(true);
     } catch (error) {
       console.error(error);
-      setSubmitError('任务发布失败，请检查网络连接或稍后重试。');
+      setSubmitError(
+        error instanceof Error && error.message
+          ? error.message
+          : '任务发布失败，请检查网络连接或稍后重试。',
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const resetForm = () => {
+    setTitle('');
+    setDescription('');
+    setAcceptanceCriteria('');
+    setBudgetCny('');
+    setExpectedDeliveryAt('');
+    setTagsText('');
+    setSkillsText('');
+    setAttachmentsText('');
+    setSubmitError('');
+    setSubmitted(false);
+    setCreatedTaskId(null);
+  };
+
+  if (submitted) {
+    return (
+      <div className="w-full py-4 md:py-6">
+        <div className="mx-auto max-w-3xl space-y-5">
+        <div className="rounded-2xl border border-[color:var(--border)] bg-white px-6 py-10 text-center md:px-10">
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[color:var(--state-success-surface,var(--brand-50))] text-[color:var(--state-success-text,var(--brand-600))]">
+            <CheckCircle2 className="h-7 w-7" />
+          </span>
+          <h1 className="mt-5 text-2xl font-bold tracking-tight text-[color:var(--text-900)]">任务发布成功</h1>
+          <p className="mt-3 text-sm leading-7 text-[color:var(--text-600)]">
+            任务已进入需求池，匹配的智能体会尽快查看并提交报价。你可以在工作台跟踪报价与订单进展。
+          </p>
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <button type="button" onClick={() => navigate('/workbench/longtask/employer/orders')} className="btn-cs btn-primary min-w-40">
+              查看我的任务
+            </button>
+            <button type="button" onClick={resetForm} className="btn-cs min-w-40 border border-[color:var(--border)] hover:border-[color:var(--brand-300)] hover:bg-[color:var(--brand-50)]">
+              再发布一个任务
+            </button>
+          </div>
+          <p className="mt-6 text-xs leading-5 text-[color:var(--text-500)]">
+            有报价进来时会通过微信服务号提醒你，请注意查收。
+          </p>
+        </div>
+
+        {/* 平台推荐工作室：任务发布后立即可见，可一键邀请参与竞标 */}
+        {createdTaskId && (
+          <RecommendedWorkspaces
+            taskId={createdTaskId}
+            token={token ?? null}
+            defaultOpen
+          />
+        )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full py-4 md:py-6">
@@ -274,7 +386,7 @@ export default function NewTask() {
                     详细描述
                   </label>
                   <textarea id="task-description" required rows={7} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="说明业务背景、输入资料、具体要求以及希望获得的输出格式……" className={textareaClass} />
-                  <p className="mt-2 text-xs leading-5 text-[color:var(--text-500)]">支持 Markdown。请避免在描述中填写密码、Token 等敏感信息。</p>
+                  <p className="mt-2 text-xs leading-5 text-[color:var(--text-500)]">支持常用排版格式。请避免在描述中填写密码、验证码等敏感信息。</p>
                 </div>
               </div>
             </section>
@@ -320,7 +432,7 @@ export default function NewTask() {
                 <div>
                   <label htmlFor="task-budget" className={labelClass}>
                     <DollarSign className="h-4 w-4" />
-                    最高预算（CNY）
+                    预算上限（¥）
                   </label>
                   <div className="relative">
                     <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-[color:var(--text-500)]">¥</span>
@@ -346,7 +458,7 @@ export default function NewTask() {
                     <CheckCircle2 className="h-4 w-4" />
                     所需能力 <span className="font-normal text-[color:var(--text-400)]">选填</span>
                   </label>
-                  <input id="task-skills" type="text" value={skillsText} onChange={(event) => setSkillsText(event.target.value)} placeholder="carbon-accounting, report-generation" className={fieldClass} />
+                  <input id="task-skills" type="text" value={skillsText} onChange={(event) => setSkillsText(event.target.value)} placeholder="例如：数据处理, 报告撰写, 数据可视化" className={fieldClass} />
                 </div>
               </div>
             </section>
@@ -399,13 +511,13 @@ export default function NewTask() {
               </>
             ) : (
               <>
-                发布至任务大厅
+                发布至任务市场
                 <ArrowRight className="h-4 w-4" />
               </>
             )}
           </button>
           <Link to="/market" className="mt-2 flex min-h-10 items-center justify-center text-sm font-semibold text-[color:var(--text-600)] hover:text-[color:var(--brand-600)]">
-            取消并返回任务大厅
+            取消并返回任务市场
           </Link>
         </aside>
       </div>

@@ -52,6 +52,14 @@ export class User {
   })
   kycStatus: KycStatus;
 
+  /** 身份证姓名（提现实名，轻量采集） */
+  @Column({ name: 'id_card_name', type: 'varchar', nullable: true })
+  idCardName: string | null;
+
+  /** 身份证号（AES-256-GCM 加密后密文，不落明文） */
+  @Column({ name: 'id_card_number_cipher', type: 'text', nullable: true })
+  idCardNumberCipher: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

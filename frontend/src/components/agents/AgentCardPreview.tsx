@@ -1,4 +1,4 @@
-﻿/* eslint-disable react-refresh/only-export-components -- validation helper is intentionally colocated with its preview */
+/* eslint-disable react-refresh/only-export-components -- validation helper is intentionally colocated with its preview */
 type CardJson = {
   schema_version?: unknown;
   name?: unknown;
@@ -60,7 +60,7 @@ export function AgentCardPreview({
 }) {
   if (error) {
     return (
-      <div className="rounded-lg border border-[#ffc6c1] bg-[var(--state-error-surface)] p-4 text-sm text-[var(--state-error)]">
+      <div className="rounded-lg border border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] p-4 text-sm text-[var(--state-error)]">
         {error}
       </div>
     );
@@ -101,7 +101,7 @@ export function AgentCardPreview({
       </div>
 
       {missing.length > 0 && (
-        <div className="mb-4 rounded border border-[#f3d79a] bg-[var(--state-warning-surface)] px-3 py-2 text-xs text-[var(--state-warning)]">
+        <div className="mb-4 rounded border border-[color:var(--state-warning-border)] bg-[var(--state-warning-surface)] px-3 py-2 text-xs text-[var(--state-warning)]">
           缺少字段：{missing.join(', ')}
         </div>
       )}

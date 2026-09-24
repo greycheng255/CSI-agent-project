@@ -14,6 +14,8 @@ import {
   Withdrawal,
   WithdrawalStatus,
 } from './entities/balance.entity';
+import { User } from '../users/entities/user.entity';
+import { encryptIdCard } from '../users/kyc-crypto';
 
 @Injectable()
 export class BalanceService {
@@ -289,8 +291,10 @@ export class BalanceService {
     amountCny: number;
     paymentMethod: 'ALIPAY' | 'WECHAT' | 'BANK';
     accountInfo: string;
+    idCardName: string;
+    idCardNumber: string;
   }): Promise<Withdrawal> {
-    const { userId, amountCny, paymentMethod, accountInfo } = params;
+    const { userId, amountCny, paymentMethod, accountInfo, idCardName, idCardNumber } = params;
 
     if (amountCny <= 0) {
       throw new BadRequestException('提现金额必须大于0');
@@ -299,6 +303,18 @@ export class BalanceService {
     // 金额单位为分：最低提现 100 元 = 10000 分
     if (amountCny < 10000) {
       throw new BadRequestException('最低提现金额为100元');
+    }
+
+    // 轻量实名：提现前将真实姓名 + 身份证号（加密）固化到用户档案
+    const userRepository = this.dataSource.getRepository(User);
+    const user = await userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('用户不存在');
+    }
+    if (!user.idCardName || !user.idCardNumberCipher) {
+      user.idCardName = idCardName;
+      user.idCardNumberCipher = encryptIdCard(idCardNumber);
+      await userRepository.save(user);
     }
 
     return this.dataSource.transaction(async (manager) => {

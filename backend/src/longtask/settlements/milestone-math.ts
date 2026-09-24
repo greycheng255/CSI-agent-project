@@ -19,6 +19,18 @@ export function isWeightsSumValid(milestones: Milestone[]): boolean {
   return Math.abs(sum - 1) <= EPSILON;
 }
 
+/**
+ * 是否具备结算依据（对接指南 §3.2.8）：至少 1 个权重非零的里程碑。
+ * 无里程碑 / 权重全零时 settlementAmount 恒为 0，会静默产出 0 元结算单，
+ * 故 Spec 提交与结算触发两处都必须先过这道闸。
+ */
+export function hasSettlementBasis(milestones: Milestone[]): boolean {
+  return (
+    Array.isArray(milestones) &&
+    milestones.some((m) => (m.weight ?? 0) > 0)
+  );
+}
+
 /** 可结算金额：仅 verified_passed 里程碑计入 */
 export function settlementAmount(
   milestones: Milestone[],

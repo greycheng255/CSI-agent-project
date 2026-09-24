@@ -247,4 +247,36 @@ export class EmployerMarketplaceOrdersController {
       typeof body.reason === 'string' ? body.reason : null,
     );
   }
+
+  /**
+   * 场景四 #9 回看：本订单的 Mention 收件箱（Console 推来的 @employer 提问）。
+   * 平台无微信模板配置时的主通道——雇主在订单详情直接查看并回复。
+   */
+  @Get(':id/mentions')
+  @UseGuards(AuthGuard)
+  async listMentions(
+    @Param('id') orderId: string,
+    @Req() req: RequestWithUser,
+  ) {
+    await this.assertOrderEmployer(orderId, req.user?.id);
+    return this.specContractService.listEmployerMentions(orderId);
+  }
+
+  /** 场景四 #10：雇主回复 Mention → 落库并经 webhook 写回 Console Task Comment */
+  @Post(':id/mentions/:mentionId/replies')
+  @UseGuards(AuthGuard)
+  async replyMention(
+    @Param('id') orderId: string,
+    @Param('mentionId') mentionId: string,
+    @Body() body: { text?: unknown; attachments?: unknown },
+    @Req() req: RequestWithUser,
+  ) {
+    await this.assertOrderEmployer(orderId, req.user?.id);
+    return this.specContractService.employerReplyMention(orderId, mentionId, {
+      text: typeof body.text === 'string' ? body.text : '',
+      attachments: Array.isArray(body.attachments) ? body.attachments : [],
+      fromId: req.user?.id ?? null,
+      fromDisplayName: req.user?.displayName ?? req.user?.email ?? null,
+    });
+  }
 }

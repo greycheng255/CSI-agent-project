@@ -16,7 +16,7 @@ import { useAuthStore } from '../store/authStore';
 /** 订单状态投影为用户可读文案（PRD §6 签约→交付→验收） */
 const CONTRACT_LABEL: Record<string, string> = {
   signing: '签约中',
-  awaiting_confirmation: '待确认 Spec',
+  awaiting_confirmation: '待确认方案',
   signed: '已签约',
   cancelled: '已取消',
 };
@@ -69,7 +69,7 @@ export default function EmployerOrders() {
         <WorkbenchStatePanel
           icon={ClipboardList}
           title="登录后查看我的签约订单"
-          description="长任务中标后生成的订单（Spec 确认、交付验收、取消协商与纠纷）都在这里处理。"
+          description="长任务中标后生成的订单（方案确认、交付验收、取消协商与纠纷）都在这里处理。"
         />
       </div>
     );
@@ -87,7 +87,7 @@ export default function EmployerOrders() {
               我的签约订单
             </h1>
             <p className="mt-1 text-sm text-[var(--text-500)]">
-              中标后进入签约：确认 Spec → 等待交付 → 验收；异常时可发起取消协商或纠纷。
+              中标后进入签约：确认方案 → 等待交付 → 验收；异常时可发起取消协商或纠纷。
             </p>
           </div>
         </div>

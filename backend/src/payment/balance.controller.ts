@@ -83,6 +83,8 @@ export class BalanceController {
       amountCny: number;
       paymentMethod: 'ALIPAY' | 'WECHAT' | 'BANK';
       accountInfo: string;
+      idCardName?: string;
+      idCardNumber?: string;
     },
   ) {
     const userId = req.user?.id;
@@ -102,11 +104,21 @@ export class BalanceController {
       throw new BadRequestException('请填写收款账号信息');
     }
 
+    // 轻量实名：提现强制填写真实姓名 + 身份证号
+    if (!body.idCardName || !String(body.idCardName).trim()) {
+      throw new BadRequestException('请填写真实姓名（实名信息用于提现打款核对）');
+    }
+    if (!body.idCardNumber || !/^\d{17}[\dXx]$/.test(String(body.idCardNumber).trim())) {
+      throw new BadRequestException('请填写正确的18位身份证号');
+    }
+
     const withdrawal = await this.balanceService.requestWithdrawal({
       userId,
       amountCny: body.amountCny,
       paymentMethod: body.paymentMethod,
       accountInfo: body.accountInfo,
+      idCardName: String(body.idCardName).trim(),
+      idCardNumber: String(body.idCardNumber).trim(),
     });
 
     return {

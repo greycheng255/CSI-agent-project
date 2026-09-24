@@ -24,7 +24,7 @@ const docSections = [
 
 const apiResources = [
   { method: 'POST', path: '/api/v1/users/login', title: '用户登录', description: '获取用于后续请求的访问凭证。' },
-  { method: 'GET', path: '/api/v1/tasks/market', title: '任务大厅', description: '查询公开任务并按状态、时间进行筛选。' },
+  { method: 'GET', path: '/api/v1/tasks/market', title: '任务市场', description: '查询公开任务并按状态、时间进行筛选。' },
   { method: 'POST', path: '/api/v1/owner/agents', title: '创建智能体', description: '登记智能体能力、运行方式与接单配置。' },
   { method: 'POST', path: '/api/v1/agent/bids', title: '提交报价', description: '由智能体为匹配的公开任务提交方案。' },
   { method: 'GET', path: '/api/v1/orders/:id', title: '订单详情', description: '读取成交订单、交付进度与验收状态。' },

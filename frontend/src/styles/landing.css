@@ -6,31 +6,31 @@
 :root {
   --v3-grad-stats-bg: linear-gradient(180deg, var(--background-50) 0%, var(--brand-50) 100%);
   --v3-grad-how-bg: linear-gradient(180deg, var(--v3-purple-tint) 0%, var(--background-50) 100%);
-  --v3-glow-blue-grad: radial-gradient(circle, rgba(0, 122, 255, 0.15) 0%, rgba(0, 122, 255, 0) 65%);
-  --v3-glow-purple-grad: radial-gradient(circle, rgba(88, 86, 214, 0.13) 0%, rgba(88, 86, 214, 0) 65%);
+  --v3-glow-blue-grad: radial-gradient(circle, rgba(83, 58, 253, 0.10) 0%, rgba(83, 58, 253, 0) 65%);
+  --v3-glow-purple-grad: radial-gradient(circle, rgba(234, 34, 97, 0.08) 0%, rgba(234, 34, 97, 0) 65%);
   --v3-badge-pill-bg: linear-gradient(135deg, var(--v3-badge-tint-blue), var(--v3-badge-tint-purple));
-  --v3-icon-green-bg: rgba(52, 199, 89, 0.12);
-  --v3-icon-blue-bg: rgba(0, 122, 255, 0.12);
-  --v3-icon-purple-bg: rgba(88, 86, 214, 0.12);
-  --v3-icon-purple2-bg: rgba(175, 82, 222, 0.12);
-  --v3-icon-orange-bg: rgba(255, 149, 0, 0.12);
-  --v3-agent-hover-border: rgba(0, 122, 255, 0.3);
-  --v3-status-ring: rgba(52, 199, 89, 0.2);
-  --v3-pulse-ring: rgba(52, 199, 89, 0.18);
-  --v3-pulse-ring-end: rgba(52, 199, 89, 0.05);
+  --v3-icon-green-bg: var(--state-success-surface);
+  --v3-icon-blue-bg: var(--brand-50);
+  --v3-icon-purple-bg: var(--brand-50);
+  --v3-icon-purple2-bg: rgba(234, 34, 97, 0.08);
+  --v3-icon-orange-bg: var(--state-warning-surface);
+  --v3-agent-hover-border: var(--brand-300);
+  --v3-status-ring: rgba(26, 127, 55, 0.18);
+  --v3-pulse-ring: rgba(26, 127, 55, 0.18);
+  --v3-pulse-ring-end: rgba(26, 127, 55, 0.05);
   --v3-feed-header-bg: var(--background-100);
-  --v3-feed-row-hover: rgba(0, 122, 255, 0.04);
+  --v3-feed-row-hover: rgba(83, 58, 253, 0.04);
   --v3-feed-row-text: var(--text-600);
-  --v3-feed-amount: #248a3d;
+  --v3-feed-amount: var(--state-success);
   --v3-badge-green-bg: var(--state-success-surface);
-  --v3-badge-green-text: #248a3d;
-  --v3-badge-orange-bg: rgba(255, 149, 0, 0.12);
-  --v3-badge-orange-text: #9e5700;
-  --v3-badge-blue-bg: rgba(0, 122, 255, 0.1);
+  --v3-badge-green-text: var(--state-success);
+  --v3-badge-orange-bg: var(--state-warning-surface);
+  --v3-badge-orange-text: var(--state-warning);
+  --v3-badge-blue-bg: var(--v3-badge-tint-blue);
   --v3-badge-blue-text: var(--brand-600);
-  --v3-badge-purple-bg: rgba(175, 82, 222, 0.12);
-  --v3-badge-purple-text: #7b3fc4;
-  --v3-cursor-glow: radial-gradient(circle, rgba(0, 122, 255, 0.08) 0%, rgba(88, 86, 214, 0.04) 45%, rgba(0, 122, 255, 0) 70%);
+  --v3-badge-purple-bg: var(--v3-badge-tint-purple);
+  --v3-badge-purple-text: var(--brand-600);
+  --v3-cursor-glow: radial-gradient(circle, rgba(83, 58, 253, 0.06) 0%, rgba(234, 34, 97, 0.03) 45%, rgba(83, 58, 253, 0) 70%);
   --v3-media-glow: inset 0 0 30px rgba(255, 255, 255, 0.15);
 }
 
@@ -40,9 +40,9 @@
   inset: 0;
   z-index: -2;
   background:
-    radial-gradient(ellipse 80% 60% at 15% 10%, rgba(0, 122, 255, 0.06), transparent 60%),
-    radial-gradient(ellipse 70% 50% at 85% 20%, rgba(88, 86, 214, 0.05), transparent 55%),
-    radial-gradient(ellipse 60% 50% at 50% 90%, rgba(175, 82, 222, 0.04), transparent 60%),
+    radial-gradient(ellipse 80% 60% at 15% 10%, rgba(83, 58, 253, 0.05), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 85% 20%, rgba(234, 34, 97, 0.035), transparent 55%),
+    radial-gradient(ellipse 60% 50% at 50% 90%, rgba(102, 94, 253, 0.04), transparent 60%),
     linear-gradient(160deg, var(--background-50) 0%, var(--brand-50) 40%, var(--v3-purple-tint) 70%, var(--background-50) 100%);
   background-size: 200% 200%, 200% 200%, 200% 200%, 400% 400%;
   animation: meshShift 24s ease infinite;
@@ -195,23 +195,20 @@
   align-items: center;
   gap: 0.45rem;
   padding: 0.45rem 0.95rem;
-  border-radius: 980px;
+  border-radius: var(--radius-pill);
   background: var(--v3-badge-pill-bg);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
   border: 1px solid var(--v3-badge-border);
   color: var(--text-800);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.01em;
   margin-bottom: 1.75rem;
-  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), translate 0.3s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
 .badge-pill:hover {
-  transform: scale(1.05);
-  box-shadow: 0 0 20px var(--v3-shadow-blue);
+  transform: scale(1.02);
+  border-color: var(--brand-300);
 }
 
 .badge-pill svg {
@@ -344,13 +341,11 @@
 }
 
 .model-card {
-  background: var(--v3-glass-bg-strong);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--v3-glass-border-strong);
-  border-radius: 1.2rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 2rem;
-  box-shadow: 0 2px 12px var(--v3-shadow-soft);
+  box-shadow: var(--shadow-sm);
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
   position: relative;
   overflow: hidden;
@@ -358,7 +353,7 @@
 
 .model-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 32px var(--v3-shadow-card);
+  box-shadow: var(--shadow-md);
 }
 
 .model-card h3 {
@@ -395,7 +390,7 @@
   font-size: 12px;
   font-weight: 600;
   padding: 0.25rem 0.65rem;
-  border-radius: 980px;
+  border-radius: var(--radius-pill);
   background: var(--v3-tag-bg);
   color: var(--brand-500);
 }
@@ -434,13 +429,11 @@
 }
 
 .feature-card {
-  background: var(--v3-glass-bg);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--v3-glass-border);
-  border-radius: 1.2rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 2rem 1.5rem;
-  box-shadow: 0 2px 12px var(--v3-shadow-soft);
+  box-shadow: var(--shadow-sm);
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
   position: relative;
   overflow: hidden;
@@ -448,7 +441,7 @@
 
 .feature-card:hover {
   transform: translateY(-6px);
-  box-shadow: 0 16px 40px var(--v3-shadow-card);
+  box-shadow: var(--shadow-lg);
 }
 
 .feature-icon {
@@ -500,34 +493,70 @@
   margin: 0;
 }
 
-/* ===== 大数字 ===== */
-.bignum-section {
+/* ===== 交易流程 ===== */
+.flow-section {
   background: var(--brand-50);
   padding: 5rem 0;
-  text-align: center;
 }
 
-.bignum-value {
-  font-size: clamp(64px, 10vw, 120px);
-  font-weight: 800;
-  color: var(--brand-500);
-  letter-spacing: -0.04em;
-  line-height: 1;
+.flow-steps {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+}
+
+.flow-step {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.75rem;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
+}
+
+.flow-step:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+}
+
+.flow-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--brand-500);
+  color: var(--v3-white);
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.flow-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-800);
+  margin: 0 0 0.5rem;
+}
+
+.flow-desc {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-500);
   margin: 0;
 }
 
-.bignum-label {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text-600);
-  margin: 0.5rem 0 1rem;
+@media (min-width: 768px) {
+  .flow-steps {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
-.bignum-sub {
-  font-size: 15px;
-  color: var(--text-500);
-  max-width: 480px;
-  margin: 0 auto;
+@media (min-width: 1024px) {
+  .flow-steps {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 /* ===== 用户评价 ===== */
@@ -538,13 +567,11 @@
 }
 
 .testimonial-card {
-  background: var(--v3-glass-bg-strong);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--v3-glass-border-strong);
-  border-radius: 1.2rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 2rem;
-  box-shadow: 0 2px 12px var(--v3-shadow-soft);
+  box-shadow: var(--shadow-sm);
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
   position: relative;
   overflow: hidden;
@@ -552,7 +579,7 @@
 
 .testimonial-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 32px var(--v3-shadow-card);
+  box-shadow: var(--shadow-md);
 }
 
 .testimonial-quote {
@@ -582,6 +609,11 @@
   flex-shrink: 0;
 }
 
+.testimonial-avatar svg {
+  width: 20px;
+  height: 20px;
+}
+
 .testimonial-name {
   font-size: 15px;
   font-weight: 700;
@@ -604,13 +636,11 @@
 
 .step-card {
   position: relative;
-  background: var(--v3-glass-bg-strong);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
-  border: 1px solid var(--v3-glass-border-strong);
-  border-radius: 1.2rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 2.5rem 2rem;
-  box-shadow: 0 2px 12px var(--v3-shadow-soft);
+  box-shadow: var(--shadow-sm);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
   overflow: hidden;
   transform-style: preserve-3d;
@@ -628,7 +658,7 @@
 
 .step-card:hover {
   transform: translateY(-6px) scale(1.02);
-  box-shadow: 0 16px 40px var(--v3-shadow-card);
+  box-shadow: var(--shadow-lg);
 }
 
 .step-card:hover::before {
@@ -761,7 +791,7 @@
 .feed-container {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 1.2rem;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
 }
@@ -987,17 +1017,175 @@
   text-decoration: underline;
 }
 
-/* ===== 滚动 reveal ===== */
-.reveal {
-  opacity: 0;
-  transform: translateY(28px) scale(0.98);
-  transition: opacity 0.7s ease, transform 0.7s ease;
+/* ===== CTA 醒目带（Hero 右侧行动面板） ===== */
+.cta-cs--band {
+  padding: 72px 1.25rem;
+  background: var(--v3-grad-brand);
 }
 
-.reveal.in-view {
-  opacity: 1;
-  transform: translateY(0) scale(1);
+.cta-cs--band::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(255, 255, 255, 0.18), transparent 62%);
+  pointer-events: none;
 }
+
+.cta-cs--band .badge-pill {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.34);
+  color: #fff;
+}
+
+.cta-cs--band .cta-h2 {
+  color: #fff;
+}
+
+.cta-cs--band .cta-sub {
+  color: rgba(255, 255, 255, 0.88);
+  margin-bottom: 2rem;
+}
+
+.cta-cs--band .cta-contact {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.cta-cs--band .cta-contact a {
+  color: #fff;
+}
+
+.btn-band-primary {
+  position: relative;
+  overflow: hidden;
+  background: var(--background-50);
+  color: var(--brand-600);
+  box-shadow: 0 1px 1px rgba(13, 37, 61, 0.06), 0 6px 16px rgba(13, 37, 61, 0.18);
+}
+
+.btn-band-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(13, 37, 61, 0.08), 0 10px 24px rgba(13, 37, 61, 0.22);
+}
+
+.btn-band-primary:active {
+  transform: translateY(0);
+}
+
+.btn-band-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 1.25rem;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: var(--tracking-button);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.btn-band-ghost:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.72);
+  transform: translateY(-1px);
+}
+
+.btn-band-ghost:active {
+  transform: translateY(0);
+}
+
+/* ===== Hero 与 CTA 并列（左：主信息 / 右：行动面板） ===== */
+.hero-split {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  align-items: center;
+  gap: 3.5rem;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.hero-split .hero-content {
+  text-align: left;
+  max-width: none;
+  margin: 0;
+}
+
+.hero-split .hero-cta,
+.hero-split .hero-trust {
+  justify-content: flex-start;
+}
+
+.hero-split .cta-cs--band {
+  padding: 2.5rem 2.25rem;
+  border-radius: var(--radius-xl);
+  text-align: left;
+  box-shadow: var(--shadow-xl);
+}
+
+.hero-split .cta-content {
+  max-width: none;
+  margin: 0;
+}
+
+.hero-split .cta-h2 {
+  font-size: clamp(24px, 2.4vw, 34px);
+  margin-bottom: 0.75rem;
+}
+
+.hero-split .cta-sub {
+  font-size: 15px;
+  margin-bottom: 1.5rem;
+}
+
+.hero-split .cta-buttons {
+  justify-content: flex-start;
+}
+
+.hero-split .cta-contact {
+  margin-top: 1.5rem;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 0.4rem;
+  font-size: 13px;
+}
+
+@media (max-width: 1024px) {
+  .hero-split {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2.25rem;
+  }
+
+  .hero-split .hero-content {
+    text-align: center;
+  }
+
+  .hero-split .hero-cta,
+  .hero-split .hero-trust,
+  .hero-split .cta-buttons,
+  .hero-split .cta-contact {
+    justify-content: center;
+    align-items: center;
+  }
+
+  .hero-split .cta-cs--band {
+    padding: 2rem 1.5rem;
+    border-radius: var(--radius-lg);
+    text-align: center;
+  }
+}
+
+/* ===== 滚动 reveal =====
+ * .reveal / .reveal.in-view 的规则已上移到 styles/animations.css（全局），
+ * 使动画调参台 /anim-tuning 也能预览到同一套效果。 */
 
 /* ===== 卡片聚光灯 ===== */
 .step-card,
@@ -1016,7 +1204,7 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: radial-gradient(300px circle at var(--mx) var(--my), rgba(0, 122, 255, 0.07), transparent 45%);
+  background: radial-gradient(300px circle at var(--mx) var(--my), rgba(83, 58, 253, 0.06), transparent 45%);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.35s ease;
@@ -1186,15 +1374,14 @@
   .cta-cs {
     padding: 80px 1.25rem;
   }
+
+  .cta-cs--band {
+    padding: 56px 1.25rem;
+  }
 }
 
 /* ===== 降级：减少动态 ===== */
 @media (prefers-reduced-motion: reduce) {
-  .reveal {
-    opacity: 1 !important;
-    transform: none !important;
-  }
-
   .feed-row {
     opacity: 1 !important;
     transform: none !important;

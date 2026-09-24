@@ -4,6 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { API_BASE } from '../config/api';
 import { CircleAlert, Loader2, Plus, Pencil, Ban, Package } from 'lucide-react';
 import { WorkbenchPageHeader } from '../components/workbench/WorkbenchPrimitives';
+import { useConfirm } from '../components/ui/confirm-context';
 
 interface PlanModel {
   model_id: string;
@@ -102,6 +103,8 @@ export default function AdminEntitlement() {
   const [actionPlan, setActionPlan] = useState('');
   const [usageWorkspace, setUsageWorkspace] = useState('');
   const [usageReport, setUsageReport] = useState<UsageReport | null>(null);
+
+  const confirm = useConfirm();
 
   const authHeaders = { Authorization: `Bearer ${adminToken}` };
 
@@ -222,7 +225,13 @@ export default function AdminEntitlement() {
   };
 
   const handleDeprecate = async (plan: Plan) => {
-    if (!window.confirm(`确认停用套餐「${plan.name}」？存量订阅保留至周期结束。`)) return;
+    const { confirmed } = await confirm({
+      title: '停用套餐',
+      description: `确认停用套餐「${plan.name}」？存量订阅保留至周期结束。`,
+      tone: 'danger',
+      confirmText: '停用套餐',
+    });
+    if (!confirmed) return;
     try {
       const res = await fetch(
         `${API_BASE}/api/v1/admin/entitlement/plans/${plan.id}/deprecate`,
@@ -252,12 +261,18 @@ export default function AdminEntitlement() {
     }
     let planCode = actionPlan || undefined;
     if (action !== 'activate' && !planCode) {
-      const input = window.prompt(
-        `目标套餐编码（升级即时生效；降级下周期生效）：`,
-        sub?.plan_code ?? '',
-      );
-      if (!input) return;
-      planCode = input.trim();
+      const result = await confirm({
+        title: '选择目标套餐',
+        description: '升级即时生效；降级下周期生效。',
+        confirmText: '确定',
+        requireReason: {
+          label: '目标套餐编码',
+          placeholder: '如 pro-monthly',
+          defaultValue: sub?.plan_code ?? '',
+        },
+      });
+      if (!result.confirmed || !result.reason) return;
+      planCode = result.reason.trim();
     }
     if (action === 'activate') {
       if (!(await postJson(`${API_BASE}/api/v1/admin/entitlement/subscriptions/activate`, { org_id: orgId, plan_code: planCode }))) {
@@ -279,11 +294,18 @@ export default function AdminEntitlement() {
   };
 
   const handleHoldSettle = async (hold: CreditHold) => {
-    const actual = window.prompt(
-      `结算冻结单 ${hold.task_id}（预扣 ${hold.estimated_credits} credits）\n实际扣费 credits：`,
-      String(hold.estimated_credits),
-    );
-    if (actual === null) return;
+    const result = await confirm({
+      title: '结算冻结单',
+      description: `${hold.task_id} · 预扣 ${hold.estimated_credits} credits`,
+      confirmText: '结算',
+      requireReason: {
+        label: '实际扣费 credits',
+        placeholder: '请输入数字',
+        defaultValue: String(hold.estimated_credits),
+      },
+    });
+    if (!result.confirmed) return;
+    const actual = result.reason ?? '';
     const ok = await postJson(
       `${API_BASE}/api/v1/admin/entitlement/credit-holds/${hold.task_id}/settle`,
       { actual_credits: Number(actual) || 0 },
@@ -297,7 +319,13 @@ export default function AdminEntitlement() {
   };
 
   const handleHoldRefund = async (hold: CreditHold) => {
-    if (!window.confirm(`确认退款释放冻结单 ${hold.task_id}（${hold.estimated_credits} credits）？`)) return;
+    const { confirmed } = await confirm({
+      title: '退款释放冻结单',
+      description: `确认退款释放冻结单 ${hold.task_id}（${hold.estimated_credits} credits）？`,
+      tone: 'danger',
+      confirmText: '确认退款',
+    });
+    if (!confirmed) return;
     const ok = await postJson(
       `${API_BASE}/api/v1/admin/entitlement/credit-holds/${hold.task_id}/refund`,
     );

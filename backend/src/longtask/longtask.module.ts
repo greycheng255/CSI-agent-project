@@ -24,6 +24,7 @@ import { CancelSkeletonService } from './marketplace-orders/cancel-skeleton.serv
 import { MarketplaceDelivery } from './marketplace-orders/delivery.entity';
 import { DeliveryContractService } from './marketplace-orders/delivery-contract.service';
 import { MarketplaceOrder } from './marketplace-orders/marketplace-order.entity';
+import { EmployerMention } from './marketplace-orders/employer-mention.entity';
 import { MarketplaceOrdersService } from './marketplace-orders/marketplace-orders.service';
 import { EmployerMarketplaceOrdersController } from './marketplace-orders/employer-marketplace-orders.controller';
 import { OwnerMarketplaceOrdersController } from './marketplace-orders/owner-marketplace-orders.controller';
@@ -40,8 +41,11 @@ import { OpportunityPushService } from './marketplace-tasks/opportunity-push.ser
 import { Workspace } from './workspaces/workspace.entity';
 import { WorkspacesController } from './workspaces/workspaces.controller';
 import { WorkspacesService } from './workspaces/workspaces.service';
+import { WorkspaceCreditCron } from './workspaces/workspace-credit.cron';
+import { WorkspaceCreditService } from './workspaces/workspace-credit.service';
 import { WorkspaceSyncService } from './workspaces/workspace-sync.service';
 import { WorkspaceWebhookController } from './workspaces/workspace-webhook.controller';
+import { WorkspaceRecommendService } from './marketplace-tasks/workspace-recommend.service';
 import { AuthModule } from '../auth/auth.module';
 import { PaymentModule } from '../payment/payment.module';
 import { WechatModule } from '../wechat/wechat.module';
@@ -67,6 +71,7 @@ import { WechatModule } from '../wechat/wechat.module';
       MarketplaceSpecChange,
       MarketplaceSettlement,
       MarketplaceDispute,
+      EmployerMention,
       WebhookOutbox,
       WebhookInboundEvent,
       HmacNonce,
@@ -85,8 +90,11 @@ import { WechatModule } from '../wechat/wechat.module';
   providers: [
     WorkspacesService,
     WorkspaceSyncService,
+    WorkspaceCreditService,
+    WorkspaceCreditCron,
     MarketplaceTasksService,
     OpportunityPushService,
+    WorkspaceRecommendService,
     MarketplaceBidsService,
     SelectionService,
     MarketplaceOrdersService,

@@ -70,6 +70,54 @@ describe('NotificationDeliveryService（业务通知入口 → enqueue）', () =
     expect(mockDispatcher.enqueue).not.toHaveBeenCalled();
   });
 
+  it('notifyDeliveryReminder → 按催办点位 enqueue 普通模板', async () => {
+    await service.notifyDeliveryReminder('employer-1', {
+      orderId: 'o1', submissionSeq: 1, submissionId: 'd1', remainingDays: 9, day: 5,
+    });
+    expect(mockDispatcher.enqueue).toHaveBeenCalledWith({
+      noKey: 'delivery.reminder:o1:1:5',
+      userId: 'employer-1',
+      eventType: 'delivery.reminder',
+      templateId: (process.env.WECHAT_TMPL_DELIVERY_REMINDER ?? null),
+      data: expect.objectContaining({ orderId: 'o1', day: 5, urgent: false }),
+    });
+  });
+
+  it('notifyDeliveryReminder 第 13 天 → 紧急模板', async () => {
+    await service.notifyDeliveryReminder('employer-1', {
+      orderId: 'o1', submissionSeq: 1, submissionId: 'd1', remainingDays: 1, day: 13,
+    });
+    expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        noKey: 'delivery.reminder:o1:1:13',
+        templateId: (process.env.WECHAT_TMPL_DELIVERY_REMINDER_URGENT ?? null),
+      }),
+    );
+  });
+
+  it('第 13 天紧急模板未配置 → 降级复用普通催办模板（P2b）', async () => {
+    const prevNormal = process.env.WECHAT_TMPL_DELIVERY_REMINDER;
+    const prevUrgent = process.env.WECHAT_TMPL_DELIVERY_REMINDER_URGENT;
+    process.env.WECHAT_TMPL_DELIVERY_REMINDER = 'NORMAL_TMPL';
+    delete process.env.WECHAT_TMPL_DELIVERY_REMINDER_URGENT;
+    try {
+      await service.notifyDeliveryReminder('employer-1', {
+        orderId: 'o1', submissionSeq: 1, submissionId: 'd1', remainingDays: 1, day: 13,
+      });
+      expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          noKey: 'delivery.reminder:o1:1:13',
+          templateId: 'NORMAL_TMPL',
+        }),
+      );
+    } finally {
+      if (prevNormal === undefined) delete process.env.WECHAT_TMPL_DELIVERY_REMINDER;
+      else process.env.WECHAT_TMPL_DELIVERY_REMINDER = prevNormal;
+      if (prevUrgent === undefined) delete process.env.WECHAT_TMPL_DELIVERY_REMINDER_URGENT;
+      else process.env.WECHAT_TMPL_DELIVERY_REMINDER_URGENT = prevUrgent;
+    }
+  });
+
   it('bindOpenid → 写回 user.wechatOpenid', async () => {
     const user = { id: 'user-1', wechatOpenid: null };
     mockUsersRepo.findOne.mockResolvedValue(user);

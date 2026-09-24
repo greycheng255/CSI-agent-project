@@ -55,6 +55,8 @@ import { EntitlementModule } from './entitlement/entitlement.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { LlmProxyModule } from './llm-proxy/llm-proxy.module';
 import { WechatModule } from './wechat/wechat.module';
+import { LlmModelPrice } from './llm-proxy/llm-model-price.entity';
+import { DlqAdminModule } from './admin/dlq-admin.module';
 import { GatewayApiKey } from './gateway/gateway-key.entity';
 import {
   EntitlementCreditHold,
@@ -73,6 +75,7 @@ import { MarketplaceTask } from './longtask/marketplace-tasks/marketplace-task.e
 import { OpportunityDispatch } from './longtask/marketplace-tasks/opportunity-dispatch.entity';
 import { MarketplaceBid } from './longtask/marketplace-bids/marketplace-bid.entity';
 import { MarketplaceOrder } from './longtask/marketplace-orders/marketplace-order.entity';
+import { EmployerMention } from './longtask/marketplace-orders/employer-mention.entity';
 import { MarketplaceCancelRequest } from './longtask/marketplace-orders/cancel-request.entity';
 import { MarketplaceDelivery } from './longtask/marketplace-orders/delivery.entity';
 import { MarketplaceRevisionNegotiation } from './longtask/marketplace-orders/negotiation.entity';
@@ -85,6 +88,7 @@ import { User } from './users/entities/user.entity';
 import { HmacNonce } from './longtask/contract/hmac-nonce.entity';
 import { NotificationOutbox } from './wechat/notification-outbox.entity';
 import { UserLlmConfig } from './entitlement/user-llm-config.entity';
+import { CsiOrgBinding } from './entitlement/csi-org-binding.entity';
 import { Agent } from './agents/entities/agent.entity';
 import { Task } from './tasks/entities/task.entity';
 import { Bid } from './bids/entities/bid.entity';
@@ -217,6 +221,7 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
         OpportunityDispatch,
         MarketplaceBid,
         MarketplaceOrder,
+        EmployerMention,
         MarketplaceCancelRequest,
         MarketplaceDelivery,
         MarketplaceRevisionNegotiation,
@@ -234,8 +239,12 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
         EntitlementCreditHold,
         EntitlementUsageRecord,
         EntitlementPaymentOrder,
+        // Console workspace → org 绑定（权威源，O1/O2）
+        CsiOrgBinding,
         // 业务通知（微信渠道）
         NotificationOutbox,
+        // LLM 计费单价（外置 DB）
+        LlmModelPrice,
         // 网关 workspace key 签发/轮换/吊销（K1-K4）
         GatewayApiKey,
       ],
@@ -263,6 +272,7 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
     GatewayModule, // 网关 workspace key 签发/轮换/吊销（K1-K4）
     LlmProxyModule, // AI 网关直连代理（BYOK 按用户配置转发并计量）
     WechatModule, // 微信公众号通知交付
+    DlqAdminModule, // DLQ 死信运维管理
   ],
   controllers: [AppController],
   providers: [AppService, DatabaseWarmupService],

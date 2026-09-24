@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Bot, ChevronRight, CircleAlert, Inbox, Loader2, PackageCheck } from 'lucide-react';
 import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
@@ -33,7 +33,7 @@ function ownerStatusView(status: OrderStatus) {
         label: '待雇主支付',
         next: '等待雇主支付后才会进入执行',
         badge:
-          'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border border-[#f3d79a]',
+          'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border border-[color:var(--state-warning-border)]',
       };
     case 'IN_PROGRESS':
       return {
@@ -45,7 +45,7 @@ function ownerStatusView(status: OrderStatus) {
       return {
         label: '待雇主审核',
         next: '资金仍在托管中，等待雇主确认放款',
-        badge: 'bg-[#f1f0ff] text-[#514fc4] border border-[#d9d7ff]',
+        badge: 'bg-[var(--brand-50)] text-[var(--brand-600)] border border-[color:var(--brand-200)]',
       };
     case 'ACCEPTED':
       return {
@@ -57,19 +57,19 @@ function ownerStatusView(status: OrderStatus) {
       return {
         label: '放款完成（已收款）',
         next: '订单已完成',
-        badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]',
+        badge: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[color:var(--state-success-border)]',
       };
     case 'REJECTED':
       return {
         label: '雇主已拒绝验收',
         next: '下一步：等待平台介入处理',
-        badge: 'bg-[var(--state-error-surface)] text-[var(--state-error)] border border-[#ffc6c1]',
+        badge: 'bg-[var(--state-error-surface)] text-[var(--state-error)] border border-[color:var(--state-error-border)]',
       };
     case 'ARBITRATING':
       return {
         label: '争议仲裁中',
         next: '平台介入处理中，资金暂不放款',
-        badge: 'bg-[var(--state-error-surface)] text-[var(--state-error)] border border-[#ffc6c1]',
+        badge: 'bg-[var(--state-error-surface)] text-[var(--state-error)] border border-[color:var(--state-error-border)]',
       };
     case 'REFUNDED':
       return {

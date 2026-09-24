@@ -45,7 +45,7 @@ function stageView(order: OwnerLongtaskOrder): {
         }
       : {
           label: '等待雇主支付',
-          cls: 'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border border-[#f3d79a]',
+          cls: 'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border border-[color:var(--state-warning-border)]',
           hint: '雇主尚未托管支付订单金额，支付后即可安排执行。',
           canDeliver: false,
         };
@@ -62,7 +62,7 @@ function stageView(order: OwnerLongtaskOrder): {
     if (order.deliveryStatus === 'in_accept') {
       return {
         label: '待雇主验收',
-        cls: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[#bde9c9]',
+        cls: 'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[color:var(--state-success-border)]',
         hint: '交付物已提交，雇主有 14 天验收窗口（超时自动验收）。',
         canDeliver: false,
       };
@@ -70,7 +70,7 @@ function stageView(order: OwnerLongtaskOrder): {
     if (order.deliveryStatus === 'revising') {
       return {
         label: '修订中',
-        cls: 'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border border-[#f3d79a]',
+        cls: 'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border border-[color:var(--state-warning-border)]',
         hint: '雇主已要求修订，修订完成后重新提交交付物。',
         canDeliver: true,
       };
@@ -225,13 +225,13 @@ export default function OwnerLongtaskOrders() {
         <WorkbenchStatePanel
           icon={Inbox}
           title="暂无中标订单"
-          description="参与任务大厅竞标并被雇主选中后，订单会出现在这里。"
+          description="参与任务市场竞标并被雇主选中后，订单会出现在这里。"
           action={
             <Link
               to="/longtask/workspaces"
               className="text-sm font-medium text-[var(--brand-600)] hover:underline"
             >
-              去任务大厅看商机
+              去任务市场看商机
             </Link>
           }
         />

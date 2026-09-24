@@ -18,6 +18,12 @@ describe('MarketplaceTasksController 雇主选标/驳回/取消（PRD §5.6.2/§
   const ordersService = {
     listByTaskIds: jest.fn().mockResolvedValue([]),
   };
+  const opportunityPushService = {
+    inviteToTask: jest.fn(),
+  };
+  const recommendService = {
+    recommendForTask: jest.fn(),
+  };
 
   let controller: MarketplaceTasksController;
   beforeEach(() => {
@@ -28,6 +34,8 @@ describe('MarketplaceTasksController 雇主选标/驳回/取消（PRD §5.6.2/§
       bidsService as never,
       selectionService as never,
       ordersService as never,
+      opportunityPushService as never,
+      recommendService as never,
     );
   });
 
@@ -125,5 +133,54 @@ describe('MarketplaceTasksController 雇主选标/驳回/取消（PRD §5.6.2/§
       status: 403,
     });
     expect(tasksService.cancel).not.toHaveBeenCalled();
+  });
+
+  it('任务发布者可读平台推荐工作室（limit 透传）', async () => {
+    tasksService.claimEmployer.mockResolvedValueOnce(task);
+    recommendService.recommendForTask.mockResolvedValueOnce({ items: [] });
+    await controller.recommendedWorkspaces('task-1', '3', reqEmployer);
+    expect(recommendService.recommendForTask).toHaveBeenCalledWith(task, 3);
+  });
+
+  it('推荐列表 limit 非法 → 回退默认值（undefined）', async () => {
+    tasksService.claimEmployer.mockResolvedValueOnce(task);
+    recommendService.recommendForTask.mockResolvedValueOnce({ items: [] });
+    await controller.recommendedWorkspaces('task-1', 'abc', reqEmployer);
+    expect(recommendService.recommendForTask).toHaveBeenCalledWith(task, undefined);
+  });
+
+  it('非任务发布者读推荐列表 → 403，且不计算推荐', async () => {
+    tasksService.claimEmployer.mockRejectedValueOnce(
+      new ContractError(403, 'CONFLICT_DUPLICATE', 'forbidden'),
+    );
+    await expect(
+      controller.recommendedWorkspaces('task-1', undefined, reqOther),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(recommendService.recommendForTask).not.toHaveBeenCalled();
+  });
+
+  it('任务发布者邀请推荐工作室 → 委托 OpportunityPushService', async () => {
+    tasksService.claimEmployer.mockResolvedValueOnce(task);
+    opportunityPushService.inviteToTask.mockResolvedValueOnce({
+      invited: true,
+      alreadyInvited: false,
+      opportunityId: 'log-1',
+      workspaceId: 'ws-1',
+    });
+    const result = await controller.inviteWorkspace(
+      'task-1',
+      { workspaceId: 'ws-1' },
+      reqEmployer,
+    );
+    expect(opportunityPushService.inviteToTask).toHaveBeenCalledWith(task, 'ws-1');
+    expect(result).toMatchObject({ invited: true, alreadyInvited: false });
+  });
+
+  it('邀请缺少 workspaceId → 400，且不触发投递', async () => {
+    tasksService.claimEmployer.mockResolvedValueOnce(task);
+    await expect(
+      controller.inviteWorkspace('task-1', {}, reqEmployer),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(opportunityPushService.inviteToTask).not.toHaveBeenCalled();
   });
 });

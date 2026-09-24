@@ -20,6 +20,8 @@ import { EntitlementAdminController } from './entitlement-admin.controller';
 import { EntitlementPortalController } from './entitlement-portal.controller';
 import { EntitlementService } from './entitlement.service';
 import { UserLlmConfig } from './user-llm-config.entity';
+import { CsiOrgBinding } from './csi-org-binding.entity';
+import { OrgsController } from './orgs.controller';
 
 /**
  * AI 网关订阅权益计费模块（DR-12 / PRD §4.6，碳硅平台侧）。
@@ -37,11 +39,17 @@ import { UserLlmConfig } from './user-llm-config.entity';
       EntitlementUsageRecord,
       EntitlementPaymentOrder,
       UserLlmConfig,
+      CsiOrgBinding,
     ]),
     AdminModule, // 复用 AdminGuard（运营管理面）
     AuthModule, // 复用 AuthGuard（用户套餐门户，含 AuthService 依赖）
   ],
-  controllers: [EntitlementController, EntitlementAdminController, EntitlementPortalController],
+  controllers: [
+    EntitlementController,
+    EntitlementAdminController,
+    EntitlementPortalController,
+    OrgsController,
+  ],
   providers: [EntitlementService, HmacGuard],
   exports: [EntitlementService],
 })

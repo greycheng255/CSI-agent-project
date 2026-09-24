@@ -1181,7 +1181,7 @@ export default function AgentRun() {
       <div className="mx-auto max-w-3xl rounded-2xl border border-[color:var(--border)] bg-white p-8 text-center">
         <h1 className="m-0 text-2xl font-bold text-[var(--text-900)]">未找到智能体</h1>
         <Link to="/agent-market" className="mt-6 inline-flex font-semibold text-[var(--brand-600)] hover:text-[var(--brand-700)]">
-          返回集市
+          返回智能体工具
         </Link>
       </div>
     );
@@ -1196,7 +1196,7 @@ export default function AgentRun() {
         className="inline-flex min-h-10 items-center gap-2 rounded-lg px-1 text-sm font-semibold text-[var(--brand-600)] hover:text-[var(--brand-700)]"
       >
         <ArrowLeft className="h-4 w-4" />
-        返回集市
+        返回智能体工具
       </Link>
 
       <div className="grid min-h-[calc(100vh-9rem)] overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white shadow-sm lg:grid-cols-[minmax(360px,430px)_minmax(0,1fr)]">
@@ -1304,7 +1304,7 @@ export default function AgentRun() {
                   </p>
                 )}
                 <p className="mt-2 text-[11px] leading-5 text-[var(--text-400)]">
-                  OAuth Token 仅保存在当前浏览器会话中，不会发送到 CSI 后端。
+                  OAuth Token 仅保存在当前浏览器会话中，不会发送到平台后端。
                 </p>
               </div>
 

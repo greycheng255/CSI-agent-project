@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -11,6 +12,8 @@ import { MarketplaceTasksService } from './marketplace-tasks.service';
 import { MarketplaceBidsService } from '../marketplace-bids/marketplace-bids.service';
 import { SelectionService } from '../marketplace-bids/selection.service';
 import { MarketplaceOrdersService } from '../marketplace-orders/marketplace-orders.service';
+import { OpportunityPushService } from './opportunity-push.service';
+import { WorkspaceRecommendService } from './workspace-recommend.service';
 import { AuthGuard } from '../../auth/auth.guard';
 import type { RequestWithUser } from '../../auth/auth.guard';
 import {
@@ -30,6 +33,8 @@ export class MarketplaceTasksController {
     private readonly bidsService: MarketplaceBidsService,
     private readonly selectionService: SelectionService,
     private readonly ordersService: MarketplaceOrdersService,
+    private readonly opportunityPushService: OpportunityPushService,
+    private readonly recommendService: WorkspaceRecommendService,
   ) {}
 
   /** 发布者即雇主：employer_user_id 一律取登录态，忽略 body 传入（防伪造/防无主任务） */
@@ -192,5 +197,45 @@ export class MarketplaceTasksController {
   @Get(':id/bids')
   listBids(@Param('id') id: string) {
     return this.bidsService.rank(id);
+  }
+
+  /**
+   * 平台推荐工作室（任务创建/发布后展示）：
+   * 以信用数据（平台自动计算）+ 类目/标签匹配排序，排除已投标与雇主自有工作室。
+   * 仅任务雇主本人可读（推荐依据含平台信用数据，不对第三方开放）。
+   */
+  @Get(':id/recommended-workspaces')
+  @UseGuards(AuthGuard)
+  async recommendedWorkspaces(
+    @Param('id') id: string,
+    @Query('limit') limit: string | undefined,
+    @Req() req: RequestWithUser,
+  ) {
+    const task = await this.assertEmployerOwner(id, req.user?.id);
+    const parsed =
+      typeof limit === 'string' && limit.trim() ? Number(limit) : undefined;
+    return this.recommendService.recommendForTask(
+      task,
+      Number.isFinite(parsed) ? parsed : undefined,
+    );
+  }
+
+  /** 雇主邀请推荐工作室参与竞标（复用 opportunity.pushed 链路，同轮幂等） */
+  @Post(':id/invite-workspace')
+  @UseGuards(AuthGuard)
+  async inviteWorkspace(
+    @Param('id') id: string,
+    @Body() body: { workspaceId?: unknown },
+    @Req() req: RequestWithUser,
+  ) {
+    const task = await this.assertEmployerOwner(id, req.user?.id);
+    if (typeof body.workspaceId !== 'string' || !body.workspaceId) {
+      throw new ContractError(
+        400,
+        CONTRACT_ERROR_CODE.VALIDATION_INVALID_PAYLOAD,
+        'workspaceId is required',
+      );
+    }
+    return this.opportunityPushService.inviteToTask(task, body.workspaceId);
   }
 }

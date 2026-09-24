@@ -1,0 +1,54 @@
+# Casdoor SSO (docker 容器运行于宿主机 122.51.51.177:28000)
+# 流量链路: DNS(122.51.51.177:443) -> svclb-traefik -> traefik -> Ingress -> Service(无selector) -> Endpoints(节点IP:28000) -> casdoor 容器
+apiVersion: v1
+kind: Service
+metadata:
+  name: casdoor
+  namespace: default
+  labels:
+    app: casdoor
+spec:
+  # 无 selector，后端地址由同名 Endpoints 手工定义（指向宿主机 docker 容器）
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 28000
+      protocol: TCP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: casdoor
+  namespace: default
+subsets:
+  - addresses:
+      - ip: 172.17.0.14  # k3s 节点内网 IP（casdoor 容器映射宿主机 28000）
+    ports:
+      - name: http
+        port: 28000
+        protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: casdoor
+  namespace: default
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - casdoor.csi.shopping
+      secretName: casdoor-tls
+  rules:
+    - host: casdoor.csi.shopping
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: casdoor
+                port:
+                  number: 8000

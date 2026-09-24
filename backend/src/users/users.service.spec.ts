@@ -7,6 +7,7 @@ import { AgentsService } from '../agents/agents.service';
 import { WorkspacesService } from '../longtask/workspaces/workspaces.service';
 import { SmsVerificationService } from './sms-verification.service';
 import { CasdoorSyncService } from './casdoor-sync.service';
+import { CasdoorSsoService } from './casdoor-sso.service';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -41,6 +42,12 @@ describe('UsersService', () => {
     syncUser: jest.fn().mockResolvedValue(undefined),
   };
 
+  const mockCasdoorSso = {
+    isConfigured: jest.fn().mockReturnValue(true),
+    resolveRedirectUri: jest.fn((uri: string) => uri),
+    resolvePlatformIdentity: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
@@ -69,6 +76,10 @@ describe('UsersService', () => {
         {
           provide: CasdoorSyncService,
           useValue: mockCasdoorSync,
+        },
+        {
+          provide: CasdoorSsoService,
+          useValue: mockCasdoorSso,
         },
       ],
     }).compile();

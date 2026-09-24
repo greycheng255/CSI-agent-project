@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { MarketplaceTasksService } from './marketplace-tasks.service';
 import { MarketplaceTask } from './marketplace-task.entity';
+import { OpportunityPushService } from './opportunity-push.service';
 import { ContractError } from '../contract/errors';
 
 describe('MarketplaceTasksService（T2：7 态状态机 + 席位/轮次字段）', () => {
@@ -14,12 +15,17 @@ describe('MarketplaceTasksService（T2：7 态状态机 + 席位/轮次字段）
     create: jest.fn(),
   };
 
+  const mockOpportunityPush = {
+    pushTask: jest.fn().mockResolvedValue({ pushed: 0 }),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MarketplaceTasksService,
         { provide: getRepositoryToken(MarketplaceTask), useValue: mockRepo },
+        { provide: OpportunityPushService, useValue: mockOpportunityPush },
       ],
     }).compile();
     service = module.get(MarketplaceTasksService);
@@ -27,7 +33,7 @@ describe('MarketplaceTasksService（T2：7 态状态机 + 席位/轮次字段）
 
   function task(overrides: Partial<MarketplaceTask> = {}) {
     return {
-      id: 't1',
+      id: '11111111-1111-4111-8111-111111111111',
       title: '任务',
       status: 'draft',
       seatLimit: 20,
@@ -59,7 +65,7 @@ describe('MarketplaceTasksService（T2：7 态状态机 + 席位/轮次字段）
   it('发布：draft→open 并写入 30 天有效期', async () => {
     mockRepo.findOne.mockResolvedValueOnce(task());
     mockRepo.save.mockImplementation((v) => v);
-    const t = await service.publish('t1');
+    const t = await service.publish('11111111-1111-4111-8111-111111111111');
     expect(t.status).toBe('open');
     const days = (t.expiresAt!.getTime() - Date.now()) / 86_400_000;
     expect(days).toBeGreaterThan(29);
@@ -68,7 +74,7 @@ describe('MarketplaceTasksService（T2：7 态状态机 + 席位/轮次字段）
 
   it('非法转移（closed 发布）→ 422 STATE_INVALID_TRANSITION', async () => {
     mockRepo.findOne.mockResolvedValueOnce(task({ status: 'closed' }));
-    await expect(service.publish('t1')).rejects.toMatchObject({
+    await expect(service.publish('11111111-1111-4111-8111-111111111111')).rejects.toMatchObject({
       status: 422,
     });
   });
@@ -76,7 +82,7 @@ describe('MarketplaceTasksService（T2：7 态状态机 + 席位/轮次字段）
   it('选标：open→selected', async () => {
     mockRepo.findOne.mockResolvedValueOnce(task({ status: 'open' }));
     mockRepo.save.mockImplementation((v) => v);
-    const t = await service.select('t1');
+    const t = await service.select('11111111-1111-4111-8111-111111111111');
     expect(t.status).toBe('selected');
   });
 
@@ -91,7 +97,7 @@ describe('MarketplaceTasksService（T2：7 态状态机 + 席位/轮次字段）
       }),
     );
     mockRepo.save.mockImplementation((v) => v);
-    const t = await service.reopenBidding('t1');
+    const t = await service.reopenBidding('11111111-1111-4111-8111-111111111111');
     expect(t.status).toBe('open');
     expect(t.bidRound).toBe(3);
     expect(t.seatTaken).toBe(0);
@@ -103,13 +109,13 @@ describe('MarketplaceTasksService（T2：7 态状态机 + 席位/轮次字段）
   it('重开竞标：selected（Spec 超时重开）也可回 open', async () => {
     mockRepo.findOne.mockResolvedValueOnce(task({ status: 'selected' }));
     mockRepo.save.mockImplementation((v) => v);
-    const t = await service.reopenBidding('t1');
+    const t = await service.reopenBidding('11111111-1111-4111-8111-111111111111');
     expect(t.status).toBe('open');
   });
 
   it('重开竞标：终态不可重开', async () => {
     mockRepo.findOne.mockResolvedValueOnce(task({ status: 'expired' }));
-    await expect(service.reopenBidding('t1')).rejects.toMatchObject({
+    await expect(service.reopenBidding('11111111-1111-4111-8111-111111111111')).rejects.toMatchObject({
       status: 422,
     });
   });
@@ -117,30 +123,38 @@ describe('MarketplaceTasksService（T2：7 态状态机 + 席位/轮次字段）
   it('自然过期：open→expired', async () => {
     mockRepo.findOne.mockResolvedValueOnce(task({ status: 'open' }));
     mockRepo.save.mockImplementation((v) => v);
-    const t = await service.expire('t1');
+    const t = await service.expire('11111111-1111-4111-8111-111111111111');
     expect(t.status).toBe('expired');
   });
 
   it('关闭 / 完成 / 取消 终态转移', async () => {
     mockRepo.findOne.mockResolvedValueOnce(task({ status: 'open' }));
     mockRepo.save.mockImplementation((v) => v);
-    expect((await service.close('t1')).status).toBe('closed');
+    expect((await service.close('11111111-1111-4111-8111-111111111111')).status).toBe('closed');
 
     mockRepo.findOne.mockResolvedValueOnce(task({ status: 'selected' }));
-    expect((await service.complete('t1')).status).toBe('completed');
+    expect((await service.complete('11111111-1111-4111-8111-111111111111')).status).toBe('completed');
 
     mockRepo.findOne.mockResolvedValueOnce(task({ status: 'selected' }));
-    expect((await service.cancel('t1')).status).toBe('cancelled');
+    expect((await service.cancel('11111111-1111-4111-8111-111111111111')).status).toBe('cancelled');
   });
 
   it('未找到任务 → 404', async () => {
     mockRepo.findOne.mockResolvedValueOnce(null);
-    await expect(service.publish('missing')).rejects.toMatchObject({
+    await expect(service.publish('22222222-2222-4222-8222-222222222222')).rejects.toMatchObject({
       status: 404,
     });
     // ContractError 实例断言
-    await expect(service.publish('missing')).rejects.toBeInstanceOf(
-      ContractError,
-    );
+    await expect(
+      service.publish('22222222-2222-4222-8222-222222222222'),
+    ).rejects.toBeInstanceOf(ContractError);
+  });
+
+  it('任务 id 非 uuid → 400 VALIDATION_INVALID_PAYLOAD（不落 PG 22P02）', async () => {
+    await expect(service.getOrThrow('not-a-uuid')).rejects.toMatchObject({
+      status: 400,
+      errorCode: 'VALIDATION_INVALID_PAYLOAD',
+    });
+    expect(mockRepo.findOne).not.toHaveBeenCalled();
   });
 });

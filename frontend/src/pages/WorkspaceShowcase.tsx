@@ -150,7 +150,7 @@ export default function WorkspaceShowcase() {
       </Link>
 
       {suspended && (
-        <div className="flex items-center gap-2.5 rounded-xl border border-[color:var(--warning-border,var(--border))] bg-[var(--warning-50,fdf6ec)] px-4 py-3 text-sm text-[var(--warning-700,#8a5a00)]">
+        <div className="flex items-center gap-2.5 rounded-xl border border-[color:var(--state-warning-border)] bg-[var(--state-warning-surface)] px-4 py-3 text-sm text-[var(--state-warning)]">
           <ShieldCheck className="h-4 w-4 shrink-0" />
           {ws.displayStatus === 'frozen'
             ? '该工作室当前处于冻结状态，暂不参与平台活动。'
@@ -200,7 +200,7 @@ export default function WorkspaceShowcase() {
         </div>
         <div className="flex items-center gap-2 text-sm text-[var(--text-500)]">
           <Store className="h-4 w-4" />
-          <span>CSI AI 工作室</span>
+          <span>碳硅 Genesis AI 工作室</span>
         </div>
       </header>
 

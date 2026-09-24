@@ -61,10 +61,11 @@ export class MarketplaceContractController {
     return this.tasksService.pullTasks(query ?? {});
   }
 
-  /** 场景一 #3：任务详情 */
+  /** 场景一 #3：任务详情（不存在 → 404 NOT_FOUND_TASK；findById 返回 null 会让
+   *  NestJS 发 200 空 body，Go 侧解码报 `decoding response: EOF`） */
   @Get('tasks/:id')
   getTask(@Param('id') id: string) {
-    return this.tasksService.findById(id);
+    return this.tasksService.getOrThrow(id);
   }
 
   /** 场景二 #4：提交竞标方案并占席位（席位满 409 CONFLICT_SEAT_FULL）；§21.4 W3 快照字段 */
@@ -228,6 +229,7 @@ export class MarketplaceContractController {
       metadata?: unknown;
       artifact_urls?: unknown;
       submission_seq?: unknown;
+      gates_all_passed?: unknown;
     },
   ) {
     return this.deliveryService.submitDeliverable(id, {
@@ -240,7 +242,26 @@ export class MarketplaceContractController {
         : null,
       submissionSeq:
         typeof body.submission_seq === 'number' ? body.submission_seq : undefined,
+      gatesAllPassed:
+        typeof body.gates_all_passed === 'boolean'
+          ? body.gates_all_passed
+          : null,
     });
+  }
+
+  /** 场景五：Console 回填空送 Gate 判定（PRD §9.4，影响是否允许自动验收） */
+  @Post('orders/:id/deliverables/:deliveryId/gates')
+  updateDeliverableGates(
+    @Param('deliveryId') deliveryId: string,
+    @Body() body: { gates_all_passed?: unknown },
+  ) {
+    if (typeof body.gates_all_passed !== 'boolean') {
+      throw validationError('gates_all_passed must be boolean');
+    }
+    return this.deliveryService.updateGateResult(
+      deliveryId,
+      body.gates_all_passed,
+    );
   }
 
   /** 场景六 #15：启动修订协商窗口（2 天） */

@@ -18,7 +18,7 @@ export default function VoiceClonePlugin(props: AgentPanelProps) {
             <div className="font-semibold text-amber-300">当前不能通过 `/api/v1/agent-runs` 提交</div>
             <p className="mt-1">
               OpenNotebook 自有前端使用附件上传和服务端 action 保存克隆音色；这不是公开 Agent API 合约。
-              因此 CSI 不再把 `sourceAudioUrl`、`prompt`、`format` 伪装成可执行参数。
+              因此平台不再把 `sourceAudioUrl`、`prompt`、`format` 伪装成可执行参数。
             </p>
           </div>
         </div>

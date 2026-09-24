@@ -5,14 +5,17 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   Req,
   UseGuards,
   NotFoundException,
   BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { AuthGuard, type RequestWithUser } from '../auth/auth.guard';
 import { AuthService } from '../auth/auth.service';
+import { CasdoorSsoService } from './casdoor-sso.service';
 import type { SmsVerificationScene } from './sms-verification.service';
 
 /**
@@ -55,6 +58,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly authService: AuthService,
+    private readonly casdoorSso: CasdoorSsoService,
   ) {}
 
   /**
@@ -94,6 +98,37 @@ export class UsersController {
   }
 
   /**
+   * Casdoor SSO：生成 authorize 跳转 URL（state 由前端生成，回调时比对防 CSRF）
+   * GET /api/v1/users/sso/authorize-url?redirect_uri=...&state=...
+   */
+  @Get('sso/authorize-url')
+  ssoAuthorizeUrl(
+    @Query('redirect_uri') redirectUri: string | undefined,
+    @Query('state') state: string | undefined,
+  ) {
+    if (!this.casdoorSso.isConfigured()) {
+      throw new UnauthorizedException('SSO 未配置（缺少 CASDOOR_* 环境变量）');
+    }
+    if (typeof state !== 'string' || state.length < 8 || state.length > 128) {
+      throw new BadRequestException('state 非法（8-128 字符）');
+    }
+    const uri = this.casdoorSso.resolveRedirectUri(redirectUri ?? '');
+    return { authorizeUrl: this.casdoorSso.buildAuthorizeUrl(uri, state) };
+  }
+
+  /**
+   * Casdoor SSO 登录（OIDC 授权码换平台会话）
+   * POST /api/v1/users/login/sso { code, redirectUri }
+   */
+  @Post('login/sso')
+  loginWithSso(@Body() body: { code?: unknown; redirectUri?: unknown }) {
+    return this.usersService.loginWithSso({
+      code: typeof body?.code === 'string' ? body.code : '',
+      redirectUri: typeof body?.redirectUri === 'string' ? body.redirectUri : '',
+    });
+  }
+
+  /**
    * 获取当前用户信息
    * GET /api/v1/users/me
    * 需要登录
@@ -116,6 +151,23 @@ export class UsersController {
   }
 
   /**
+   * 提交实名认证（持久化，登录后仅一次）
+   * POST /api/v1/users/kyc
+   */
+  @Post('kyc')
+  @UseGuards(AuthGuard)
+  submitKyc(
+    @Req() req: RequestWithUser,
+    @Body() body: { realName: string; idCardNumber: string },
+  ) {
+    return this.usersService.submitKyc(
+      req.user.id,
+      body?.realName,
+      body?.idCardNumber,
+    );
+  }
+
+  /**
    * 修改密码
    * POST /api/v1/users/change-password
    */
@@ -131,6 +183,27 @@ export class UsersController {
       body.newPassword,
     );
     return { message: '密码修改成功' };
+  }
+
+  /**
+   * 短信验证码设置密码（短信建号用户打通 SSO 专用）
+   * POST /api/v1/users/set-password
+   */
+  @Post('set-password')
+  @UseGuards(AuthGuard)
+  async setPassword(
+    @Req() req: RequestWithUser,
+    @Body() body: { verificationCode: string; newPassword: string },
+  ) {
+    if (!body.verificationCode || !body.newPassword) {
+      throw new BadRequestException('验证码与新密码不能为空');
+    }
+    await this.usersService.setPasswordBySms({
+      userId: req.user.id,
+      verificationCode: body.verificationCode,
+      newPassword: body.newPassword,
+    });
+    return { message: '密码设置成功，可用于 SSO 登录' };
   }
 
   /**

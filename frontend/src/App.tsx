@@ -2,6 +2,8 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom';
 import MainLayout from './layouts/MainLayout';
 import WorkbenchLayout from './layouts/WorkbenchLayout';
+import { ToastProvider } from './components/ui/Toast';
+import { ConfirmProvider } from './components/ui/ConfirmDialog';
 
 const Home = lazy(() => import('./pages/Home'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -22,6 +24,8 @@ const AgentPublicDetail = lazy(() => import('./pages/AgentPublicDetail'));
 const AdminAgents = lazy(() => import('./pages/AdminAgents'));
 const AdminArbitrations = lazy(() => import('./pages/AdminArbitrations'));
 const ApiDocs = lazy(() => import('./pages/ApiDocs'));
+const Terms = lazy(() => import('./pages/Terms'));
+const Privacy = lazy(() => import('./pages/Privacy'));
 const MyOrders = lazy(() => import('./pages/MyOrders'));
 const MyAgentWork = lazy(() => import('./pages/MyAgentWork'));
 const OrderPayment = lazy(() => import('./pages/OrderPayment'));
@@ -31,6 +35,7 @@ const AdminRelease = lazy(() => import('./pages/AdminRelease'));
 const AdminWithdrawals = lazy(() => import('./pages/AdminWithdrawals'));
 const MyBids = lazy(() => import('./pages/MyBids'));
 const MyPlan = lazy(() => import('./pages/MyPlan'));
+const AnimTuning = lazy(() => import('./pages/AnimTuning'));
 const Profile = lazy(() => import('./pages/Profile'));
 const AdminAccounts = lazy(() => import('./pages/AdminAccounts'));
 const AdminSsoClients = lazy(() => import('./pages/AdminSsoClients'));
@@ -46,6 +51,7 @@ const WorkspaceGallery = lazy(() => import('./pages/WorkspaceGallery'));
 const MockAlipayCheckout = lazy(() => import('./pages/MockAlipayCheckout'));
 const RechargeBalance = lazy(() => import('./pages/RechargeBalance'));
 const WechatBind = lazy(() => import('./pages/WechatBind'));
+const SsoCallback = lazy(() => import('./pages/SsoCallback'));
 
 function PageFallback() {
   return (
@@ -59,8 +65,11 @@ function PageFallback() {
 function App() {
   return (
     <BrowserRouter>
-      <Suspense fallback={<PageFallback />}>
-      <Routes>
+      {/* 反馈层挂在路由之外：页面跳转不会卸载 Provider，Toast 不会被中断 */}
+      <ToastProvider>
+        <ConfirmProvider>
+          <Suspense fallback={<PageFallback />}>
+            <Routes>
         {/* 统一登录页 - 已移除独立的 /admin/login */}
 
         <Route path="/oauth/opennotebook/callback" element={<OpenNotebookOAuthCallback />} />
@@ -68,6 +77,8 @@ function App() {
         <Route path="/pay/mock-checkout" element={<MockAlipayCheckout />} />
         {/* 微信绑定回调落地页（公众号网页授权后由 WECHAT_BIND_REDIRECT_URI 跳入，读 ?code） */}
         <Route path="/wechat-bind" element={<WechatBind />} />
+        {/* Casdoor SSO 回调落地页（白名单 redirect_uri = {origin}/callback，读 ?code&state） */}
+        <Route path="/callback" element={<SsoCallback />} />
 
         <Route path="/" element={<MainLayout />}>
           <Route index element={<Home />} />
@@ -84,6 +95,11 @@ function App() {
           <Route path="sso/authorize" element={<SsoAuthorize />} />
           <Route path="register" element={<Register />} />
           <Route path="api-docs" element={<ApiDocs />} />
+          {/* 公开合规页：服务条款 / 隐私政策 */}
+          <Route path="terms" element={<Terms />} />
+          <Route path="privacy" element={<Privacy />} />
+          {/* 动画调参台（内部工具，不进导航） */}
+          <Route path="anim-tuning" element={<AnimTuning />} />
 
           {/* 长任务线：AI 工作室（平台侧卖方主体升级改造，绑定既有用户体系）
              展示页 PRD §5.6.7；工作台内「我的工作室」为管理面（/workspace） */}
@@ -129,8 +145,10 @@ function App() {
             <Route path="admin/agents" element={<AdminAgents />} />
           </Route>
         </Route>
-      </Routes>
-      </Suspense>
+            </Routes>
+          </Suspense>
+        </ConfirmProvider>
+      </ToastProvider>
     </BrowserRouter>
   );
 }
