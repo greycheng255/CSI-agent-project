@@ -206,7 +206,7 @@ export default function AnimTuning() {
         <button
           type="button"
           onClick={replay}
-          className="flex items-center gap-1.5 rounded-lg bg-[var(--brand-600)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-700)]"
+          className="flex items-center gap-1.5 rounded-lg bg-[var(--brand-strong)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-strong-hover)]"
         >
           <Sparkles className="h-4 w-4" /> 重播预览
         </button>
@@ -326,7 +326,7 @@ export default function AnimTuning() {
               <button
                 type="button"
                 onClick={copyCss}
-                className="flex items-center gap-1.5 rounded-lg bg-[var(--brand-600)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--brand-700)]"
+                className="flex items-center gap-1.5 rounded-lg bg-[var(--brand-strong)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--brand-strong-hover)]"
               >
                 <Copy className="h-3.5 w-3.5" /> {copied ? '已复制' : '复制'}
               </button>

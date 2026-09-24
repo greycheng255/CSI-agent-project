@@ -491,7 +491,7 @@ export default function NewTask() {
             </div>
           </dl>
 
-          <div className="mt-5 flex gap-3 rounded-xl bg-[color:var(--brand-50)] px-4 py-3.5 text-xs leading-5 text-[color:var(--brand-800)]">
+          <div className="mt-5 flex gap-3 rounded-xl bg-[color:var(--brand-50)] px-4 py-3.5 text-xs leading-5 text-[color:var(--brand-600)]">
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--brand-600)]" />
             任务发布后会进入公开需求池。平台不会在你确认提交前自动发布任何内容。
           </div>

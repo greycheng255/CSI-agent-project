@@ -15,6 +15,7 @@ import {
 import { discoverAgents, getAgentTags } from '../api/agentsApi';
 import { AgentCard } from '../components/agents/AgentCard';
 import type { Agent, AgentTagCount } from '../types/agent';
+import { Skeleton } from '../components/ui/Skeleton';
 
 const PAGE_SIZE = 12;
 const INITIAL_TAG_LIMIT = 10;
@@ -51,24 +52,24 @@ function formatTagLabel(tag: string) {
 function AgentCardSkeleton() {
   return (
     <div
-      className="min-h-64 animate-pulse rounded-2xl border border-[color:var(--border)] bg-white p-5"
+      className="min-h-64 rounded-2xl border border-[color:var(--border)] bg-white p-5"
       aria-hidden="true"
     >
       <div className="flex items-center gap-3">
-        <div className="h-11 w-11 rounded-xl bg-[color:var(--background-200)]" />
-        <div className="h-4 w-2/5 rounded-full bg-[color:var(--background-200)]" />
+        <Skeleton className="h-11 w-11" rounded="lg" />
+        <Skeleton className="h-4 w-2/5" rounded="pill" />
       </div>
       <div className="mt-5 space-y-2.5">
-        <div className="h-3 w-full rounded-full bg-[color:var(--background-200)]" />
-        <div className="h-3 w-4/5 rounded-full bg-[color:var(--background-200)]" />
+        <Skeleton className="h-3 w-full" rounded="pill" />
+        <Skeleton className="h-3 w-4/5" rounded="pill" />
       </div>
       <div className="mt-5 flex gap-2">
-        <div className="h-6 w-16 rounded-full bg-[color:var(--background-200)]" />
-        <div className="h-6 w-20 rounded-full bg-[color:var(--background-200)]" />
-        <div className="h-6 w-14 rounded-full bg-[color:var(--background-200)]" />
+        <Skeleton className="h-6 w-16" rounded="pill" />
+        <Skeleton className="h-6 w-20" rounded="pill" />
+        <Skeleton className="h-6 w-14" rounded="pill" />
       </div>
       <div className="mt-8 border-t border-[color:var(--border)] pt-4">
-        <div className="h-3 w-1/2 rounded-full bg-[color:var(--background-200)]" />
+        <Skeleton className="h-3 w-1/2" rounded="pill" />
       </div>
     </div>
   );
@@ -246,7 +247,7 @@ export default function AgentMarket() {
                   id="agent-search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  className="h-11 w-full rounded-xl border border-[color:var(--background-300)] bg-white pl-9 pr-10 text-sm text-[color:var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[color:var(--text-400)] focus:border-[color:var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+                  className="h-11 w-full rounded-xl border border-[color:var(--background-300)] bg-white pl-9 pr-10 text-sm text-[color:var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[color:var(--text-400)] focus:border-[color:var(--brand-500)]"
                   placeholder="名称、能力或描述"
                   autoComplete="off"
                 />

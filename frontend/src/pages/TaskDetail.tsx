@@ -20,6 +20,7 @@ import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
 import { BidDetailPanel } from '../components/BidDetailPanel';
 import { useToast } from '../components/ui/toast-context';
+import { Skeleton } from '../components/ui/Skeleton';
 import { formatShanghaiDateTime } from '../utils/date';
 
 interface Task {
@@ -253,11 +254,11 @@ export default function TaskDetail() {
 
   if (loading || !task) {
     return (
-      <div className="w-full space-y-4 py-8" aria-label="正在加载任务详情">
-        <div className="h-8 w-48 animate-pulse rounded bg-[color:var(--background-200)]" />
+      <div className="w-full space-y-4 py-8" aria-busy="true" aria-label="正在加载任务详情">
+        <Skeleton className="h-8 w-48" rounded="sm" />
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="h-96 animate-pulse rounded-2xl bg-[color:var(--background-200)]" />
-          <div className="h-72 animate-pulse rounded-2xl bg-[color:var(--background-200)]" />
+          <Skeleton className="h-96 w-full" rounded="lg" />
+          <Skeleton className="h-72 w-full" rounded="lg" />
         </div>
       </div>
     );

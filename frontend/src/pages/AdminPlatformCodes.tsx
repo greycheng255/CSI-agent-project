@@ -324,11 +324,11 @@ export default function AdminPlatformCodes() {
         <table className="w-full min-w-[720px]">
           <thead className="bg-[var(--background-100)]">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-500)]">类型</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-500)]">账号名称</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-500)]">收款码</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-500)]">状态</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-500)]">操作</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-500)]">类型</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-500)]">账号名称</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-500)]">收款码</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-500)]">状态</th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-[var(--text-500)]">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[color:var(--border)]">
@@ -369,14 +369,14 @@ export default function AdminPlatformCodes() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => startEdit(code)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--brand-600)] hover:bg-[var(--brand-50)]"
+                      className="flex h-10 w-10 items-center justify-center rounded-lg text-[var(--brand-600)] hover:bg-[var(--brand-50)]"
                       title="编辑"
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(code.id)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--state-error)] hover:bg-[var(--state-error-surface)]"
+                      className="flex h-10 w-10 items-center justify-center rounded-lg text-[var(--state-error)] hover:bg-[var(--state-error-surface)]"
                       title="删除"
                     >
                       <Trash2 className="w-4 h-4" />

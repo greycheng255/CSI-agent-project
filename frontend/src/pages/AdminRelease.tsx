@@ -4,7 +4,9 @@ import { CircleAlert, Inbox, Loader2, DollarSign, CheckCircle2, RefreshCw, Exter
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
 import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { Skeleton } from '../components/ui/Skeleton';
 import { useToast } from '../components/ui/toast-context';
+import { useDialogA11y } from '../components/ui/useDialogA11y';
 
 type OrderStatus = 'PENDING_RELEASE' | 'COMPLETED';
 
@@ -70,6 +72,8 @@ export default function AdminRelease() {
   const [releaseNotes, setReleaseNotes] = useState('');
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const releaseDialogRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(Boolean(showReleaseModal), releaseDialogRef, () => setShowReleaseModal(null));
 
   const fetchOrders = useCallback(() => {
     setLoading(true);
@@ -201,10 +205,25 @@ export default function AdminRelease() {
       </div>
 
       {loading ? (
-        <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white text-sm text-[var(--text-500)]">
-          <Loader2 className="mr-3 h-5 w-5 animate-spin text-[var(--brand-500)]" />
-          加载中...
-        </div>
+        <section className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white divide-y divide-[color:var(--border)]">
+          {Array.from({ length: 4 }, (_, index) => (
+            <div key={index} className="p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <Skeleton className="h-5 w-56" rounded="sm" />
+                <Skeleton className="h-6 w-20" rounded="pill" />
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-4 md:grid-cols-4">
+                <Skeleton className="h-4 w-full" rounded="sm" />
+                <Skeleton className="h-4 w-full" rounded="sm" />
+                <Skeleton className="h-4 w-full" rounded="sm" />
+                <Skeleton className="h-4 w-full" rounded="sm" />
+              </div>
+              <div className="mt-4 flex gap-3">
+                <Skeleton className="h-10 w-28" rounded="pill" />
+              </div>
+            </div>
+          ))}
+        </section>
       ) : error ? (
         <WorkbenchStatePanel icon={CircleAlert} title="放款订单暂时无法加载" description={error} tone="error" action={<button type="button" onClick={() => fetchOrders()} className="btn-cs btn-primary btn-sm">重新加载</button>} />
       ) : orders.length === 0 ? (
@@ -321,14 +340,14 @@ export default function AdminRelease() {
       {/* 放款确认弹窗 */}
       {showReleaseModal && (
         <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/35 p-4" role="dialog" aria-modal="true" aria-labelledby="release-dialog-title">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[color:var(--border)] bg-white p-6">
+          <div ref={releaseDialogRef} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[color:var(--border)] bg-white p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 id="release-dialog-title" className="text-lg font-semibold text-[var(--text-900)]">确认放款</h3>
               <button
                 type="button"
                 onClick={() => setShowReleaseModal(null)}
                 aria-label="关闭放款确认弹窗"
-                className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-500)] hover:bg-[var(--background-100)] hover:text-[var(--text-800)]"
+                className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--text-500)] hover:bg-[var(--background-100)] hover:text-[var(--text-800)]"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -468,7 +487,7 @@ export default function AdminRelease() {
                     <button
                       type="button"
                       onClick={() => setTransferScreenshot(null)}
-                      className="absolute top-2 right-2 px-2 py-1 bg-[var(--state-error)] text-white text-xs rounded hover:bg-[var(--state-error-dark)]"
+                      className="absolute top-2 right-2 px-2 py-1 bg-[var(--state-error-strong)] text-white text-xs rounded hover:bg-[var(--state-error-dark)]"
                     >
                       重新上传
                     </button>

@@ -162,7 +162,7 @@ export default function PaymentCodes({ embedded }: { embedded?: boolean }) {
         {!embedded && <h1 className="mb-6 text-2xl font-bold text-[var(--text-900)]">我的收款码</h1>}
 
         {error && (
-          <div className="mb-4 rounded-xl border border-[color:var(--state-error)] bg-[var(--state-error-surface)] p-4 text-[var(--state-error)]">{error}</div>
+          <div role="alert" className="mb-4 rounded-xl border border-[color:var(--state-error)] bg-[var(--state-error-surface)] p-4 text-[var(--state-error)]">{error}</div>
         )}
 
         {/* 上传新收款码 */}

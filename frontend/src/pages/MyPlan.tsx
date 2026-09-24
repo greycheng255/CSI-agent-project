@@ -268,7 +268,7 @@ export default function MyPlan() {
           <div className="text-sm text-[var(--text-600)]">请使用普通用户身份登录后配置</div>
           <button
             onClick={() => (window.location.href = '/login')}
-            className="rounded-lg bg-[var(--brand-600)] px-6 py-2 text-sm font-medium text-white hover:bg-[var(--brand-700)]"
+            className="rounded-lg bg-[var(--brand-strong)] px-6 py-2 text-sm font-medium text-white hover:bg-[var(--brand-strong-hover)]"
           >
             去登录
           </button>
@@ -294,8 +294,8 @@ export default function MyPlan() {
         </button>
       </div>
 
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600">{error}</div>}
-      {notice && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700">{notice}</div>}
+      {error && <div className="rounded-lg border border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] px-4 py-2 text-sm text-[var(--state-error)]">{error}</div>}
+      {notice && <div className="rounded-lg border border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] px-4 py-2 text-sm text-[var(--state-success-text)]">{notice}</div>}
       {loading && <div className="rounded-xl border border-[var(--border)] p-8 text-center text-sm text-[var(--text-500)]">加载中…</div>}
 
       {!loading && (
@@ -312,7 +312,7 @@ export default function MyPlan() {
                   {!wizardOpen && (
                     <button onClick={openWizard} className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-600)] hover:bg-[var(--background-100)]">更换配置</button>
                   )}
-                  <button onClick={remove} disabled={saving} className="flex items-center gap-1 rounded-lg border border-red-200 px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50">
+                  <button onClick={remove} disabled={saving} className="flex items-center gap-1 rounded-lg border border-[color:var(--state-error-border)] px-4 py-2 text-sm text-[var(--state-error)] hover:bg-[var(--state-error-surface)] disabled:opacity-50">
                     <Trash2 className="h-3.5 w-3.5" /> 清除
                   </button>
                 </div>
@@ -336,7 +336,7 @@ export default function MyPlan() {
                   const done = step > value;
                   return (
                     <li key={label} className="flex items-center gap-2">
-                      <span className={`flex h-6 w-6 items-center justify-center rounded-full font-semibold ${done ? 'bg-emerald-500 text-white' : active ? 'bg-[var(--brand-600)] text-white' : 'bg-[var(--background-200)] text-[var(--text-500)]'}`}>
+                      <span className={`flex h-6 w-6 items-center justify-center rounded-full font-semibold ${done ? 'bg-emerald-500 text-white' : active ? 'bg-[var(--brand-strong)] text-white' : 'bg-[var(--background-200)] text-[var(--text-500)]'}`}>
                         {done ? <CheckCircle2 className="h-3.5 w-3.5" /> : value}
                       </span>
                       <span className={active ? 'font-semibold text-[var(--text-800)]' : 'text-[var(--text-500)]'}>{label}</span>
@@ -372,7 +372,7 @@ export default function MyPlan() {
                       href={provider.portal}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-600)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-700)]"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-strong)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-strong-hover)]"
                     >
                       打开 OneLLM 门户获取密钥 <ExternalLink className="h-3.5 w-3.5" />
                     </a>
@@ -394,7 +394,7 @@ export default function MyPlan() {
                       type="button"
                       disabled={!step1Valid}
                       onClick={() => setStep(2)}
-                      className="flex items-center gap-1.5 rounded-lg bg-[var(--brand-600)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--brand-700)] disabled:opacity-50"
+                      className="flex items-center gap-1.5 rounded-lg bg-[var(--brand-strong)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--brand-strong-hover)] disabled:opacity-50"
                     >
                       下一步 <ArrowRight className="h-4 w-4" />
                     </button>
@@ -441,7 +441,7 @@ export default function MyPlan() {
                       type="button"
                       disabled={!step2Valid}
                       onClick={goToStep3}
-                      className="flex items-center gap-1.5 rounded-lg bg-[var(--brand-600)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--brand-700)] disabled:opacity-50"
+                      className="flex items-center gap-1.5 rounded-lg bg-[var(--brand-strong)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--brand-strong-hover)] disabled:opacity-50"
                     >
                       下一步 <ArrowRight className="h-4 w-4" />
                     </button>
@@ -461,7 +461,7 @@ export default function MyPlan() {
                   )}
 
                   {probeResult?.ok && (
-                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                    <div className="rounded-lg border border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] px-4 py-3 text-sm text-[var(--state-success-text)]">
                       <div className="flex items-center gap-2 font-medium">
                         <CheckCircle2 className="h-4 w-4" /> 连接正常
                         {probeResult.model_count > 0 && `，该密钥可用 ${probeResult.model_count} 个模型`}
@@ -476,7 +476,7 @@ export default function MyPlan() {
                   )}
 
                   {probeResult && !probeResult.ok && (
-                    <div className={`rounded-lg border px-4 py-3 text-sm ${probeResult.error_kind === 'not_found' || probeResult.error_kind === 'quota' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-red-200 bg-red-50 text-red-600'}`}>
+                    <div className={`rounded-lg border px-4 py-3 text-sm ${probeResult.error_kind === 'not_found' || probeResult.error_kind === 'quota' ? 'border-[color:var(--state-warning-border)] bg-[var(--state-warning-surface)] text-[var(--state-warning)]' : 'border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] text-[var(--state-error)]'}`}>
                       <div className="flex items-center gap-2 font-medium">
                         {probeResult.error_kind === 'not_found' || probeResult.error_kind === 'quota' ? <Zap className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
                         {PROBE_FAIL_TEXT[probeResult.error_kind ?? 'upstream'] ?? PROBE_FAIL_TEXT.upstream}
@@ -498,7 +498,7 @@ export default function MyPlan() {
                           type="button"
                           onClick={save}
                           disabled={saving}
-                          className="flex items-center gap-1.5 rounded-lg bg-[var(--brand-600)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--brand-700)] disabled:opacity-50"
+                          className="flex items-center gap-1.5 rounded-lg bg-[var(--brand-strong)] px-5 py-2 text-sm font-medium text-white hover:bg-[var(--brand-strong-hover)] disabled:opacity-50"
                         >
                           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                           {probeResult.error_kind === 'quota' ? '仍要保存' : '保存并启用'}
@@ -553,21 +553,21 @@ export default function MyPlan() {
                     <table className="w-full text-left text-xs">
                       <thead>
                         <tr className="border-b border-[var(--border)] text-[var(--text-500)]">
-                          <th className="py-1.5 pr-3 font-medium">模型</th>
-                          <th className="py-1.5 pr-3 font-medium">次数</th>
-                          <th className="py-1.5 pr-3 font-medium">输入 Token</th>
-                          <th className="py-1.5 pr-3 font-medium">输出 Token</th>
-                          <th className="py-1.5 pr-3 font-medium">金额</th>
+                          <th scope="col" className="py-1.5 pr-3 font-medium">模型</th>
+                          <th scope="col" className="py-1.5 pr-3 font-medium">次数</th>
+                          <th scope="col" className="py-1.5 pr-3 font-medium">输入 Token</th>
+                          <th scope="col" className="py-1.5 pr-3 font-medium">输出 Token</th>
+                          <th scope="col" className="py-1.5 pr-3 font-medium">金额</th>
                         </tr>
                       </thead>
                       <tbody>
                         {usage.models.map((m) => (
                           <tr key={m.model} className="border-b border-[var(--border)] last:border-0">
                             <td className="py-1.5 pr-3 font-medium text-[var(--text-800)]">{m.model}</td>
-                            <td className="py-1.5 pr-3 text-[var(--text-600)]">{fmt(m.requests)}</td>
-                            <td className="py-1.5 pr-3 text-[var(--text-600)]">{fmt(m.input_tokens)}</td>
-                            <td className="py-1.5 pr-3 text-[var(--text-600)]">{fmt(m.output_tokens)}</td>
-                            <td className="py-1.5 pr-3 text-[var(--text-600)]">¥{(m.cost_cents / 100).toFixed(2)}</td>
+                            <td className="py-1.5 pr-3 text-[var(--text-600)] tabular">{fmt(m.requests)}</td>
+                            <td className="py-1.5 pr-3 text-[var(--text-600)] tabular">{fmt(m.input_tokens)}</td>
+                            <td className="py-1.5 pr-3 text-[var(--text-600)] tabular">{fmt(m.output_tokens)}</td>
+                            <td className="py-1.5 pr-3 text-[var(--text-600)] money">¥{(m.cost_cents / 100).toFixed(2)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -581,19 +581,19 @@ export default function MyPlan() {
                     <table className="w-full text-left text-xs">
                       <thead>
                         <tr className="border-b border-[var(--border)] text-[var(--text-500)]">
-                          <th className="py-1.5 pr-3 font-medium">日期</th>
-                          <th className="py-1.5 pr-3 font-medium">次数</th>
-                          <th className="py-1.5 pr-3 font-medium">Token</th>
-                          <th className="py-1.5 pr-3 font-medium">金额</th>
+                          <th scope="col" className="py-1.5 pr-3 font-medium">日期</th>
+                          <th scope="col" className="py-1.5 pr-3 font-medium">次数</th>
+                          <th scope="col" className="py-1.5 pr-3 font-medium">Token</th>
+                          <th scope="col" className="py-1.5 pr-3 font-medium">金额</th>
                         </tr>
                       </thead>
                       <tbody>
                         {usage.daily.map((d) => (
                           <tr key={d.day} className="border-b border-[var(--border)] last:border-0">
-                            <td className="py-1.5 pr-3 text-[var(--text-800)]">{formatDay(d.day)}</td>
-                            <td className="py-1.5 pr-3 text-[var(--text-600)]">{fmt(d.requests)}</td>
-                            <td className="py-1.5 pr-3 text-[var(--text-600)]">{fmt(d.tokens)}</td>
-                            <td className="py-1.5 pr-3 text-[var(--text-600)]">¥{(d.cost_cents / 100).toFixed(2)}</td>
+                            <td className="py-1.5 pr-3 text-[var(--text-800)] tabular">{formatDay(d.day)}</td>
+                            <td className="py-1.5 pr-3 text-[var(--text-600)] tabular">{fmt(d.requests)}</td>
+                            <td className="py-1.5 pr-3 text-[var(--text-600)] tabular">{fmt(d.tokens)}</td>
+                            <td className="py-1.5 pr-3 text-[var(--text-600)] money">¥{(d.cost_cents / 100).toFixed(2)}</td>
                           </tr>
                         ))}
                       </tbody>

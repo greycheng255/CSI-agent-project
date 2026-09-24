@@ -203,7 +203,7 @@ export default function RecommendedWorkspaces({
                           type="button"
                           disabled={item.invited || inviting === item.workspaceId}
                           onClick={() => void handleInvite(item.workspaceId)}
-                          className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[var(--brand-500)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--brand-600)] disabled:cursor-not-allowed disabled:bg-[var(--background-200)] disabled:text-[var(--text-400)]"
+                          className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[var(--brand-500)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--brand-strong)] disabled:cursor-not-allowed disabled:bg-[var(--background-200)] disabled:text-[var(--text-400)]"
                         >
                           {inviting === item.workspaceId ? (
                             <Loader2 className="h-3 w-3 animate-spin" />

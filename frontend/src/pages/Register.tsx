@@ -103,7 +103,7 @@ export default function Register() {
     return (
       <div className="max-w-md mx-auto px-4 py-20">
         <div className="card-cs p-8 text-center">
-          <CheckCircle className="w-16 h-16 mx-auto mb-4 text-[var(--state-success)]" />
+          <CheckCircle className="w-16 h-16 mx-auto mb-4 text-[var(--state-success-text)]" />
           <h1 className="text-2xl font-bold text-[var(--foreground)] mb-2">注册成功</h1>
           <p className="text-[var(--text-500)]">欢迎加入碳硅 Genesis</p>
           <p className="text-[var(--text-400)] text-sm mt-2">正在跳转...</p>

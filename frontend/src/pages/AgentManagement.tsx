@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { Bot, Plus, Activity, Settings, ExternalLink, Code2, Terminal, DollarSign, RefreshCw, Loader2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -9,6 +9,7 @@ import { disableAgent, enableAgent } from '../api/agentsApi';
 import { WorkbenchPageHeader } from '../components/workbench/WorkbenchPrimitives';
 import { useToast } from '../components/ui/toast-context';
 import { useConfirm } from '../components/ui/confirm-context';
+import { useDialogA11y } from '../components/ui/useDialogA11y';
 
 type AgentStatus = 'ONLINE' | 'OFFLINE';
 
@@ -159,7 +160,7 @@ function getExecutionDisplay(agent: Agent, health?: HealthCheckState): Execution
     return {
       endpointLabel: '平台',
       statusLabel: '可执行',
-      statusClassName: 'bg-green-500/10 text-green-400',
+      statusClassName: 'bg-green-500/10 text-[var(--state-success-text)]',
       detail: agent.lastCredentialUsedAt
         ? `最近调用 ${new Date(agent.lastCredentialUsedAt).toLocaleString()}`
         : '平台已准备好执行条件',
@@ -195,7 +196,7 @@ function getExecutionDisplay(agent: Agent, health?: HealthCheckState): Execution
   return {
     endpointLabel: '外部自管 Agent',
     statusLabel: '接收地址正常',
-    statusClassName: 'bg-green-500/10 text-green-400',
+    statusClassName: 'bg-green-500/10 text-[var(--state-success-text)]',
     detail: agent.webhookUrl,
     title: '平台会把匹配到的任务推送到该接收地址。请确保你的智能体服务能正常接收并处理平台推送。',
   };
@@ -236,6 +237,9 @@ export default function AgentManagement() {
   const [healthCheckingAgent, setHealthCheckingAgent] = useState<string | null>(null);
   const [togglingAgent, setTogglingAgent] = useState<string | null>(null);
   const [healthStatusMap, setHealthStatusMap] = useState<Record<string, HealthCheckState>>({});
+
+  const bidDialogRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(showBid, bidDialogRef, () => setShowBid(false));
 
   const fetchAgents = useCallback(() => {
     if (!user?.id) return;
@@ -456,7 +460,7 @@ export default function AgentManagement() {
 
       {showBid && (
         <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/35 px-4" role="dialog" aria-modal="true" aria-labelledby="agent-bid-dialog-title">
-          <div className="w-full max-w-2xl rounded-2xl border border-[color:var(--border)] bg-white p-6">
+          <div ref={bidDialogRef} className="w-full max-w-2xl rounded-2xl border border-[color:var(--border)] bg-white p-6">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
                 <h2 id="agent-bid-dialog-title" className="flex items-center gap-2 text-lg font-semibold text-[var(--text-900)]">
@@ -471,7 +475,7 @@ export default function AgentManagement() {
                 type="button"
                 onClick={() => setShowBid(false)}
                 aria-label="关闭 Agent 报价弹窗"
-                className="text-sm text-[var(--text-500)] transition-colors hover:text-[var(--text-800)]"
+                className="inline-flex min-h-10 items-center px-2 text-sm text-[var(--text-500)] transition-colors hover:text-[var(--text-800)]"
               >
                 关闭
               </button>
@@ -577,10 +581,10 @@ export default function AgentManagement() {
           <div className="mb-6 rounded-xl border border-[var(--brand-100)] bg-white p-4">
             <h3 className="mb-2 text-sm font-semibold text-[var(--text-800)]">当前集群架构</h3>
             <ul className="space-y-1 text-xs text-[var(--text-600)]">
-              <li>• Openclaw 集群 Namespace: <span className="text-blue-400">openclaw-cloud</span></li>
-              <li>• Genesis 集群 Namespace: <span className="text-blue-400">genesis</span></li>
-              <li>• Genesis API (集群内): <span className="text-green-400">http://genesis-backend.genesis.svc.cluster.local:4000</span></li>
-              <li>• Genesis API (NodePort): <span className="text-green-400">http://122.51.51.177:30001</span></li>
+              <li>• Openclaw 集群 Namespace: <span className="text-[var(--brand-600)]">openclaw-cloud</span></li>
+              <li>• Genesis 集群 Namespace: <span className="text-[var(--brand-600)]">genesis</span></li>
+              <li>• Genesis API (集群内): <span className="text-[var(--state-success-text)]">http://genesis-backend.genesis.svc.cluster.local:4000</span></li>
+              <li>• Genesis API (NodePort): <span className="text-[var(--state-success-text)]">http://122.51.51.177:30001</span></li>
             </ul>
           </div>
 
@@ -672,7 +676,7 @@ spec:
 
           <p className="mt-4 border-t border-[var(--brand-100)] pt-4 text-xs text-[var(--text-500)]">
             * 注册成功后，Genesis 网络会主动将平台上的新需求推送到您配置的 webhookUrl。
-            * 完整文档请参考: <span className="text-blue-400">OPENCLAW_INTEGRATION.md</span>
+            * 完整文档请参考: <span className="text-[var(--brand-600)]">OPENCLAW_INTEGRATION.md</span>
           </p>
         </section>
       )}
@@ -817,8 +821,8 @@ spec:
             
             <div className="space-y-2 mb-6">
               {agent.podName && (
-                <div className="text-xs text-blue-400 flex items-center">
-                  <span className="font-mono bg-blue-500/10 px-2 py-0.5 rounded">Pod: {agent.podName}</span>
+                <div className="text-xs text-[var(--brand-600)] flex items-center">
+                  <span className="font-mono bg-[var(--brand-50)] px-2 py-0.5 rounded">Pod: {agent.podName}</span>
                 </div>
               )}
               {agent.owner?.phone && (

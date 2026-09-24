@@ -20,6 +20,9 @@
   --brand-700: #3629a8;
   --brand-800: #2a1f82;
   --brand-900: #1c1e54;
+  /* 实心品牌面（主按钮底 / hover）：两主题都须保持深靛蓝以承载白字，故不参与深色反相 */
+  --brand-strong: #4434d4;
+  --brand-strong-hover: #3629a8;
 
   /* 表面阶梯：50 画布 / 100-200 次级面 / 300 发丝 / 400 输入边框 */
   --background-50: #ffffff;
@@ -71,6 +74,10 @@
   --state-error-border: rgba(223, 27, 65, 0.28);
   --state-error-foreground: #ffffff;
   --state-error-surface-strong: #ffe1de;
+  /* 实心状态面（危险/警告按钮底）：同 --brand-strong，不参与深色反相 */
+  --state-error-strong: #df1b41;
+  --state-error-strong-hover: #c01638;
+  --state-warning-strong: #9b6829;
 
   /* 支付宝渠道品牌色（第三方渠道标识，仅支付宝相关页面使用） */
   --alipay-brand: #1677ff;
@@ -193,6 +200,97 @@
   --v3-brand-dark: #1c1e54;
 
   color-scheme: light;
+}
+
+/* ===== DARK THEME（令牌反相） =====
+ * 全站组件直接消费 primitive 色板（约 1994 处 / 71 文件），故深色主题通过
+ * 「翻转色板阶梯」实现，组件代码零改动：把浅色下的「白画布→深墨色」整体翻转。
+ * 只覆盖表面阶梯、文字/图标阶梯，以及浅色专用的 rgba（玻璃导航、阴影）。
+ * 刻意不反相：--text-50/100/200（深色代码块 --surface-code 上的文字）、
+ * --surface-code、--v3-white、--alipay-*、--brand-*、--state-*、--*-foreground（品牌/状态色与白字）。 */
+[data-theme='dark'] {
+  /* 表面阶梯：深画布 → 浅高海拔 */
+  --background-50: #0b1220;
+  --background-100: #101a2e;
+  --background-200: #16223a;
+  --background-300: #22304b;
+  --background-400: #33456a;
+  --background-500: #4a5f85;
+  --background-600: #6b7fa3;
+  --background-700: #9fb0c9;
+  --background-800: #ccd8e8;
+  --background-900: #eaf0f8;
+
+  /* 文字阶梯：保留 50/100/200（on-dark），反相 300–900 */
+  --text-300: #8ea0bd;
+  --text-400: #a7b6cd;
+  --text-500: #b9c6da;
+  --text-600: #cdd8e8;
+  --text-700: #dee6f2;
+  --text-800: #eef3fa;
+  --text-900: #ffffff;
+
+  /* 图标阶梯：与文字一致 */
+  --icon-300: #8ea0bd;
+  --icon-400: #a7b6cd;
+  --icon-500: #b9c6da;
+  --icon-600: #cdd8e8;
+  --icon-700: #dee6f2;
+  --icon-800: #eef3fa;
+  --icon-900: #ffffff;
+
+  /* 品牌阶梯：浅底纹 → 深底纹；品牌文字提亮
+   * （--brand-600/700 同时被实心按钮使用，实心处已改用 --brand-strong 系列，故此处可安全提亮为「底纹之上」的文字色） */
+  --brand-50: #1b1a4d;
+  --brand-100: #232066;
+  --brand-200: #322b8a;
+  --brand-600: #b3aaff;
+  --brand-700: #cdc7ff;
+
+  /* 状态阶梯：底纹 → 深底纹；状态文字提亮（实心按钮已改用 --state-*-strong 系列） */
+  --state-success-surface: #0f2a1d;
+  --state-warning-surface: #2e2413;
+  --state-error-surface: #2e1620;
+  --state-error-surface-strong: #40202a;
+  --state-success-text: #5fd18a;
+  --state-warning: #e0b070;
+  --state-error: #ff7d94;
+
+  /* 主按钮 hover 渐变：原引用 --brand-600（已在深色下提亮），改用固定深靛蓝以保白字对比 */
+  --v3-grad-brand-h: linear-gradient(135deg, #4434d4 0%, var(--brand-500) 100%);
+  --v3-grad-blue-h: linear-gradient(90deg, #4434d4, var(--brand-500));
+
+  /* 玻璃导航 / 页脚：白玻璃 → 深玻璃 */
+  --v3-nav-bg-light: rgba(11, 18, 32, 0.92);
+  --v3-glass-bg: rgba(11, 18, 32, 0.92);
+  --v3-glass-bg-strong: rgba(11, 18, 32, 0.96);
+  --v3-footer-social-bg: rgba(255, 255, 255, 0.06);
+  --v3-shadow-soft: rgba(0, 0, 0, 0.4);
+  --v3-shadow-card: rgba(0, 0, 0, 0.45);
+
+  /* 阴影：深色底上用黑底阴影（原深蓝阴影在深底上不可见） */
+  --shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.35);
+  --shadow: 0 1px 1px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.45), 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 8px 16px rgba(0, 0, 0, 0.5), 0 24px 56px rgba(0, 0, 0, 0.55);
+  --shadow-2xl: 0 16px 32px rgba(0, 0, 0, 0.55), 0 40px 80px rgba(0, 0, 0, 0.6);
+
+  color-scheme: dark;
+}
+
+/* 桥接：267 处 bg-white 字面量。
+ * 置于 utilities 层且用 :where() 保持 (0,1,0) 特异性——既能覆盖基础 bg-white，
+ * 又让 hover:bg-* 等更高特异性变体照常生效。 */
+@layer utilities {
+  [data-theme='dark'] :where(.bg-white) {
+    background-color: var(--background-50);
+  }
+}
+
+/* 骨架微光：深色底上降低亮度，避免刺眼白条 */
+[data-theme='dark'] .skeleton::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
 }
 
 /* Tailwind v4 语义工具类映射（bg-background / text-foreground / bg-primary 等） */
@@ -575,7 +673,7 @@ pre {
 }
 
 .nav-login:hover {
-  color: var(--brand-500);
+  color: var(--brand-600);
 }
 
 .nav-user-chip {
@@ -591,7 +689,7 @@ pre {
 }
 
 .nav-user-chip:hover {
-  color: var(--brand-500);
+  color: var(--brand-600);
 }
 
 .nav-badge {
@@ -603,7 +701,7 @@ pre {
 
 .nav-badge-green {
   background: var(--state-success-surface);
-  color: var(--state-success);
+  color: var(--state-success-text);
 }
 
 .nav-badge-red {
@@ -633,6 +731,41 @@ pre {
 .nav-icon-btn:hover {
   color: var(--state-error);
   background: var(--background-100);
+}
+
+/* 主题外观三态分段控件（浅色 / 深色 / 跟随系统） */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--background-100);
+}
+
+.theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: transparent;
+  color: var(--text-500);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.theme-toggle-btn:hover {
+  color: var(--text-800);
+}
+
+.theme-toggle-btn.active {
+  background: var(--background-50);
+  color: var(--brand-600);
+  box-shadow: var(--shadow-sm);
 }
 
 .nav-toggle {
@@ -718,6 +851,16 @@ pre {
   margin: 0.5rem 0;
 }
 
+.nav-mobile-theme {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  color: var(--text-600);
+  font-size: 0.875rem;
+}
+
 @media (max-width: 1199px) {
   .nav-links,
   .nav-desktop-only {
@@ -745,42 +888,6 @@ pre {
   .nav-workbench-item {
     transition: none;
   }
-}
-
-/* 管理员 MCP 集成中心仍包含较多旧版面板，统一桥接到当前浅色工作台令牌。 */
-.admin-mcp-light {
-  color: var(--text-800);
-}
-
-.admin-mcp-light [class~="bg-[#111]"],
-.admin-mcp-light [class~="bg-[#0a0a0a]"],
-.admin-mcp-light [class*="bg-gray-9"],
-.admin-mcp-light [class*="bg-gray-8"],
-.admin-mcp-light [class~="bg-black"] {
-  background-color: var(--background-50) !important;
-}
-
-.admin-mcp-light [class*="border-gray-8"],
-.admin-mcp-light [class*="border-gray-7"] {
-  border-color: var(--border) !important;
-}
-
-.admin-mcp-light [class*="text-gray-1"],
-.admin-mcp-light [class*="text-gray-2"] {
-  color: var(--text-900) !important;
-}
-
-.admin-mcp-light [class*="text-gray-3"],
-.admin-mcp-light [class*="text-gray-4"] {
-  color: var(--text-600) !important;
-}
-
-.admin-mcp-light input:not([type="checkbox"]):not([type="radio"]),
-.admin-mcp-light select,
-.admin-mcp-light textarea {
-  border-color: var(--border) !important;
-  background: var(--background-50) !important;
-  color: var(--text-800) !important;
 }
 
 /* ===== 共享：按钮 ===== */
@@ -923,7 +1030,7 @@ pre {
 }
 
 .link-cs {
-  color: var(--brand-500);
+  color: var(--brand-600);
   font-weight: 600;
   text-decoration: none;
 }
@@ -1254,7 +1361,7 @@ pre {
 }
 
 .footer-list a:hover {
-  color: var(--brand-500);
+  color: var(--brand-600);
 }
 
 .footer-bottom {
@@ -1303,7 +1410,7 @@ pre {
 
 .footer-social a:hover {
   background: var(--v3-footer-social-hover-bg);
-  color: var(--brand-500);
+  color: var(--brand-600);
 }
 
 .footer-social svg {
@@ -1324,10 +1431,11 @@ pre {
 }
 
 /* ===== 共享：焦点 / 水波纹 ===== */
+/* 统一键盘焦点环：仅 :focus-visible 生效，outline 自动跟随元素自身圆角，
+ * 不要在规则内设置 border-radius（会强行改写元素圆角，导致 pill 按钮变形）。 */
 :focus-visible {
   outline: 2px solid var(--v3-focus-ring);
   outline-offset: 2px;
-  border-radius: 6px;
 }
 
 .ripple {
@@ -1428,7 +1536,7 @@ pre {
 }
 
 .toast-item--info .toast-item-icon {
-  color: var(--brand-500);
+  color: var(--brand-600);
 }
 
 .toast-item-body {
@@ -1460,7 +1568,7 @@ pre {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--brand-500);
+  color: var(--brand-600);
   font: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -1650,7 +1758,7 @@ pre {
 }
 
 .btn-danger {
-  background: var(--state-error);
+  background: var(--state-error-strong);
   color: var(--state-error-foreground);
   box-shadow: 0 1px 1px rgba(13, 37, 61, 0.04), 0 2px 6px rgba(223, 27, 65, 0.2);
 }

@@ -271,7 +271,7 @@
 }
 
 .icon-blue {
-  color: var(--brand-500);
+  color: var(--brand-600);
 }
 
 .icon-purple {
@@ -309,7 +309,7 @@
 }
 
 .eyebrow-blue {
-  color: var(--brand-500);
+  color: var(--brand-600);
 }
 
 .eyebrow-purple {
@@ -369,7 +369,7 @@
 }
 
 .model-card h3 a:hover {
-  color: var(--brand-500);
+  color: var(--brand-600);
 }
 
 .model-card p {
@@ -392,11 +392,11 @@
   padding: 0.25rem 0.65rem;
   border-radius: var(--radius-pill);
   background: var(--v3-tag-bg);
-  color: var(--brand-500);
+  color: var(--brand-600);
 }
 
 .model-link {
-  color: var(--brand-500);
+  color: var(--brand-600);
   text-decoration: none;
   font-size: 14px;
   font-weight: 600;
@@ -466,7 +466,7 @@
 
 .stat-icon-blue {
   background: var(--v3-icon-blue-bg);
-  color: var(--brand-500);
+  color: var(--brand-600);
 }
 
 .stat-icon-purple {
@@ -706,7 +706,7 @@
 
 .step-icon-blue {
   background: var(--v3-icon-blue-bg);
-  color: var(--brand-500);
+  color: var(--brand-600);
 }
 
 .step-icon-purple {
@@ -769,7 +769,7 @@
 }
 
 .feed-link {
-  color: var(--brand-500);
+  color: var(--brand-600);
   text-decoration: none;
   font-size: 15px;
   font-weight: 600;
@@ -933,7 +933,7 @@
 }
 
 .faq-item summary:hover {
-  color: var(--brand-500);
+  color: var(--brand-600);
 }
 
 .faq-item summary::-webkit-details-marker {
@@ -1009,7 +1009,7 @@
 }
 
 .cta-contact a {
-  color: var(--brand-500);
+  color: var(--brand-600);
   text-decoration: none;
 }
 

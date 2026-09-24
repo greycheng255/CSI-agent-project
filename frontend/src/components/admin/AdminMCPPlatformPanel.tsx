@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -23,6 +23,7 @@ import {
   type AdminMCPTool,
 } from '../../api/adminMcpApi';
 import { useConfirm } from '../ui/confirm-context';
+import { useDialogA11y } from '../ui/useDialogA11y';
 
 type Diagnostic = {
   name: string;
@@ -101,12 +102,12 @@ function sampleArguments(tool?: AdminMCPTool) {
 
 function statusClass(status?: string) {
   if (status === 'success' || status === 'pass') {
-    return 'text-green-400 bg-green-500/10 border-green-500/20';
+    return 'text-[var(--state-success-text)] bg-[var(--state-success-surface)] border-[color:var(--state-success-border)]';
   }
   if (status === 'failed' || status === 'fail') {
-    return 'text-red-400 bg-red-500/10 border-red-500/20';
+    return 'text-[var(--state-error)] bg-[var(--state-error-surface)] border-[color:var(--state-error-border)]';
   }
-  return 'text-gray-400 bg-gray-500/10 border-gray-700';
+  return 'text-[var(--text-600)] bg-[var(--background-100)] border-[color:var(--border)]';
 }
 
 /* eslint-disable react-hooks/exhaustive-deps -- invocation and tool loaders are scoped to their explicit filter effects */
@@ -133,6 +134,8 @@ export default function AdminMCPPlatformPanel() {
   const [requestFilter, setRequestFilter] = useState('');
 
   const confirm = useConfirm();
+  const detailDialogRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(Boolean(detail), detailDialogRef, () => setDetail(null));
 
   const selectedTool = useMemo(
     () => tools.find((tool) => tool.name === selectedName),
@@ -325,19 +328,19 @@ export default function AdminMCPPlatformPanel() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 rounded-xl border border-gray-800 bg-[#111] p-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 rounded-xl border border-[color:var(--border)] bg-[var(--background-50)] p-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
-          <ShieldCheck className="h-5 w-5 text-yellow-400" />
+          <ShieldCheck className="h-5 w-5 text-[var(--state-warning)]" />
           <div>
-            <h2 className="text-base font-bold text-gray-100">平台 MCP 服务</h2>
-            <p className="mt-1 text-xs text-gray-500">
+            <h2 className="text-base font-bold text-[var(--text-900)]">平台 MCP 服务</h2>
+            <p className="mt-1 text-xs text-[var(--text-500)]">
               外部应用调用当前平台，调试本平台暴露的 /mcp Tool。
             </p>
           </div>
         </div>
         <button
           onClick={runDiagnostics}
-          className="flex items-center justify-center gap-2 rounded-lg bg-yellow-500 px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-yellow-400"
+          className="flex items-center justify-center gap-2 rounded-lg bg-[var(--brand-500)] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[var(--brand-strong)]"
         >
           <ShieldCheck className="h-4 w-4" />
           一键诊断
@@ -345,7 +348,7 @@ export default function AdminMCPPlatformPanel() {
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+        <div className="flex items-center gap-2 rounded-lg border border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] px-4 py-3 text-sm text-[var(--state-error)]">
           <AlertCircle className="h-4 w-4" />
           {error}
         </div>
@@ -353,33 +356,33 @@ export default function AdminMCPPlatformPanel() {
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {diagnostics.map((item) => (
-          <div key={item.name} className="rounded-lg border border-gray-800 bg-[#111] p-4">
+          <div key={item.name} className="rounded-lg border border-[color:var(--border)] bg-[var(--background-50)] p-4">
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm text-gray-300">{item.name}</span>
+              <span className="text-sm text-[var(--text-700)]">{item.name}</span>
               {item.status === 'pass' ? (
-                <CheckCircle2 className="h-4 w-4 text-green-400" />
+                <CheckCircle2 className="h-4 w-4 text-[var(--state-success-text)]" />
               ) : item.status === 'fail' ? (
-                <XCircle className="h-4 w-4 text-red-400" />
+                <XCircle className="h-4 w-4 text-[var(--state-error)]" />
               ) : (
-                <span className="h-4 w-4 rounded-full border border-gray-700" />
+                <span className="h-4 w-4 rounded-full border border-[color:var(--input)]" />
               )}
             </div>
-            <p className="truncate text-xs text-gray-500">{item.detail}</p>
+            <p className="truncate text-xs text-[var(--text-500)]">{item.detail}</p>
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[300px_1fr]">
-        <div className="overflow-hidden rounded-xl border border-gray-800 bg-[#111]">
-          <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
+        <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background-50)]">
+          <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3">
             <div className="flex items-center gap-2">
-              <FileJson className="h-4 w-4 text-yellow-400" />
+              <FileJson className="h-4 w-4 text-[var(--state-warning)]" />
               <span className="text-sm font-bold">本平台 Tool</span>
-              <span className="text-xs text-gray-600">{tools.length}</span>
+              <span className="text-xs text-[var(--text-500)]">{tools.length}</span>
             </div>
             <button
               onClick={loadTools}
-              className="text-gray-500 hover:text-yellow-400"
+              className="text-[var(--text-500)] hover:text-[var(--state-warning)]"
               title="刷新"
             >
               {toolsLoading ? (
@@ -399,23 +402,23 @@ export default function AdminMCPPlatformPanel() {
                     ? '需要 idempotency_key'
                     : '不需要 idempotency_key'
                 }`}
-                className={`w-full border-b border-gray-800/70 px-4 py-3 text-left transition-colors hover:bg-white/5 ${
-                  selectedName === tool.name ? 'bg-yellow-500/10' : ''
+                className={`w-full border-b border-[color:var(--border)] px-4 py-3 text-left transition-colors hover:bg-[var(--background-100)] ${
+                  selectedName === tool.name ? 'bg-[var(--state-warning-surface)]' : ''
                 }`}
               >
                 <div className="flex items-center justify-between gap-3">
-                  <span className="break-all text-sm text-gray-200">{tool.name}</span>
+                  <span className="break-all text-sm text-[var(--text-800)]">{tool.name}</span>
                   <span
                     className={`rounded border px-2 py-0.5 text-[10px] ${
                       tool.isWrite
-                        ? 'border-orange-500/20 bg-orange-500/10 text-orange-400'
-                        : 'border-cyan-500/20 bg-cyan-500/10 text-cyan-400'
+                        ? 'border-[color:var(--state-warning-border)] bg-[var(--state-warning-surface)] text-[var(--state-warning)]'
+                        : 'border-[color:var(--brand-200)] bg-[var(--brand-50)] text-[var(--brand-600)]'
                     }`}
                   >
                     {tool.isWrite ? '写' : '读'}
                   </span>
                 </div>
-                <p className="mt-1 line-clamp-2 text-xs text-gray-600">
+                <p className="mt-1 line-clamp-2 text-xs text-[var(--text-500)]">
                   {tool.description}
                 </p>
               </button>
@@ -425,25 +428,25 @@ export default function AdminMCPPlatformPanel() {
 
         <div className="space-y-5">
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <div className="overflow-hidden rounded-xl border border-gray-800 bg-[#111]">
-              <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
+            <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background-50)]">
+              <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3">
                 <div>
                   <p className="text-sm font-bold">{selectedTool?.name || '未选择 Tool'}</p>
-                  <p className="mt-1 text-xs text-gray-600">
+                  <p className="mt-1 text-xs text-[var(--text-500)]">
                     {selectedTool?.isWrite ? '写操作需要幂等键' : '读操作'}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={resetArgs}
-                    className="p-2 text-gray-500 hover:text-yellow-400"
+                    className="p-2 text-[var(--text-500)] hover:text-[var(--state-warning)]"
                     title="示例参数"
                   >
                     <Wand2 className="h-4 w-4" />
                   </button>
                   <button
                     onClick={formatArgs}
-                    className="p-2 text-gray-500 hover:text-yellow-400"
+                    className="p-2 text-[var(--text-500)] hover:text-[var(--state-warning)]"
                     title="格式化"
                   >
                     <FileJson className="h-4 w-4" />
@@ -454,10 +457,10 @@ export default function AdminMCPPlatformPanel() {
                 value={argsText}
                 onChange={(event) => setArgsText(event.target.value)}
                 spellCheck={false}
-                className="h-80 w-full resize-none bg-black p-4 font-mono text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                className="h-80 w-full resize-none bg-[var(--background-50)] p-4 font-mono text-xs text-[var(--text-800)] focus:outline-none focus:ring-1 focus:ring-[color:var(--brand-500)]"
               />
-              <div className="flex items-center justify-between border-t border-gray-800 px-4 py-3">
-                <span className="text-xs text-gray-600">
+              <div className="flex items-center justify-between border-t border-[color:var(--border)] px-4 py-3">
+                <span className="text-xs text-[var(--text-500)]">
                   {selectedTool?.requiresIdempotency
                     ? 'idempotency_key 自动补全'
                     : 'request_id 可选'}
@@ -465,7 +468,7 @@ export default function AdminMCPPlatformPanel() {
                 <button
                   onClick={execute}
                   disabled={!selectedTool || executing}
-                  className="flex items-center gap-2 rounded-lg bg-yellow-500 px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-yellow-400 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-lg bg-[var(--brand-500)] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-[var(--brand-strong)] disabled:opacity-50"
                 >
                   {executing ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -477,24 +480,24 @@ export default function AdminMCPPlatformPanel() {
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-gray-800 bg-[#111]">
-              <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
+            <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background-50)]">
+              <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3">
                 <div className="flex items-center gap-2">
-                  <Database className="h-4 w-4 text-yellow-400" />
+                  <Database className="h-4 w-4 text-[var(--state-warning)]" />
                   <span className="text-sm font-bold">响应结果</span>
                 </div>
                 <button
                   onClick={copyResponse}
                   disabled={!response}
-                  className="p-2 text-gray-500 hover:text-yellow-400 disabled:opacity-30"
+                  className="p-2 text-[var(--text-500)] hover:text-[var(--state-warning)] disabled:opacity-30"
                   title="复制"
                 >
                   <Copy className="h-4 w-4" />
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-3 border-b border-gray-800 p-4 text-xs">
+              <div className="grid grid-cols-2 gap-3 border-b border-[color:var(--border)] p-4 text-xs">
                 <div>
-                  <p className="mb-1 text-gray-600">状态</p>
+                  <p className="mb-1 text-[var(--text-500)]">状态</p>
                   <span
                     className={`rounded border px-2 py-1 ${
                       response?.result.success
@@ -508,34 +511,34 @@ export default function AdminMCPPlatformPanel() {
                   </span>
                 </div>
                 <div>
-                  <p className="mb-1 text-gray-600">耗时</p>
-                  <p className="text-gray-300">{response?.durationMs ?? '-'} ms</p>
+                  <p className="mb-1 text-[var(--text-500)]">耗时</p>
+                  <p className="text-[var(--text-700)]">{response?.durationMs ?? '-'} ms</p>
                 </div>
                 <div>
-                  <p className="mb-1 text-gray-600">审计 ID</p>
-                  <p className="truncate text-gray-300">{response?.invocationId || '-'}</p>
+                  <p className="mb-1 text-[var(--text-500)]">审计 ID</p>
+                  <p className="truncate text-[var(--text-700)]">{response?.invocationId || '-'}</p>
                 </div>
                 <div>
-                  <p className="mb-1 text-gray-600">错误码</p>
-                  <p className="truncate text-gray-300">{response?.result.error?.code || '-'}</p>
+                  <p className="mb-1 text-[var(--text-500)]">错误码</p>
+                  <p className="truncate text-[var(--text-700)]">{response?.result.error?.code || '-'}</p>
                 </div>
               </div>
-              <pre className="h-[254px] overflow-auto bg-black p-4 font-mono text-xs text-gray-300">
+              <pre className="h-[254px] overflow-auto bg-[var(--background-100)] p-4 font-mono text-xs text-[var(--text-700)]">
                 {response ? stringifyJson(response) : '暂无响应'}
               </pre>
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-gray-800 bg-[#111]">
-            <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
+          <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background-50)]">
+            <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3">
               <div className="flex items-center gap-2">
-                <Search className="h-4 w-4 text-yellow-400" />
+                <Search className="h-4 w-4 text-[var(--state-warning)]" />
                 <span className="text-sm font-bold">最近 MCP 调用</span>
-                <span className="text-xs text-gray-600">共 {invocationTotal} 条</span>
+                <span className="text-xs text-[var(--text-500)]">共 {invocationTotal} 条</span>
               </div>
               <button
                 onClick={loadInvocations}
-                className="text-gray-500 hover:text-yellow-400"
+                className="text-[var(--text-500)] hover:text-[var(--state-warning)]"
               >
                 {invocationsLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -544,11 +547,11 @@ export default function AdminMCPPlatformPanel() {
                 )}
               </button>
             </div>
-            <div className="flex flex-wrap items-center gap-3 border-b border-gray-800 p-3">
+            <div className="flex flex-wrap items-center gap-3 border-b border-[color:var(--border)] p-3">
               <select
                 value={toolFilter}
                 onChange={(event) => setToolFilter(event.target.value)}
-                className="rounded-lg border border-gray-700 bg-black px-3 py-2 text-xs text-gray-200 focus:border-yellow-500 focus:outline-none"
+                className="rounded-lg border border-[color:var(--input)] bg-[var(--background-50)] px-3 py-2 text-xs text-[var(--text-800)] focus:border-[color:var(--brand-500)] focus:outline-none"
               >
                 <option value="">全部 Tool</option>
                 {tools.map((tool) => (
@@ -560,7 +563,7 @@ export default function AdminMCPPlatformPanel() {
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
-                className="rounded-lg border border-gray-700 bg-black px-3 py-2 text-xs text-gray-200 focus:border-yellow-500 focus:outline-none"
+                className="rounded-lg border border-[color:var(--input)] bg-[var(--background-50)] px-3 py-2 text-xs text-[var(--text-800)] focus:border-[color:var(--brand-500)] focus:outline-none"
               >
                 <option value="">全部状态</option>
                 <option value="success">success</option>
@@ -570,11 +573,11 @@ export default function AdminMCPPlatformPanel() {
                 value={requestFilter}
                 onChange={(event) => setRequestFilter(event.target.value)}
                 placeholder="request_id"
-                className="rounded-lg border border-gray-700 bg-black px-3 py-2 text-xs text-gray-200 focus:border-yellow-500 focus:outline-none"
+                className="rounded-lg border border-[color:var(--input)] bg-[var(--background-50)] px-3 py-2 text-xs text-[var(--text-800)] focus:border-[color:var(--brand-500)] focus:outline-none"
               />
               <button
                 onClick={loadInvocations}
-                className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-400 transition-colors hover:bg-yellow-500/20"
+                className="rounded-lg border border-[color:var(--state-warning-border)] bg-[var(--state-warning-surface)] px-3 py-2 text-xs text-[var(--state-warning)] transition-colors hover:bg-[color:var(--state-warning-border)]"
               >
                 查询
               </button>
@@ -582,13 +585,13 @@ export default function AdminMCPPlatformPanel() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-800 text-gray-500">
-                    <th className="px-4 py-3 text-left">时间</th>
-                    <th className="px-4 py-3 text-left">Tool</th>
-                    <th className="px-4 py-3 text-left">request_id</th>
-                    <th className="px-4 py-3 text-left">幂等键</th>
-                    <th className="px-4 py-3 text-left">状态</th>
-                    <th className="px-4 py-3 text-right">耗时</th>
+                  <tr className="border-b border-[color:var(--border)] text-[var(--text-500)]">
+                    <th scope="col" className="px-4 py-3 text-left">时间</th>
+                    <th scope="col" className="px-4 py-3 text-left">Tool</th>
+                    <th scope="col" className="px-4 py-3 text-left">request_id</th>
+                    <th scope="col" className="px-4 py-3 text-left">幂等键</th>
+                    <th scope="col" className="px-4 py-3 text-left">状态</th>
+                    <th scope="col" className="px-4 py-3 text-right">耗时</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -596,18 +599,18 @@ export default function AdminMCPPlatformPanel() {
                     <tr
                       key={item.id}
                       onClick={() => showInvocationDetail(item.id)}
-                      className="cursor-pointer border-b border-gray-800/50 hover:bg-white/5"
+                      className="cursor-pointer border-b border-[color:var(--border)] hover:bg-[var(--background-100)]"
                     >
-                      <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-500">
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--text-500)]">
                         {new Date(item.createdAt).toLocaleString('zh-CN')}
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-300">
+                      <td className="px-4 py-3 text-xs text-[var(--text-700)]">
                         {item.toolName}
                       </td>
-                      <td className="max-w-[180px] truncate px-4 py-3 text-xs text-gray-500">
+                      <td className="max-w-[180px] truncate px-4 py-3 text-xs text-[var(--text-500)]">
                         {item.requestId || '-'}
                       </td>
-                      <td className="max-w-[180px] truncate px-4 py-3 text-xs text-gray-500">
+                      <td className="max-w-[180px] truncate px-4 py-3 text-xs text-[var(--text-500)]">
                         {item.idempotencyKey || '-'}
                       </td>
                       <td className="px-4 py-3">
@@ -615,14 +618,14 @@ export default function AdminMCPPlatformPanel() {
                           {item.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-right text-xs text-gray-500">
+                      <td className="px-4 py-3 text-right text-xs text-[var(--text-500)]">
                         {item.durationMs ?? '-'} ms
                       </td>
                     </tr>
                   ))}
                   {invocations.length === 0 && (
                     <tr>
-                      <td className="py-10 text-center text-sm text-gray-600" colSpan={6}>
+                      <td className="py-10 text-center text-sm text-[var(--text-500)]" colSpan={6}>
                         暂无调用记录
                       </td>
                     </tr>
@@ -635,34 +638,43 @@ export default function AdminMCPPlatformPanel() {
       </div>
 
       {detail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
-          <div className="max-h-[86vh] w-full max-w-4xl overflow-hidden rounded-xl border border-gray-800 bg-[#111]">
-            <div className="flex items-center justify-between border-b border-gray-800 px-5 py-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label="MCP 调用详情"
+        >
+          <div
+            ref={detailDialogRef}
+            className="max-h-[86vh] w-full max-w-4xl overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background-50)]"
+          >
+            <div className="flex items-center justify-between border-b border-[color:var(--border)] px-5 py-4">
               <div>
                 <p className="font-bold">{detail.toolName}</p>
-                <p className="text-xs text-gray-600">{detail.id}</p>
+                <p className="text-xs text-[var(--text-500)]">{detail.id}</p>
               </div>
               <button
                 onClick={() => setDetail(null)}
-                className="text-gray-500 hover:text-gray-300"
+                aria-label="关闭调用详情"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-[var(--text-500)] hover:bg-[var(--background-100)] hover:text-[var(--text-700)]"
               >
                 <XCircle className="h-5 w-5" />
               </button>
             </div>
             <div className="grid max-h-[72vh] grid-cols-1 overflow-auto lg:grid-cols-2">
-              <div className="border-r border-gray-800">
-                <div className="border-b border-gray-800 px-4 py-2 text-xs text-gray-500">
+              <div className="border-r border-[color:var(--border)]">
+                <div className="border-b border-[color:var(--border)] px-4 py-2 text-xs text-[var(--text-500)]">
                   input_json
                 </div>
-                <pre className="whitespace-pre-wrap p-4 font-mono text-xs text-gray-300">
+                <pre className="whitespace-pre-wrap p-4 font-mono text-xs text-[var(--text-700)]">
                   {stringifyJson(detail.inputJson)}
                 </pre>
               </div>
               <div>
-                <div className="border-b border-gray-800 px-4 py-2 text-xs text-gray-500">
+                <div className="border-b border-[color:var(--border)] px-4 py-2 text-xs text-[var(--text-500)]">
                   output_json
                 </div>
-                <pre className="whitespace-pre-wrap p-4 font-mono text-xs text-gray-300">
+                <pre className="whitespace-pre-wrap p-4 font-mono text-xs text-[var(--text-700)]">
                   {stringifyJson(detail.outputJson)}
                 </pre>
               </div>

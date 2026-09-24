@@ -4,6 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { API_BASE } from '../config/api';
 import { CircleAlert, Loader2, Plus, Pencil, Ban, Package } from 'lucide-react';
 import { WorkbenchPageHeader } from '../components/workbench/WorkbenchPrimitives';
+import { Skeleton } from '../components/ui/Skeleton';
 import { useConfirm } from '../components/ui/confirm-context';
 
 interface PlanModel {
@@ -364,7 +365,7 @@ export default function AdminEntitlement() {
   const formatTokens = (n: number) => (n === -1 ? '无限' : n.toLocaleString());
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[var(--background-100)]">
       <WorkbenchPageHeader
         icon={Package}
         eyebrow="运营管理"
@@ -373,7 +374,7 @@ export default function AdminEntitlement() {
         actions={
           <button
             onClick={openCreate}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-500)] px-3.5 py-2 text-sm font-medium text-white hover:bg-[var(--brand-strong)]"
           >
             <Plus className="h-4 w-4" /> 新建套餐
           </button>
@@ -381,7 +382,7 @@ export default function AdminEntitlement() {
       />
       <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6">
         {error && (
-          <div className="flex items-center gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="flex items-center gap-2 rounded-lg bg-[var(--state-error-surface)] px-4 py-3 text-sm text-[var(--state-error)]">
             <CircleAlert className="h-4 w-4" /> {error}
           </div>
         )}
@@ -389,63 +390,63 @@ export default function AdminEntitlement() {
         {showForm && (
           <form
             onSubmit={handleSubmit}
-            className="space-y-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
+            className="space-y-4 rounded-xl border border-[color:var(--border)] bg-white p-6 shadow-sm"
           >
-            <h3 className="text-base font-semibold text-gray-900">
+            <h3 className="text-base font-semibold text-[var(--text-900)]">
               {editing ? `编辑套餐：${editing.name}` : '新建套餐'}
             </h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <label className="block text-sm">
-                <span className="mb-1 block font-medium text-gray-700">套餐编码 *</span>
+                <span className="mb-1 block font-medium text-[var(--text-700)]">套餐编码 *</span>
                 <input
                   value={form.code}
                   onChange={(e) => setForm({ ...form, code: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-[color:var(--input)] px-3 py-2 text-sm"
                   placeholder="pro"
                 />
               </label>
               <label className="block text-sm">
-                <span className="mb-1 block font-medium text-gray-700">名称 *</span>
+                <span className="mb-1 block font-medium text-[var(--text-700)]">名称 *</span>
                 <input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-[color:var(--input)] px-3 py-2 text-sm"
                   placeholder="专业版"
                 />
               </label>
               <label className="block text-sm">
-                <span className="mb-1 block font-medium text-gray-700">周期（天）</span>
+                <span className="mb-1 block font-medium text-[var(--text-700)]">周期（天）</span>
                 <input
                   type="number"
                   value={form.period_days}
                   onChange={(e) => setForm({ ...form, period_days: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-[color:var(--input)] px-3 py-2 text-sm"
                 />
               </label>
               <label className="block text-sm">
-                <span className="mb-1 block font-medium text-gray-700">
+                <span className="mb-1 block font-medium text-[var(--text-700)]">
                   Token 额度（-1 无限）
                 </span>
                 <input
                   type="number"
                   value={form.total_tokens}
                   onChange={(e) => setForm({ ...form, total_tokens: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-[color:var(--input)] px-3 py-2 text-sm"
                 />
               </label>
               <label className="block text-sm">
-                <span className="mb-1 block font-medium text-gray-700">
+                <span className="mb-1 block font-medium text-[var(--text-700)]">
                   Credits 额度（媒体生成，-1 无限）
                 </span>
                 <input
                   type="number"
                   value={form.total_credits}
                   onChange={(e) => setForm({ ...form, total_credits: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-[color:var(--input)] px-3 py-2 text-sm"
                 />
               </label>
               <label className="block text-sm">
-                <span className="mb-1 block font-medium text-gray-700">
+                <span className="mb-1 block font-medium text-[var(--text-700)]">
                   实例数上限（-1 无限）
                 </span>
                 <input
@@ -454,39 +455,39 @@ export default function AdminEntitlement() {
                   onChange={(e) =>
                     setForm({ ...form, max_runtime_instances: e.target.value })
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-[color:var(--input)] px-3 py-2 text-sm"
                 />
               </label>
               <label className="block text-sm">
-                <span className="mb-1 block font-medium text-gray-700">
+                <span className="mb-1 block font-medium text-[var(--text-700)]">
                   Profile 目录（逗号分隔，* 通配）
                 </span>
                 <input
                   value={form.runtime_profiles}
                   onChange={(e) => setForm({ ...form, runtime_profiles: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-[color:var(--input)] px-3 py-2 text-sm"
                 />
               </label>
               <label className="block text-sm">
-                <span className="mb-1 block font-medium text-gray-700">价格（分）</span>
+                <span className="mb-1 block font-medium text-[var(--text-700)]">价格（分）</span>
                 <input
                   type="number"
                   value={form.price_cents}
                   onChange={(e) => setForm({ ...form, price_cents: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-[color:var(--input)] px-3 py-2 text-sm"
                 />
               </label>
               <label className="block text-sm sm:col-span-2 lg:col-span-4">
-                <span className="mb-1 block font-medium text-gray-700">
+                <span className="mb-1 block font-medium text-[var(--text-700)]">
                   模型目录（每行一条：model_id, model_type, tier, 旗舰填 1）
                 </span>
                 <textarea
                   value={form.models}
                   onChange={(e) => setForm({ ...form, models: e.target.value })}
                   rows={4}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
+                  className="w-full rounded-lg border border-[color:var(--input)] px-3 py-2 font-mono text-sm"
                   placeholder={
-                    'gpt-5.5, chat, flagship, 1\ndoubao-seedream-4-5-251128, image\ngrok-video-3, video\n'
+                    'openai/gpt-5.5, chat, flagship, 1\ndoubao-seedream-4-5-251128, image\ngrok-video-3, video\n'
                   }
                 />
               </label>
@@ -495,7 +496,7 @@ export default function AdminEntitlement() {
               <button
                 type="submit"
                 disabled={saving}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand-500)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--brand-strong)] disabled:opacity-50"
               >
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
                 保存
@@ -503,7 +504,7 @@ export default function AdminEntitlement() {
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                className="rounded-lg border border-[color:var(--input)] px-4 py-2 text-sm text-[var(--text-700)] hover:bg-[var(--background-100)]"
               >
                 取消
               </button>
@@ -512,71 +513,73 @@ export default function AdminEntitlement() {
         )}
 
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-gray-900">套餐列表</h2>
+          <h2 className="text-lg font-semibold text-[var(--text-900)]">套餐列表</h2>
           {loading ? (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <Loader2 className="h-4 w-4 animate-spin" /> 加载中…
+            <div className="space-y-2" aria-busy="true" aria-label="正在读取套餐列表">
+              {Array.from({ length: 3 }, (_, index) => (
+                <Skeleton key={index} className="h-12 w-full" rounded="lg" />
+              ))}
             </div>
           ) : plans.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">
+            <div className="rounded-xl border border-dashed border-[color:var(--border)] bg-white p-8 text-center text-sm text-[var(--text-500)]">
               暂无套餐，点击「新建套餐」创建
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+            <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-white shadow-sm">
+              <table className="min-w-full divide-y divide-[color:var(--border)] text-sm">
+                <thead className="bg-[var(--background-100)] text-left text-xs font-medium uppercase tracking-wide text-[var(--text-500)]">
                   <tr>
-                    <th className="px-4 py-3">套餐</th>
-                    <th className="px-4 py-3">状态</th>
-                    <th className="px-4 py-3">周期</th>
-                    <th className="px-4 py-3">Token 额度</th>
-                    <th className="px-4 py-3">实例上限</th>
-                    <th className="px-4 py-3">模型目录</th>
-                    <th className="px-4 py-3">价格</th>
-                    <th className="px-4 py-3 text-right">操作</th>
+                    <th scope="col" className="px-4 py-3">套餐</th>
+                    <th scope="col" className="px-4 py-3">状态</th>
+                    <th scope="col" className="px-4 py-3">周期</th>
+                    <th scope="col" className="px-4 py-3">Token 额度</th>
+                    <th scope="col" className="px-4 py-3">实例上限</th>
+                    <th scope="col" className="px-4 py-3">模型目录</th>
+                    <th scope="col" className="px-4 py-3">价格</th>
+                    <th scope="col" className="px-4 py-3 text-right">操作</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-[color:var(--background-100)]">
                   {plans.map((plan) => (
                     <tr key={plan.id}>
                       <td className="px-4 py-3">
-                        <div className="font-medium text-gray-900">{plan.name}</div>
-                        <div className="font-mono text-xs text-gray-500">{plan.code}</div>
+                        <div className="font-medium text-[var(--text-900)]">{plan.name}</div>
+                        <div className="font-mono text-xs text-[var(--text-500)]">{plan.code}</div>
                       </td>
                       <td className="px-4 py-3">
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs ${
                             plan.status === 'active'
-                              ? 'bg-green-50 text-green-700'
-                              : 'bg-gray-100 text-gray-500'
+                              ? 'bg-[var(--state-success-surface)] text-[var(--state-success-text)]'
+                              : 'bg-[var(--background-100)] text-[var(--text-500)]'
                           }`}
                         >
                           {plan.status === 'active' ? '启用' : '已停用'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-700">{plan.period_days} 天</td>
-                      <td className="px-4 py-3 text-gray-700">
+                      <td className="px-4 py-3 text-[var(--text-700)] tabular">{plan.period_days} 天</td>
+                      <td className="px-4 py-3 text-[var(--text-700)] tabular">
                         {formatTokens(plan.total_tokens)}
                       </td>
-                      <td className="px-4 py-3 text-gray-700">
+                      <td className="px-4 py-3 text-[var(--text-700)] tabular">
                         {formatTokens(plan.total_credits)}
                       </td>
-                      <td className="px-4 py-3 text-gray-700">
+                      <td className="px-4 py-3 text-[var(--text-700)] tabular">
                         {plan.max_runtime_instances === -1
                           ? '无限'
                           : plan.max_runtime_instances}
                       </td>
-                      <td className="px-4 py-3 text-gray-700">
+                      <td className="px-4 py-3 text-[var(--text-700)] tabular">
                         {plan.models.length} 个模型
                       </td>
-                      <td className="px-4 py-3 text-gray-700">
+                      <td className="px-4 py-3 text-[var(--text-700)] tabular">
                         ¥{(plan.price_cents / 100).toFixed(2)}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex gap-1">
                           <button
                             onClick={() => openEdit(plan)}
-                            className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-blue-600"
+                            className="rounded-lg p-1.5 text-[var(--text-500)] hover:bg-[var(--background-100)] hover:text-[var(--brand-600)]"
                             title="编辑"
                           >
                             <Pencil className="h-4 w-4" />
@@ -584,7 +587,7 @@ export default function AdminEntitlement() {
                           {plan.status === 'active' && (
                             <button
                               onClick={() => handleDeprecate(plan)}
-                              className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-red-600"
+                              className="rounded-lg p-1.5 text-[var(--text-500)] hover:bg-[var(--background-100)] hover:text-[var(--state-error)]"
                               title="停用"
                             >
                               <Ban className="h-4 w-4" />
@@ -602,11 +605,11 @@ export default function AdminEntitlement() {
 
         <section className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-gray-900">订阅操作</h2>
+            <h2 className="text-lg font-semibold text-[var(--text-900)]">订阅操作</h2>
             <select
               value={actionPlan}
               onChange={(e) => setActionPlan(e.target.value)}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+              className="rounded-lg border border-[color:var(--input)] px-3 py-1.5 text-sm"
             >
               <option value="">默认套餐（free）</option>
               {plans
@@ -618,52 +621,52 @@ export default function AdminEntitlement() {
                 ))}
             </select>
           </div>
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[color:var(--border)] bg-white p-4 shadow-sm">
             <input
               value={actionOrg}
               onChange={(e) => setActionOrg(e.target.value)}
-              className="w-72 rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
+              className="w-72 rounded-lg border border-[color:var(--input)] px-3 py-2 font-mono text-sm"
               placeholder="Org ID（激活新订阅）"
             />
             <button
               onClick={() => handleLifecycle('activate')}
-              className="rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              className="rounded-lg bg-[var(--brand-500)] px-3.5 py-2 text-sm font-medium text-white hover:bg-[var(--brand-strong)]"
             >
               激活订阅
             </button>
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-[var(--text-400)]">
               升级即时生效（差价折算由结算版块承担）；降级下个计费周期生效
             </span>
           </div>
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-gray-900">Org 订阅</h2>
+          <h2 className="text-lg font-semibold text-[var(--text-900)]">Org 订阅</h2>
           {subscriptions.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">
+            <div className="rounded-xl border border-dashed border-[color:var(--border)] bg-white p-8 text-center text-sm text-[var(--text-500)]">
               暂无订阅
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+            <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-white shadow-sm">
+              <table className="min-w-full divide-y divide-[color:var(--border)] text-sm">
+                <thead className="bg-[var(--background-100)] text-left text-xs font-medium uppercase tracking-wide text-[var(--text-500)]">
                   <tr>
-                    <th className="px-4 py-3">Org</th>
-                    <th className="px-4 py-3">套餐</th>
-                    <th className="px-4 py-3">状态</th>
-                    <th className="px-4 py-3">周期结束</th>
-                    <th className="px-4 py-3">额度用量</th>
-                    <th className="px-4 py-3">Credits 用量</th>
-                    <th className="px-4 py-3">免费额度</th>
+                    <th scope="col" className="px-4 py-3">Org</th>
+                    <th scope="col" className="px-4 py-3">套餐</th>
+                    <th scope="col" className="px-4 py-3">状态</th>
+                    <th scope="col" className="px-4 py-3">周期结束</th>
+                    <th scope="col" className="px-4 py-3">额度用量</th>
+                    <th scope="col" className="px-4 py-3">Credits 用量</th>
+                    <th scope="col" className="px-4 py-3">免费额度</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-[color:var(--background-100)]">
                   {subscriptions.map((sub) => (
                     <tr key={sub.id}>
-                      <td className="px-4 py-3 font-mono text-xs text-gray-700">
+                      <td className="px-4 py-3 font-mono text-xs text-[var(--text-700)]">
                         {sub.org_id.slice(0, 8)}…
                       </td>
-                      <td className="px-4 py-3 text-gray-700">
+                      <td className="px-4 py-3 text-[var(--text-700)] tabular">
                         {sub.plan_name}
                         {sub.pending_plan && (
                           <span className="ml-1 text-xs text-amber-600">
@@ -672,24 +675,24 @@ export default function AdminEntitlement() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                        <span className="rounded-full bg-[var(--brand-50)] px-2 py-0.5 text-xs text-[var(--brand-700)]">
                           {sub.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-700">
+                      <td className="px-4 py-3 text-[var(--text-700)] tabular">
                         {new Date(sub.period_end).toLocaleDateString()}
                       </td>
-                      <td className="px-4 py-3 text-gray-700">
+                      <td className="px-4 py-3 text-[var(--text-700)] tabular">
                         {sub.quota
                           ? `${sub.quota.used_tokens.toLocaleString()} / ${formatTokens(sub.quota.total_tokens)}`
                           : '—'}
                       </td>
-                      <td className="px-4 py-3 text-gray-700">
+                      <td className="px-4 py-3 text-[var(--text-700)] tabular">
                         {sub.quota
                           ? `${sub.quota.used_credits.toLocaleString()} / ${formatTokens(sub.quota.total_credits)}`
                           : '—'}
                       </td>
-                      <td className="px-4 py-3 text-gray-700">
+                      <td className="px-4 py-3 text-[var(--text-700)] tabular">
                         {sub.free_quota
                           ? `${sub.free_quota.used_tokens.toLocaleString()} / ${formatTokens(sub.free_quota.total_tokens)}`
                           : '—'}
@@ -698,13 +701,13 @@ export default function AdminEntitlement() {
                         <div className="inline-flex gap-1">
                           <button
                             onClick={() => handleLifecycle('upgrade', sub)}
-                            className="rounded-lg px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
+                            className="rounded-lg px-2 py-1 text-xs text-[var(--brand-600)] hover:bg-[var(--brand-50)]"
                           >
                             升级
                           </button>
                           <button
                             onClick={() => handleLifecycle('downgrade', sub)}
-                            className="rounded-lg px-2 py-1 text-xs text-amber-600 hover:bg-amber-50"
+                            className="rounded-lg px-2 py-1 text-xs text-[var(--state-warning)] hover:bg-[var(--state-warning-surface)]"
                           >
                             降级
                           </button>
@@ -719,56 +722,56 @@ export default function AdminEntitlement() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-gray-900">
+          <h2 className="text-lg font-semibold text-[var(--text-900)]">
             预扣费冻结单
-            <span className="ml-2 text-sm font-normal text-gray-500">
+            <span className="ml-2 text-sm font-normal text-[var(--text-500)]">
               媒体生成提交时冻结 credits，终态结算/退款（对账兜底）
             </span>
           </h2>
           {creditHolds.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">
+            <div className="rounded-xl border border-dashed border-[color:var(--border)] bg-white p-8 text-center text-sm text-[var(--text-500)]">
               暂无冻结中的冻结单
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead className="bg-gray-50 text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+            <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-white shadow-sm">
+              <table className="min-w-full divide-y divide-[color:var(--border)] text-sm">
+                <thead className="bg-[var(--background-100)] text-left text-xs font-medium uppercase tracking-wide text-[var(--text-500)]">
                   <tr>
-                    <th className="px-4 py-3">Task</th>
-                    <th className="px-4 py-3">Org</th>
-                    <th className="px-4 py-3">模型</th>
-                    <th className="px-4 py-3">预扣 credits</th>
-                    <th className="px-4 py-3">提交时间</th>
-                    <th className="px-4 py-3 text-right">操作</th>
+                    <th scope="col" className="px-4 py-3">Task</th>
+                    <th scope="col" className="px-4 py-3">Org</th>
+                    <th scope="col" className="px-4 py-3">模型</th>
+                    <th scope="col" className="px-4 py-3">预扣 credits</th>
+                    <th scope="col" className="px-4 py-3">提交时间</th>
+                    <th scope="col" className="px-4 py-3 text-right">操作</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-[color:var(--background-100)]">
                   {creditHolds.map((hold) => (
                     <tr key={hold.task_id}>
-                      <td className="px-4 py-3 font-mono text-xs text-gray-700">
+                      <td className="px-4 py-3 font-mono text-xs text-[var(--text-700)]">
                         {hold.task_id}
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs text-gray-700">
+                      <td className="px-4 py-3 font-mono text-xs text-[var(--text-700)]">
                         {hold.org_id.slice(0, 8)}…
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs text-gray-700">
+                      <td className="px-4 py-3 font-mono text-xs text-[var(--text-700)]">
                         {hold.model}
                       </td>
-                      <td className="px-4 py-3 text-gray-700">{hold.estimated_credits}</td>
-                      <td className="px-4 py-3 text-gray-700">
+                      <td className="px-4 py-3 text-[var(--text-700)] tabular">{hold.estimated_credits}</td>
+                      <td className="px-4 py-3 text-[var(--text-700)] tabular">
                         {new Date(hold.created_at).toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex gap-1">
                           <button
                             onClick={() => handleHoldSettle(hold)}
-                            className="rounded-lg px-2 py-1 text-xs text-green-700 hover:bg-green-50"
+                            className="rounded-lg px-2 py-1 text-xs text-[var(--state-success-text)] hover:bg-[var(--state-success-surface)]"
                           >
                             结算
                           </button>
                           <button
                             onClick={() => handleHoldRefund(hold)}
-                            className="rounded-lg px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                            className="rounded-lg px-2 py-1 text-xs text-[var(--state-error)] hover:bg-[var(--state-error-surface)]"
                           >
                             退款
                           </button>
@@ -783,22 +786,22 @@ export default function AdminEntitlement() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-gray-900">用量查询</h2>
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <h2 className="text-lg font-semibold text-[var(--text-900)]">用量查询</h2>
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[color:var(--border)] bg-white p-4 shadow-sm">
             <input
               value={usageWorkspace}
               onChange={(e) => setUsageWorkspace(e.target.value)}
-              className="w-80 rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm"
+              className="w-80 rounded-lg border border-[color:var(--input)] px-3 py-2 font-mono text-sm"
               placeholder="Workspace ID（近 30 天）"
             />
             <button
               onClick={handleUsageQuery}
-              className="rounded-lg border border-gray-300 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              className="rounded-lg border border-[color:var(--input)] px-3.5 py-2 text-sm text-[var(--text-700)] hover:bg-[var(--background-100)]"
             >
               查询
             </button>
             {usageReport && (
-              <span className="text-sm text-gray-700">
+              <span className="text-sm text-[var(--text-700)]">
                 请求数 {usageReport.requests} · 输入 {usageReport.input_tokens.toLocaleString()} ·
                 输出 {usageReport.output_tokens.toLocaleString()} · credits{' '}
                 {usageReport.credits.toLocaleString()} · 金额 ¥

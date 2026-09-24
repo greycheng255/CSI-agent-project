@@ -33,6 +33,7 @@ export default function DeliveryForm({
   const containerClass = embedded
     ? 'py-6'
     : 'rounded-2xl border border-[color:var(--border)] bg-white p-5 md:p-6';
+  const labelClass = 'block text-sm font-medium text-[color:var(--text-700)] mb-1';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,13 +94,13 @@ export default function DeliveryForm({
     switch (previewType) {
       case 'code':
         return (
-          <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm">
+          <pre className="bg-[var(--surface-code)] text-[var(--text-100)] p-4 rounded-lg overflow-x-auto text-sm">
             <code>{previewContent}</code>
           </pre>
         );
       case 'text':
         return (
-          <div className="bg-gray-50 p-4 rounded-lg whitespace-pre-wrap text-gray-700">
+          <div className="bg-[var(--background-100)] p-4 rounded-lg whitespace-pre-wrap text-[color:var(--text-700)]">
             {previewContent}
           </div>
         );
@@ -109,15 +110,15 @@ export default function DeliveryForm({
             href={previewContent}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-600 hover:underline break-all"
+            className="link-cs hover:underline break-all"
           >
             {previewContent}
           </a>
         );
       case 'image':
         return (
-                    <img
-                      loading="lazy"
+          <img
+            loading="lazy"
             src={previewContent}
             alt="预览"
             className="max-w-full h-auto rounded-lg"
@@ -131,18 +132,18 @@ export default function DeliveryForm({
 
   return (
     <section className={containerClass}>
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">提交交付物</h3>
+      <h3 className="text-lg font-semibold text-[color:var(--text-900)] mb-4">提交交付物</h3>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
+        <div role="alert" className="alert-cs-error mb-4">
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4" aria-busy={submitting}>
         {/* 交付说明 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className={labelClass}>
             交付说明
           </label>
           <textarea
@@ -150,30 +151,30 @@ export default function DeliveryForm({
             onChange={(e) => setDeliverySummary(e.target.value)}
             placeholder="描述本次交付的内容..."
             rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="field-input"
           />
         </div>
 
         {/* 附件链接 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className={labelClass}>
             附件链接
           </label>
           <div className="flex items-center">
-            <LinkIcon className="w-5 h-5 text-gray-400 mr-2" />
+            <LinkIcon className="w-5 h-5 text-[color:var(--text-400)] mr-2" />
             <input
               type="url"
               value={deliveryUrl}
               onChange={(e) => setDeliveryUrl(e.target.value)}
               placeholder="https://..."
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="field-input flex-1"
             />
           </div>
         </div>
 
         {/* 预览内容 */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className={labelClass}>
             交付材料链接列表
           </label>
           <textarea
@@ -181,12 +182,12 @@ export default function DeliveryForm({
             onChange={(e) => setArtifactUrlsText(e.target.value)}
             placeholder="每行一个链接，例如代码仓库、结果文件、报告地址"
             rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="field-input"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className={labelClass}>
             Commit Hash
           </label>
           <input
@@ -194,12 +195,12 @@ export default function DeliveryForm({
             value={commitHash}
             onChange={(e) => setCommitHash(e.target.value)}
             placeholder="例如 9f4d2a1 或完整提交哈希"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+            className="field-input font-mono text-sm"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className={labelClass}>
             证据包 JSON
           </label>
           <textarea
@@ -207,13 +208,13 @@ export default function DeliveryForm({
             onChange={(e) => setEvidenceBundleText(e.target.value)}
             placeholder='{"tests":["npm test"],"result":"passed","notes":"..."}'
             rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+            className="field-input font-mono text-sm"
           />
         </div>
 
         <div>
           <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-[color:var(--text-700)]">
               预览内容（可选）
             </label>
             <div className="flex items-center space-x-2">
@@ -230,10 +231,11 @@ export default function DeliveryForm({
                     key={type}
                     type="button"
                     onClick={() => setPreviewType(type)}
-                    className={`p-2 rounded-lg transition-colors ${
+                    aria-pressed={previewType === type}
+                    className={`inline-flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
                       previewType === type
-                        ? 'bg-blue-100 text-blue-600'
-                        : 'text-gray-400 hover:text-gray-600'
+                        ? 'bg-[var(--brand-100)] text-[var(--brand-600)]'
+                        : 'text-[color:var(--text-400)] hover:text-[color:var(--text-600)]'
                     }`}
                     title={type === 'text' ? '文本' : type === 'code' ? '代码' : type === 'link' ? '链接' : '图片'}
                   >
@@ -249,7 +251,7 @@ export default function DeliveryForm({
               <select
                 value={previewLanguage}
                 onChange={(e) => setPreviewLanguage(e.target.value)}
-                className="px-3 py-1 border border-gray-300 rounded text-sm"
+                className="field-input text-sm"
               >
                 <option value="">选择语言</option>
                 <option value="javascript">JavaScript</option>
@@ -278,7 +280,7 @@ export default function DeliveryForm({
                 : '粘贴文本内容...'
             }
             rows={4}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+            className="field-input font-mono text-sm"
           />
 
           {previewContent && (
@@ -286,14 +288,15 @@ export default function DeliveryForm({
               <button
                 type="button"
                 onClick={() => setShowPreview(!showPreview)}
-                className="flex items-center text-sm text-blue-600 hover:text-blue-800"
+                aria-expanded={showPreview}
+                className="inline-flex min-h-10 items-center text-sm link-cs hover:underline"
               >
                 <Eye className="w-4 h-4 mr-1" />
                 {showPreview ? '隐藏预览' : '显示预览'}
               </button>
 
               {showPreview && (
-                <div className="mt-2 border border-gray-200 rounded-lg p-4">
+                <div className="mt-2 border border-[color:var(--border)] rounded-lg p-4">
                   {renderPreview()}
                 </div>
               )}
@@ -307,14 +310,15 @@ export default function DeliveryForm({
             type="button"
             onClick={onCancel}
             disabled={submitting}
-            className="px-4 py-2 text-gray-700 hover:text-gray-900"
+            className="btn-cs btn-ghost-dark btn-sm"
           >
             取消
           </button>
           <button
             type="submit"
             disabled={submitting}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center"
+            aria-busy={submitting}
+            className={`btn-cs btn-primary${submitting ? ' btn-cs--loading' : ''}`}
           >
             {submitting ? (
               <>

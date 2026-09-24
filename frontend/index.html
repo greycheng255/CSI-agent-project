@@ -11,6 +11,23 @@
         window.$RefreshSig$ = function() { return function() {}; };
         window.$RefreshReg$ = function() {};
       }
+      // 尽早应用主题，避免首屏闪白（FOUC）
+      (function () {
+        try {
+          var raw = localStorage.getItem('csi-theme');
+          var mode = raw ? (JSON.parse(raw).state || {}).mode : 'system';
+          if (mode !== 'light' && mode !== 'dark') mode = 'system';
+          var resolved =
+            mode === 'system'
+              ? window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+              : mode;
+          document.documentElement.setAttribute('data-theme', resolved);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
     </script>
   </head>
   <body>

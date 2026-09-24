@@ -156,7 +156,7 @@ export function PanelInput({
         type={type}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+        className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)]"
       />
     </div>
   );
@@ -292,7 +292,7 @@ export function AttachmentUpload({
               <button
                 type="button"
                 onClick={() => onChange(urls.filter((item) => item !== url).join('\n'))}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-400)] hover:bg-[var(--state-error-surface)] hover:text-[var(--state-error)]"
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-[var(--text-400)] hover:bg-[var(--state-error-surface)] hover:text-[var(--state-error)]"
                 aria-label="移除附件"
               >
                 <X className="h-3.5 w-3.5" />
@@ -301,7 +301,7 @@ export function AttachmentUpload({
           ))}
         </div>
       )}
-      {error && <p className="mt-1.5 text-xs text-[var(--state-error)]">{error}</p>}
+      {error && <p role="alert" className="mt-1.5 text-xs text-[var(--state-error)]">{error}</p>}
     </div>
   );
 }
@@ -323,7 +323,7 @@ export function PanelSelect({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+        className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)]"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -356,7 +356,7 @@ export function PanelTextarea({
         onChange={(event) => onChange(event.target.value)}
         rows={rows}
         placeholder={placeholder}
-        className="w-full resize-y rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm leading-6 text-[var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+        className="w-full resize-y rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm leading-6 text-[var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)]"
       />
     </div>
   );
@@ -421,7 +421,7 @@ export function ToggleOption({
         className="relative h-6 w-11 rounded-full border transition-colors"
         style={{ background: value ? accent : 'var(--background-300)', borderColor: value ? accent : 'var(--border)' }}
       >
-        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${value ? 'translate-x-5' : 'translate-x-0.5'}`} />
+        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-[var(--v3-white)] transition-transform ${value ? 'translate-x-5' : 'translate-x-0.5'}`} />
       </span>
     </button>
   );
@@ -480,7 +480,7 @@ export function ModelSelect({
       <select
         value={selectedModel}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+        className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)]"
       >
         {models.map((model) => (
           <option key={model.name} value={model.name}>
@@ -577,7 +577,7 @@ export function ParamField({
           aria-label={label}
         >
           <span
-            className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+            className={`absolute top-0.5 h-5 w-5 rounded-full bg-[var(--v3-white)] transition-transform ${
               checked ? 'translate-x-5' : 'translate-x-0.5'
             }`}
           />
@@ -626,7 +626,7 @@ export function ParamField({
           onChange={(event) => onChange(event.target.value)}
           rows={name === 'source_material' || name === 'prompt' || name === 'text' ? 7 : 4}
           placeholder={PLACEHOLDERS[name] || schema.description || label}
-          className="w-full resize-y rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm leading-6 text-[var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+          className="w-full resize-y rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm leading-6 text-[var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)]"
         />
       ) : (
         <input
@@ -634,7 +634,7 @@ export function ParamField({
           type={type === 'number' ? 'number' : 'text'}
           onChange={(event) => onChange(event.target.value)}
           placeholder={schema.description || label}
-          className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+          className="min-h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[var(--text-500)] focus:border-[var(--brand-500)]"
         />
       )}
       {schema.description && <p className="mt-1.5 text-xs text-[var(--text-500)]">{schema.description}</p>}

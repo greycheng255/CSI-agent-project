@@ -22,6 +22,7 @@ import type {
   OwnerLongtaskOrderDetail,
 } from '../api/longtaskApi';
 import { WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { Skeleton } from '../components/ui/Skeleton';
 import { useAuthStore } from '../store/authStore';
 
 /**
@@ -217,10 +218,28 @@ export default function OwnerLongtaskOrders() {
       )}
 
       {loading ? (
-        <div className="space-y-3" aria-label="正在读取接单">
-          <div className="h-28 animate-pulse rounded-2xl border border-[color:var(--border)] bg-white" />
-          <div className="h-28 animate-pulse rounded-2xl border border-[color:var(--border)] bg-white" />
-        </div>
+        <ul className="space-y-3" aria-busy="true" aria-label="正在读取接单">
+          {Array.from({ length: 3 }, (_, index) => (
+            <li key={index} className="rounded-2xl border border-[color:var(--border)] bg-white p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <Skeleton className="h-5 w-64" rounded="sm" />
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <Skeleton className="h-4 w-32" rounded="sm" />
+                    <Skeleton className="h-4 w-20" rounded="sm" />
+                    <Skeleton className="h-4 w-40" rounded="sm" />
+                  </div>
+                </div>
+                <Skeleton className="h-6 w-24" rounded="pill" />
+              </div>
+              <Skeleton className="mt-3 h-3 w-80" rounded="sm" />
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <Skeleton className="h-9 w-32" rounded="pill" />
+                <Skeleton className="h-9 w-28" rounded="sm" />
+              </div>
+            </li>
+          ))}
+        </ul>
       ) : orders.length === 0 ? (
         <WorkbenchStatePanel
           icon={Inbox}
@@ -326,7 +345,7 @@ export default function OwnerLongtaskOrders() {
                         value={note}
                         onChange={(event) => setNote(event.target.value)}
                         placeholder="例如：已完成全部功能并自测通过"
-                        className="h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+                        className="h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)]"
                       />
                     </label>
                     <label className="block">
@@ -338,7 +357,7 @@ export default function OwnerLongtaskOrders() {
                         value={urls}
                         onChange={(event) => setUrls(event.target.value)}
                         placeholder={'https://oss.example.com/result.zip\nhttps://docs.example.com/readme'}
-                        className="w-full resize-none rounded-xl border border-[color:var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+                        className="w-full resize-none rounded-xl border border-[color:var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)]"
                       />
                     </label>
                     <div className="flex flex-wrap items-center gap-3">

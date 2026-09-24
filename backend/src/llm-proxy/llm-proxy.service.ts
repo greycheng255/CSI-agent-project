@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Response as ExpressResponse } from 'express';
-import { Readable } from 'stream';
+import { randomUUID } from 'node:crypto';
+import { Readable, Transform } from 'stream';
 import { ContractError } from '../longtask/contract/errors';
 import { EntitlementService, UsageIngestItem } from '../entitlement/entitlement.service';
 import { LlmModelPriceService } from './llm-model-price.service';
@@ -27,6 +28,97 @@ function toOpenAiBaseUrl(baseUrl: string): string {
 }
 
 /**
+ * opencode zen 网关（`/zen/go/v1`）强制要求 `x-opencode-session` 头做请求路由，
+ * 缺失即回 400 MissingSessionID。其它 OpenAI 兼容网关忽略未知头，故按主机名条件注入。
+ */
+function upstreamHeaders(baseUrl: string, apiKey: string, isGet: boolean): Record<string, string> {
+  const headers: Record<string, string> = isGet
+    ? { Authorization: `Bearer ${apiKey}` }
+    : { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` };
+  try {
+    if (new URL(baseUrl).hostname.endsWith('opencode.ai')) {
+      headers['x-opencode-session'] = randomUUID();
+    }
+  } catch {
+    // baseUrl 非法时交由后续 fetch 抛错
+  }
+  return headers;
+}
+
+/**
+ * 调用方模型名 → 上游真实模型名别名表。
+ * multica / Console 沿用 gpt-5.4、gpt-5.5（含 openai/ 命名空间形态）作为对外模型 ID，
+ * 而 zen 上游目录里没有 gpt-5.x，直接透传会被上游以 "Model is unavailable" 400 拒绝，
+ * 故统一改写为上游真实可用的 deepseek-v4.1-flash。
+ */
+const UPSTREAM_MODEL_ALIASES: Record<string, string> = {
+  'gpt-5.4': 'deepseek-v4.1-flash',
+  'gpt-5.5': 'deepseek-v4.1-flash',
+  'openai/gpt-5.4': 'deepseek-v4.1-flash',
+  'openai/gpt-5.5': 'deepseek-v4.1-flash',
+};
+
+/** 别名改写（未登记的名字原样透传，保证 zen 真名仍可直接调用） */
+function resolveUpstreamModel(model: string): string {
+  return UPSTREAM_MODEL_ALIASES[model] ?? UPSTREAM_MODEL_ALIASES[model.toLowerCase()] ?? model;
+}
+
+/**
+ * L3 /v1/models：把对外别名并入上游模型列表（去重、置顶），
+ * 使 multica / Console 能按自己的硬编码模型名（gpt-5.4 / gpt-5.5）在目录中匹配到；
+ * 上游真实模型条目保持不变，zen 真名仍可用。
+ */
+function withModelAliases(body: unknown): unknown {
+  if (!body || typeof body !== 'object') return body;
+  const list = (body as { data?: unknown }).data;
+  if (!Array.isArray(list)) return body;
+  const seen = new Set(
+    list
+      .map((m) => (m && typeof m === 'object' ? (m as { id?: string }).id : undefined))
+      .filter((id): id is string => typeof id === 'string'),
+  );
+  const created = Math.floor(Date.now() / 1000);
+  const aliasEntries = Object.keys(UPSTREAM_MODEL_ALIASES)
+    .filter((id) => !id.includes('/') && !seen.has(id))
+    .map((id) => ({ id, object: 'model', created, owned_by: 'csi-gateway' }));
+  if (!aliasEntries.length) return body;
+  return { ...(body as object), data: [...aliasEntries, ...list] };
+}
+
+/** 非流式 JSON 响应：把顶层 model 字段从上游真名回写为调用方请求时用的名字 */
+function restoreBodyModel(body: unknown, restore: ModelRestore | undefined): unknown {
+  if (!restore || !body || typeof body !== 'object') return body;
+  const b = body as { model?: unknown };
+  if (b.model !== restore.upstreamModel) return body;
+  return { ...b, model: restore.requestedModel };
+}
+
+/**
+ * SSE 行级改写：只把 data 帧里出现的上游真名换成调用方原名，其余字节原样透传。
+ * 之所以按行缓冲：chunk 边界可能切断 `"model":"…"` 字面量，
+ * 按完整行切块后再替换既不会漏改（跨行不可能出现该字面量），也不会切坏帧。
+ */
+function createModelRestoreTransform(restore: ModelRestore): Transform {
+  const escaped = restore.upstreamModel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`("model"\\s*:\\s*)"${escaped}"`, 'g');
+  const to = `$1"${restore.requestedModel}"`;
+  let carry = '';
+  return new Transform({
+    transform(chunk: Buffer, _enc, cb) {
+      carry += chunk.toString('utf8');
+      const lastNl = carry.lastIndexOf('\n');
+      if (lastNl < 0) return cb(); // 无完整行，继续缓冲
+      const ready = carry.slice(0, lastNl + 1);
+      carry = carry.slice(lastNl + 1);
+      cb(null, ready.replace(pattern, to));
+    },
+    flush(cb) {
+      cb(null, carry.replace(pattern, to));
+    },
+  });
+}
+
+/**
  * forward() 结果双模：
  * - json：非流式（或上游未按流式应答），body 已缓冲解析
  * - stream：上游 text/event-stream 直通，upstream 为原始 fetch Response，由 controller 层 pipe 给客户端；
@@ -39,7 +131,15 @@ export type ForwardResult =
       status: number;
       upstream: globalThis.Response;
       recordStreamUsage: (u: StreamUsage) => void;
+      // 发生模型别名改写时携带，供 pipeSseResponse 把 data 帧里的上游真名回写为调用方原名
+      modelRestore?: ModelRestore;
     };
+
+/** 调用方模型名 ↔ 上游真名的回写对（仅别名命中时生成） */
+export interface ModelRestore {
+  upstreamModel: string;
+  requestedModel: string;
+}
 
 /** 流式收尾帧提取的完整用量（chat: prompt/completion_tokens；Responses: input/output_tokens） */
 export interface StreamUsage {
@@ -53,11 +153,13 @@ export interface StreamUsage {
  * - 设置标准 SSE 头 + X-Accel-Buffering: no（防 nginx 反代缓冲）
  * - 客户端断连 → 销毁管道（undici 随之 abort 上游连接）
  * - 上游中断 → 销毁客户端连接（让 OpenAI SDK 识别为流断开而非空成功）
+ * - modelRestore 非空时（发生别名改写）插入行级改写，把 data 帧里的上游真名回写为调用方原名
  */
 export function pipeSseResponse(
   res: ExpressResponse,
   upstream: globalThis.Response,
   onStreamUsage?: (u: StreamUsage) => void,
+  modelRestore?: ModelRestore,
 ): void {
   const startedAt = Date.now();
   const streamLogger = new Logger('LlmProxyStream');
@@ -148,7 +250,11 @@ export function pipeSseResponse(
       nodeStream.destroy();
     }
   });
-  nodeStream.pipe(res);
+  if (modelRestore) {
+    nodeStream.pipe(createModelRestoreTransform(modelRestore)).pipe(res);
+  } else {
+    nodeStream.pipe(res);
+  }
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -230,6 +336,18 @@ export class LlmProxyService {
 
     // 转发给上游的干净载荷：剔除内部路由字段
     const { endpoint: _ep, agent_run_id: _runId, ...upstreamPayload } = payload;
+    // 调用方（multica / Console）沿用 gpt-5.x 命名，zen 上游无此模型，转发前按别名改写为真实模型名；
+    // 计量/日志仍按调用方原始 model 记账，保持对账口径一致。
+    let modelRestore: ModelRestore | undefined;
+    if (typeof upstreamPayload.model === 'string') {
+      const requestedModel = upstreamPayload.model;
+      const upstreamModel = resolveUpstreamModel(requestedModel);
+      if (upstreamModel !== requestedModel) {
+        this.logger.log(`model alias ${requestedModel} -> ${upstreamModel}`);
+        upstreamPayload.model = upstreamModel;
+        modelRestore = { upstreamModel, requestedModel };
+      }
+    }
     // 流式端点：chat/completions 与 responses（Responses API 流式为 event: response.completed 收尾，自带 usage）
     const wantsStream =
       !isGet &&
@@ -250,9 +368,7 @@ export class LlmProxyService {
     try {
       upstream = await fetch(url, {
         method: isGet ? 'GET' : 'POST',
-        headers: isGet
-          ? { Authorization: `Bearer ${apiKey}` }
-          : { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        headers: upstreamHeaders(cfg.base_url, apiKey, isGet),
         body: isGet ? undefined : JSON.stringify(upstreamPayload),
         signal: controller.signal,
       });
@@ -290,7 +406,7 @@ export class LlmProxyService {
           .recordUsage(orgId, [item])
           .catch((err) => this.logger.warn(`llm-proxy stream usage record failed (ignored): ${String(err)}`));
       };
-      return { mode: 'stream', status: upstream.status, upstream, recordStreamUsage };
+      return { mode: 'stream', status: upstream.status, upstream, recordStreamUsage, modelRestore };
     }
 
     // 非流式：signal 持续覆盖响应体读取（修复旧实现 clearTimeout 过早、
@@ -358,6 +474,13 @@ export class LlmProxyService {
           .catch((err) => this.logger.warn(`llm-proxy usage record failed (ignored): ${String(err)}`));
       }
     }
+
+    // L3 模型目录：并入对外别名（gpt-5.4 / gpt-5.5），使 multica/Console 能匹配到自己的模型名
+    if (isGet && endpoint === 'models') {
+      body = withModelAliases(body);
+    }
+    // 别名改写过的请求：把响应里的上游真名回写为调用方原名
+    body = restoreBodyModel(body, modelRestore);
 
     this.logger.log(
       `forward done status=${upstream.status} mode=json model=${model} elapsed=${Date.now() - startedAt}ms` +

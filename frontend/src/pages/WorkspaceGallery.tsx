@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Store } from 'lucide-react';
 import {
@@ -7,27 +7,34 @@ import {
 } from '../api/longtaskApi';
 import type { WorkspaceGalleryItem } from '../api/longtaskApi';
 import { WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { Skeleton, SkeletonText } from '../components/ui/Skeleton';
 
 /** 已入驻工作室画廊（答复文档六：消费 workspace 生命周期投影，仅 active 工作室） */
 export default function WorkspaceGallery() {
   const [items, setItems] = useState<WorkspaceGalleryItem[] | null>(null);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    let cancelled = false;
+  const load = useCallback(() => {
     listWorkspaceGallery()
       .then((data) => {
-        if (!cancelled) setItems(Array.isArray(data) ? data : []);
+        setItems(Array.isArray(data) ? data : []);
+        setError('');
       })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : '读取工作室画廊失败');
-        }
+      .catch((err: unknown) => {
+        setItems([]);
+        setError(err instanceof Error ? err.message : '读取工作室画廊失败');
       });
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  const retry = () => {
+    setError('');
+    setItems(null);
+    load();
+  };
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   if (error) {
     return (
@@ -37,6 +44,7 @@ export default function WorkspaceGallery() {
           title="无法查看工作室画廊"
           description={error}
           tone="error"
+          action={<button type="button" onClick={retry} className="btn-cs btn-primary btn-sm">重试</button>}
         />
       </div>
     );
@@ -44,16 +52,33 @@ export default function WorkspaceGallery() {
 
   if (items === null) {
     return (
-      <div className="mx-auto w-full max-w-[1440px] space-y-5" aria-label="正在读取工作室画廊">
-        <div className="h-8 w-40 animate-pulse rounded-lg bg-[var(--background-100)]" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[0, 1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-44 animate-pulse rounded-2xl border border-[color:var(--border)] bg-white"
-            />
-          ))}
+      <div
+        className="mx-auto w-full max-w-[1440px] space-y-5 py-2"
+        aria-busy="true"
+        aria-label="正在读取工作室画廊"
+      >
+        <div>
+          <Skeleton className="h-6 w-40" rounded="sm" />
+          <Skeleton className="mt-2 h-4 w-64" rounded="sm" />
         </div>
+        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 8 }, (_, index) => (
+            <li key={index} className="rounded-2xl border border-[color:var(--border)] bg-white p-4">
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-12 w-12" rounded="lg" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className="h-4 w-28" rounded="sm" />
+                  <Skeleton className="h-3 w-36" rounded="sm" />
+                </div>
+              </div>
+              <SkeletonText lines={2} className="mt-3" />
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                <Skeleton className="h-5 w-16" rounded="pill" />
+                <Skeleton className="h-5 w-14" rounded="pill" />
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
     );
   }

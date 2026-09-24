@@ -4,6 +4,7 @@ import { CircleAlert, Inbox, Loader2, Gavel, CheckCircle2, RefreshCw } from 'luc
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
 import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { Skeleton, SkeletonText } from '../components/ui/Skeleton';
 import { useToast } from '../components/ui/toast-context';
 
 type ArbitrationStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
@@ -126,10 +127,23 @@ export default function AdminArbitrations() {
       </div>
 
       {loading ? (
-        <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white text-sm text-[var(--text-500)]">
-          <Loader2 className="mr-3 h-5 w-5 animate-spin text-[var(--brand-500)]" />
-          正在加载仲裁列表...
-        </div>
+        <section className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white">
+          <div className="divide-y divide-[color:var(--border)]">
+            {Array.from({ length: 4 }, (_, index) => (
+              <div key={index} className="p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <Skeleton className="h-5 w-56" rounded="sm" />
+                  <Skeleton className="h-6 w-20" rounded="pill" />
+                </div>
+                <SkeletonText lines={2} className="mt-3" />
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Skeleton className="h-10 w-28" rounded="pill" />
+                  <Skeleton className="h-10 w-28" rounded="pill" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       ) : error ? (
         <WorkbenchStatePanel icon={CircleAlert} title="仲裁列表暂时无法加载" description={error} tone="error" action={<button type="button" onClick={() => fetchList(activeStatus === 'all' ? undefined : activeStatus)} className="btn-cs btn-primary btn-sm">重新加载</button>} />
       ) : items.length === 0 ? (
@@ -194,7 +208,7 @@ export default function AdminArbitrations() {
                           type="button"
                           onClick={() => resolve(orderId, 'REFUND')}
                           disabled={actingId === orderId}
-                          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[var(--state-error)] px-4 text-sm font-semibold text-white disabled:opacity-50"
+                          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-[var(--state-error-strong)] px-4 text-sm font-semibold text-white disabled:opacity-50"
                         >
                           {actingId === orderId ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                           退款给雇主

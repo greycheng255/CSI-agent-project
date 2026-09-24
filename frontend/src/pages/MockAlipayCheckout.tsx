@@ -146,7 +146,7 @@ export default function MockAlipayCheckout() {
           )}
 
           {error && (
-            <p className="text-sm text-[var(--state-error)]">{error}</p>
+            <p role="alert" className="text-sm text-[var(--state-error)]">{error}</p>
           )}
 
           {!ready && (

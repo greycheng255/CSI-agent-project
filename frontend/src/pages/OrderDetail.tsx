@@ -23,6 +23,7 @@ import AcceptanceChecklist from '../components/AcceptanceChecklist';
 import { acceptDelivery, rejectDelivery } from '../api/deliveryApi';
 import { useToast } from '../components/ui/toast-context';
 import { useConfirm } from '../components/ui/confirm-context';
+import { Skeleton } from '../components/ui/Skeleton';
 import type { Delivery } from '../types/delivery';
 import { formatShanghaiDateTime } from '../utils/date';
 
@@ -671,11 +672,11 @@ export default function OrderDetail() {
 
   if (loading) {
     return (
-      <div className="w-full space-y-4 py-8" aria-label="正在加载订单详情">
-        <div className="h-8 w-48 animate-pulse rounded bg-[color:var(--background-200)]" />
+      <div className="w-full space-y-4 py-8" aria-busy="true" aria-label="正在加载订单详情">
+        <Skeleton className="h-8 w-48" rounded="sm" />
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="h-96 animate-pulse rounded-2xl bg-[color:var(--background-200)]" />
-          <div className="h-80 animate-pulse rounded-2xl bg-[color:var(--background-200)]" />
+          <Skeleton className="h-96 w-full" rounded="lg" />
+          <Skeleton className="h-80 w-full" rounded="lg" />
         </div>
       </div>
     );
@@ -802,7 +803,7 @@ export default function OrderDetail() {
                                   <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
                                     task.status === 'COMPLETED' ? 'bg-[color:var(--state-success)]' :
                                     task.status === 'IN_PROGRESS' ? 'bg-[color:var(--brand-500)]' :
-                                    task.status === 'FAILED' ? 'bg-[color:var(--state-error)]' :
+                                    task.status === 'FAILED' ? 'bg-[color:var(--state-error-strong)]' :
                                     'bg-[color:var(--background-500)]'
                                   }`} />
                                   <div className="min-w-0 flex-1">
@@ -838,12 +839,12 @@ export default function OrderDetail() {
                     value={helpMessage}
                     onChange={(event) => setHelpMessage(event.target.value)}
                     placeholder="描述您遇到的问题..."
-                    className="h-11 flex-1 rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--text-800)] outline-none placeholder:text-[color:var(--text-500)] focus:border-[color:var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+                    className="h-11 flex-1 rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--text-800)] outline-none placeholder:text-[color:var(--text-500)] focus:border-[color:var(--brand-500)]"
                   />
                   <button
                     onClick={handleSendHelp}
                     disabled={sendingHelp || !helpMessage.trim()}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[color:var(--state-warning)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[color:var(--state-warning-strong)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {sendingHelp ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
                     发送求助
@@ -972,7 +973,7 @@ export default function OrderDetail() {
                         }
                       }}
                       disabled={rejecting}
-                      className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[color:var(--state-warning)] px-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[color:var(--state-warning-strong)] px-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {rejecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertCircle className="h-4 w-4" />}
                       退回修改
@@ -1002,7 +1003,7 @@ export default function OrderDetail() {
                         }
                       }}
                       disabled={rejecting}
-                      className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[color:var(--state-error)] px-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[color:var(--state-error-strong)] px-4 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {rejecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertCircle className="h-4 w-4" />}
                       拒绝并仲裁

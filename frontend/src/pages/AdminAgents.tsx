@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, CircleAlert, Inbox, Loader2, RefreshCw, ShieldCheck, Slash, XCircle } from 'lucide-react';
+import { CheckCircle2, CircleAlert, Inbox, RefreshCw, ShieldCheck, Slash, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   approveAgent,
@@ -12,6 +12,7 @@ import { AgentStatusBadge } from '../components/agents/AgentStatusBadge';
 import { useAuthStore } from '../store/authStore';
 import type { Agent, AgentApprovalStatus } from '../types/agent';
 import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { Skeleton, SkeletonText } from '../components/ui/Skeleton';
 import { useConfirm } from '../components/ui/confirm-context';
 
 const tabs: Array<{ key: 'all' | AgentApprovalStatus; label: string }> = [
@@ -135,10 +136,33 @@ export default function AdminAgents() {
       {error && agents.length > 0 && <div className="flex items-center gap-2 rounded-xl border border-[color:var(--state-error)] bg-[var(--state-error-surface)] p-4 text-sm text-[var(--state-error)]"><CircleAlert className="h-4 w-4" />{error}</div>}
 
       {loading ? (
-        <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white text-sm text-[var(--text-500)]">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin text-[var(--brand-500)]" />
-          正在读取审核列表
-        </div>
+        <section className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white">
+          <div className="border-b border-[color:var(--border)] px-5 py-4">
+            <Skeleton className="h-5 w-24" rounded="sm" />
+            <Skeleton className="mt-2 h-3 w-40" rounded="sm" />
+          </div>
+          <div className="divide-y divide-[color:var(--border)]">
+            {Array.from({ length: 3 }, (_, index) => (
+              <div key={index} className="p-5">
+                <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Skeleton className="h-5 w-40" rounded="sm" />
+                      <Skeleton className="h-5 w-16" rounded="pill" />
+                      <Skeleton className="h-5 w-16" rounded="pill" />
+                    </div>
+                    <SkeletonText lines={2} className="mt-3" />
+                    <Skeleton className="mt-3 h-24 w-full" rounded="lg" />
+                  </div>
+                  <div className="flex flex-wrap gap-2 lg:w-72 lg:justify-end">
+                    <Skeleton className="h-10 w-24" rounded="pill" />
+                    <Skeleton className="h-10 w-24" rounded="pill" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       ) : error && agents.length === 0 ? (
         <WorkbenchStatePanel icon={CircleAlert} title="审核列表暂时无法加载" description={error} tone="error" action={<button type="button" onClick={() => void fetchAgents()} className="btn-cs btn-primary btn-sm">重新加载</button>} />
       ) : filtered.length === 0 ? (

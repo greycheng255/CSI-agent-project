@@ -5,6 +5,7 @@ import { Shield, Users, Plus, X, Loader2, Edit3, RefreshCw, FileText, Clock, Sea
 import { API_BASE } from '../config/api';
 import AdminMCPConsolePanel from '../components/admin/AdminMCPConsolePanel';
 import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { Skeleton, SkeletonTable } from '../components/ui/Skeleton';
 
 interface AdminItem {
   id: string;
@@ -228,8 +229,14 @@ export default function AdminAccounts() {
 
   if (loading) {
     return (
-      <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white text-sm text-[var(--text-500)]">
-        <Loader2 className="mr-3 h-5 w-5 animate-spin text-[var(--brand-500)]" />正在读取管理员数据...
+      <div className="mx-auto w-full max-w-[1440px] space-y-6">
+        <Skeleton className="h-8 w-56" rounded="sm" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }, (_, index) => (
+            <Skeleton key={index} className="h-24" rounded="lg" />
+          ))}
+        </div>
+        <SkeletonTable rows={5} columns={5} />
       </div>
     );
   }
@@ -336,12 +343,12 @@ export default function AdminAccounts() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[color:var(--border)] bg-[var(--background-100)] text-[var(--text-500)]">
-                <th className="text-left py-3 px-4">用户名</th>
-                <th className="text-left py-3 px-4">级别</th>
-                <th className="text-left py-3 px-4">状态</th>
-                <th className="text-left py-3 px-4">权限</th>
-                <th className="text-left py-3 px-4">最后登录</th>
-                <th className="text-right py-3 px-4">操作</th>
+                <th scope="col" className="text-left py-3 px-4">用户名</th>
+                <th scope="col" className="text-left py-3 px-4">级别</th>
+                <th scope="col" className="text-left py-3 px-4">状态</th>
+                <th scope="col" className="text-left py-3 px-4">权限</th>
+                <th scope="col" className="text-left py-3 px-4">最后登录</th>
+                <th scope="col" className="text-right py-3 px-4">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -403,7 +410,7 @@ export default function AdminAccounts() {
           <div className="border-t border-[color:var(--border)] p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-sm">编辑管理员</h3>
-              <button type="button" onClick={() => setEditingId(null)} aria-label="关闭管理员编辑" className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--text-500)] hover:bg-[var(--background-100)] hover:text-[var(--text-800)]">
+              <button type="button" onClick={() => setEditingId(null)} aria-label="关闭管理员编辑" className="flex h-10 w-10 items-center justify-center rounded-lg text-[var(--text-500)] hover:bg-[var(--background-100)] hover:text-[var(--text-800)]">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -509,8 +516,18 @@ export default function AdminAccounts() {
           {/* 日志表格 */}
           <div className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white">
             {logsLoading ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="w-6 h-6 animate-spin text-[var(--text-500)]" />
+              <div
+                className="divide-y divide-[color:var(--border)]"
+                aria-busy="true"
+                aria-label="正在读取操作日志"
+              >
+                {Array.from({ length: 5 }, (_, index) => (
+                  <div key={index} className="flex items-center gap-4 px-4 py-3">
+                    <Skeleton className="h-4 w-32" rounded="sm" />
+                    <Skeleton className="h-4 w-24" rounded="sm" />
+                    <Skeleton className="h-4 flex-1" rounded="sm" />
+                  </div>
+                ))}
               </div>
             ) : logs.length === 0 ? (
               <div className="text-center py-12 text-[var(--text-500)] text-sm">暂无操作日志</div>
@@ -519,11 +536,11 @@ export default function AdminAccounts() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-[color:var(--border)] bg-[var(--background-100)] text-[var(--text-500)]">
-                      <th className="text-left py-3 px-4">时间</th>
-                      <th className="text-left py-3 px-4">操作者</th>
-                      <th className="text-left py-3 px-4">操作</th>
-                      <th className="text-left py-3 px-4">对象</th>
-                      <th className="text-left py-3 px-4">详情</th>
+                      <th scope="col" className="text-left py-3 px-4">时间</th>
+                      <th scope="col" className="text-left py-3 px-4">操作者</th>
+                      <th scope="col" className="text-left py-3 px-4">操作</th>
+                      <th scope="col" className="text-left py-3 px-4">对象</th>
+                      <th scope="col" className="text-left py-3 px-4">详情</th>
                     </tr>
                   </thead>
                   <tbody>

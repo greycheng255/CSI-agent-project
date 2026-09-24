@@ -79,7 +79,7 @@ const withdrawalStatusView: Record<
   },
   APPROVED: {
     label: '已批准',
-    badge: 'bg-[var(--brand-50)] text-[var(--brand-600)] border border-blue-500/20',
+    badge: 'bg-[var(--brand-50)] text-[var(--brand-600)] border border-[var(--brand-200)]',
   },
   PROCESSING: {
     label: '打款中',
@@ -437,7 +437,7 @@ export default function MyBalance({ embedded }: { embedded?: boolean }) {
             </h3>
           </div>
           <form onSubmit={handleWithdraw} className="space-y-4 px-5 py-5">
-            <div className="flex items-start gap-2 rounded-lg border border-blue-500/20 bg-[var(--brand-50)] p-3 text-xs text-[var(--brand-700)]">
+            <div className="flex items-start gap-2 rounded-lg border border-[var(--brand-200)] bg-[var(--brand-50)] p-3 text-xs text-[var(--brand-700)]">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>
                 为保障资金安全，提现需填写真实姓名与身份证号进行实名核对，平台将加密保存。

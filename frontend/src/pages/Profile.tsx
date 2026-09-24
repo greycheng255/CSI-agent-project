@@ -874,7 +874,7 @@ export default function Profile() {
                   <CheckCircle className="h-4 w-4 shrink-0" />令牌已创建，仅显示一次，请立即复制保存
                 </div>
                 <div className="flex items-stretch gap-2">
-                  <code className="min-w-0 flex-1 break-all rounded-lg bg-white/70 px-3 py-2 font-mono text-xs text-[var(--text-800)]">{newPatToken}</code>
+                  <code className="min-w-0 flex-1 break-all rounded-lg bg-[var(--background-100)] px-3 py-2 font-mono text-xs text-[var(--text-800)]">{newPatToken}</code>
                   <button type="button" onClick={handleCopyToken} className="btn-cs btn-secondary btn-sm shrink-0">
                     {copied ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied ? '已复制' : '复制'}
                   </button>

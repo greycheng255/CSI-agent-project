@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bot, ChevronRight, CircleAlert, Inbox, Loader2, PackageCheck } from 'lucide-react';
+import { Bot, ChevronRight, CircleAlert, Inbox, PackageCheck } from 'lucide-react';
 import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { Skeleton } from '../components/ui/Skeleton';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
 
@@ -101,28 +102,30 @@ export default function MyAgentWork() {
 
   const apiBase = API_BASE;
 
+  const loadOrders = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${apiBase}/api/v1/orders/owner/${user.id}`);
+      if (!res.ok) throw new Error('network');
+      const data = (await res.json()) as OrderItem[];
+      setError('');
+      setOrders(Array.isArray(data) ? data : []);
+    } catch {
+      setOrders([]);
+      setError('读取接单记录失败，请检查后端服务是否正常运行。');
+    } finally {
+      setLoading(false);
+    }
+  }, [apiBase, user]);
+
   useEffect(() => {
     if (!user) {
       navigate('/login');
       return;
     }
-
-    fetch(`${apiBase}/api/v1/orders/owner/${user.id}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('network');
-        return res.json();
-      })
-      .then((data: OrderItem[]) => {
-        setError('');
-        setOrders(Array.isArray(data) ? data : []);
-        setLoading(false);
-      })
-      .catch(() => {
-        setOrders([]);
-        setError('读取接单记录失败，请检查后端服务是否正常运行。');
-        setLoading(false);
-      });
-  }, [apiBase, navigate, user]);
+    void loadOrders();
+  }, [loadOrders, navigate, user]);
 
   return (
     <div className="mx-auto w-full max-w-[1440px] space-y-6">
@@ -140,12 +143,35 @@ export default function MyAgentWork() {
       />
 
       {loading ? (
-        <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white text-sm text-[var(--text-500)]">
-          <Loader2 className="mr-3 h-5 w-5 animate-spin text-[var(--brand-500)]" />
-          正在读取接单记录...
-        </div>
+        <section className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white">
+          <div className="border-b border-[color:var(--border)] px-5 py-4">
+            <Skeleton className="h-5 w-24" rounded="sm" />
+            <Skeleton className="mt-2 h-3 w-56" rounded="sm" />
+          </div>
+          <div className="divide-y divide-[color:var(--border)]">
+            {Array.from({ length: 4 }, (_, index) => (
+              <div key={index} className="px-5 py-5">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-6 w-24" rounded="pill" />
+                  <Skeleton className="h-4 w-28" rounded="sm" />
+                </div>
+                <Skeleton className="mt-3 h-5 w-64" rounded="sm" />
+                <div className="mt-3 flex gap-6">
+                  <Skeleton className="h-4 w-36" rounded="sm" />
+                  <Skeleton className="h-4 w-28" rounded="sm" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       ) : error ? (
-        <WorkbenchStatePanel icon={CircleAlert} title="接单记录暂时无法加载" description={error} tone="error" />
+        <WorkbenchStatePanel
+          icon={CircleAlert}
+          title="接单记录暂时无法加载"
+          description={error}
+          tone="error"
+          action={<button type="button" onClick={() => void loadOrders()} className="btn-cs btn-primary btn-sm">重试</button>}
+        />
       ) : orders.length === 0 ? (
         <WorkbenchStatePanel
           icon={Inbox}

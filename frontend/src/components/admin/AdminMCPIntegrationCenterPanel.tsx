@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   Copy,
@@ -44,6 +44,7 @@ import {
   type MCPIntegrationTool,
   type MCPTaskBinding,
 } from '../../api/mcpIntegrationsApi';
+import { useDialogA11y } from '../ui/useDialogA11y';
 
 type DetailTab =
   | 'overview'
@@ -71,15 +72,15 @@ function stringifyJson(value: unknown) {
 
 function statusClass(status?: string | boolean | null) {
   if (status === true || status === 'healthy' || status === 'success') {
-    return 'border-green-500/20 bg-green-500/10 text-green-400';
+    return 'border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] text-[var(--state-success-text)]';
   }
   if (status === false || status === 'failed') {
-    return 'border-red-500/20 bg-red-500/10 text-red-400';
+    return 'border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] text-[var(--state-error)]';
   }
   if (status === 'warning') {
-    return 'border-yellow-500/20 bg-yellow-500/10 text-yellow-400';
+    return 'border-[color:var(--state-warning-border)] bg-[var(--state-warning-surface)] text-[var(--state-warning)]';
   }
-  return 'border-gray-700 bg-gray-500/10 text-gray-400';
+  return 'border-[color:var(--border)] bg-[var(--background-100)] text-[var(--text-500)]';
 }
 
 function sampleExternalArgs(tool?: MCPIntegrationTool) {
@@ -171,6 +172,8 @@ export default function AdminMCPIntegrationCenterPanel() {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState('');
   const [error, setError] = useState('');
+  const detailDialogRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(Boolean(detail), detailDialogRef, () => setDetail(null));
 
   const selectedApp = useMemo(
     () => apps.find((app) => app.id === selectedId) || null,
@@ -468,17 +471,17 @@ export default function AdminMCPIntegrationCenterPanel() {
     <div className="space-y-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
-          <Terminal className="h-6 w-6 text-yellow-400" />
+          <Terminal className="h-6 w-6 text-[var(--state-warning)]" />
           <div>
             <h1 className="text-2xl font-bold">MCP 集成中心</h1>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-              <span className="rounded border border-gray-800 bg-black px-2 py-0.5">
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--text-500)]">
+              <span className="rounded border border-[color:var(--border)] bg-[var(--background-100)] px-2 py-0.5">
                 双向 MCP 应用
               </span>
-              <span className="rounded border border-gray-800 bg-black px-2 py-0.5">
+              <span className="rounded border border-[color:var(--border)] bg-[var(--background-100)] px-2 py-0.5">
                 Tool 发现与保存
               </span>
-              <span className="rounded border border-gray-800 bg-black px-2 py-0.5">
+              <span className="rounded border border-[color:var(--border)] bg-[var(--background-100)] px-2 py-0.5">
                 调用测试审计
               </span>
             </div>
@@ -486,7 +489,7 @@ export default function AdminMCPIntegrationCenterPanel() {
         </div>
         <button
           onClick={() => void loadApps(selectedApp?.id)}
-          className="flex items-center justify-center gap-2 rounded-lg border border-gray-800 bg-[#111] px-4 py-2 text-sm text-gray-300 hover:border-yellow-500/40 hover:text-yellow-400"
+          className="flex items-center justify-center gap-2 rounded-lg border border-[color:var(--border)] bg-[var(--background-50)] px-4 py-2 text-sm text-[var(--text-700)] hover:border-[color:var(--brand-400)] hover:text-[var(--brand-600)]"
         >
           {loading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -498,19 +501,19 @@ export default function AdminMCPIntegrationCenterPanel() {
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+        <div className="flex items-center gap-2 rounded-lg border border-[color:var(--state-error-border)] bg-[var(--state-error-surface)] px-4 py-3 text-sm text-[var(--state-error)]">
           <AlertCircle className="h-4 w-4" />
           {error}
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[340px_1fr]">
-        <div className="overflow-hidden rounded-xl border border-gray-800 bg-[#111]">
-          <div className="border-b border-gray-800 px-4 py-3">
+        <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background-50)]">
+          <div className="border-b border-[color:var(--border)] px-4 py-3">
             <div className="flex items-center gap-2">
-              <Globe2 className="h-4 w-4 text-yellow-400" />
+              <Globe2 className="h-4 w-4 text-[var(--state-warning)]" />
               <span className="text-sm font-bold">MCP 应用</span>
-              <span className="text-xs text-gray-600">{apps.length}</span>
+              <span className="text-xs text-[var(--text-500)]">{apps.length}</span>
             </div>
           </div>
           <div className="max-h-[720px] overflow-y-auto">
@@ -518,41 +521,41 @@ export default function AdminMCPIntegrationCenterPanel() {
               <button
                 key={app.id}
                 onClick={() => setSelectedId(app.id)}
-                className={`w-full border-b border-gray-800/70 px-4 py-4 text-left transition-colors hover:bg-white/5 ${
-                  selectedId === app.id ? 'bg-yellow-500/10' : ''
+                className={`w-full border-b border-[color:var(--border)] px-4 py-4 text-left transition-colors hover:bg-[var(--background-100)] ${
+                  selectedId === app.id ? 'bg-[var(--brand-50)]' : ''
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
                       {app.code === 'opennotebook' ? (
-                        <Globe2 className="h-4 w-4 text-cyan-400" />
+                        <Globe2 className="h-4 w-4 text-[var(--brand-600)]" />
                       ) : (
-                        <Server className="h-4 w-4 text-purple-400" />
+                        <Server className="h-4 w-4 text-[var(--brand-500)]" />
                       )}
-                      <span className="text-sm font-bold text-gray-100">{app.name}</span>
+                      <span className="text-sm font-bold text-[var(--text-900)]">{app.name}</span>
                     </div>
-                    <p className="mt-1 text-xs text-gray-600">{app.code}</p>
+                    <p className="mt-1 text-xs text-[var(--text-500)]">{app.code}</p>
                   </div>
                   <span className={`rounded border px-2 py-0.5 text-xs ${statusClass(app.healthStatus)}`}>
                     {app.healthStatus}
                   </span>
                 </div>
-                <p className="mt-2 line-clamp-2 text-xs text-gray-500">
+                <p className="mt-2 line-clamp-2 text-xs text-[var(--text-500)]">
                   {app.description || '暂无说明'}
                 </p>
                 <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                  <div className="rounded border border-gray-800 bg-black px-2 py-1">
-                    <p className="text-gray-600">方向</p>
-                    <p className="truncate text-gray-300">{app.direction}</p>
+                  <div className="rounded border border-[color:var(--border)] bg-[var(--background-100)] px-2 py-1">
+                    <p className="text-[var(--text-500)]">方向</p>
+                    <p className="truncate text-[var(--text-700)]">{app.direction}</p>
                   </div>
-                  <div className="rounded border border-gray-800 bg-black px-2 py-1">
-                    <p className="text-gray-600">外部</p>
-                    <p className="text-gray-300">{app.externalToolCount || 0}</p>
+                  <div className="rounded border border-[color:var(--border)] bg-[var(--background-100)] px-2 py-1">
+                    <p className="text-[var(--text-500)]">外部</p>
+                    <p className="text-[var(--text-700)]">{app.externalToolCount || 0}</p>
                   </div>
-                  <div className="rounded border border-gray-800 bg-black px-2 py-1">
-                    <p className="text-gray-600">平台</p>
-                    <p className="text-gray-300">{app.platformToolCount || 0}</p>
+                  <div className="rounded border border-[color:var(--border)] bg-[var(--background-100)] px-2 py-1">
+                    <p className="text-[var(--text-500)]">平台</p>
+                    <p className="text-[var(--text-700)]">{app.platformToolCount || 0}</p>
                   </div>
                 </div>
               </button>
@@ -563,25 +566,25 @@ export default function AdminMCPIntegrationCenterPanel() {
         <div className="space-y-5">
           {selectedApp ? (
             <>
-              <div className="flex flex-col gap-4 rounded-xl border border-gray-800 bg-[#111] p-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col gap-4 rounded-xl border border-[color:var(--border)] bg-[var(--background-50)] p-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-lg font-bold text-gray-100">{selectedApp.name}</h2>
+                    <h2 className="text-lg font-bold text-[var(--text-900)]">{selectedApp.name}</h2>
                     <span className={`rounded border px-2 py-0.5 text-xs ${statusClass(selectedApp.enabled)}`}>
                       {selectedApp.enabled ? 'enabled' : 'disabled'}
                     </span>
-                    <span className="rounded border border-gray-800 bg-black px-2 py-0.5 text-xs text-gray-500">
+                    <span className="rounded border border-[color:var(--border)] bg-[var(--background-100)] px-2 py-0.5 text-xs text-[var(--text-500)]">
                       {selectedApp.transport}
                     </span>
                   </div>
-                  <p className="mt-1 break-all text-xs text-gray-500">
+                  <p className="mt-1 break-all text-xs text-[var(--text-500)]">
                     {selectedApp.endpointUrl || '未配置外部 endpoint'}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={saveApp}
-                    className="flex items-center gap-2 rounded-lg bg-yellow-500 px-4 py-2 text-sm font-bold text-black hover:bg-yellow-400"
+                    className="flex items-center gap-2 rounded-lg bg-[var(--brand-500)] px-4 py-2 text-sm font-bold text-white hover:bg-[var(--brand-strong)]"
                   >
                     {actionLoading === 'save' ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -592,7 +595,7 @@ export default function AdminMCPIntegrationCenterPanel() {
                   </button>
                   <button
                     onClick={toggleApp}
-                    className="flex items-center gap-2 rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:border-yellow-500/40 hover:text-yellow-400"
+                    className="flex items-center gap-2 rounded-lg border border-[color:var(--border)] px-4 py-2 text-sm text-[var(--text-700)] hover:border-[color:var(--brand-400)] hover:bg-[var(--brand-50)] hover:text-[var(--brand-600)]"
                   >
                     <Power className="h-4 w-4" />
                     {selectedApp.enabled ? '停用' : '启用'}
@@ -607,8 +610,8 @@ export default function AdminMCPIntegrationCenterPanel() {
                     onClick={() => setActiveTab(tab.key)}
                     className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
                       activeTab === tab.key
-                        ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-400'
-                        : 'border-gray-800 bg-[#111] text-gray-500 hover:text-gray-300'
+                        ? 'border-[color:var(--brand-200)] bg-[var(--brand-50)] text-[var(--brand-600)]'
+                        : 'border-[color:var(--border)] bg-[var(--background-50)] text-[var(--text-500)] hover:text-[var(--text-800)]'
                     }`}
                   >
                     {tab.label}
@@ -617,31 +620,31 @@ export default function AdminMCPIntegrationCenterPanel() {
               </div>
 
               {activeTab === 'overview' && (
-                <div className="grid grid-cols-1 gap-4 rounded-xl border border-gray-800 bg-[#111] p-4 lg:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 rounded-xl border border-[color:var(--border)] bg-[var(--background-50)] p-4 lg:grid-cols-2">
                   <label className="space-y-1 text-sm">
-                    <span className="text-gray-500">应用名称</span>
+                    <span className="text-[var(--text-500)]">应用名称</span>
                     <input
                       value={form.name}
                       onChange={(event) => setForm({ ...form, name: event.target.value })}
-                      className="w-full rounded-lg border border-gray-700 bg-black px-3 py-2 text-gray-200 focus:border-yellow-500 focus:outline-none"
+                      className="w-full rounded-lg border border-[color:var(--input)] bg-[var(--background-50)] px-3 py-2 text-[var(--text-800)] focus:border-[color:var(--brand-500)] focus:outline-none"
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-gray-500">Endpoint</span>
+                    <span className="text-[var(--text-500)]">Endpoint</span>
                     <input
                       value={form.endpointUrl}
                       onChange={(event) => setForm({ ...form, endpointUrl: event.target.value })}
-                      className="w-full rounded-lg border border-gray-700 bg-black px-3 py-2 text-gray-200 focus:border-yellow-500 focus:outline-none"
+                      className="w-full rounded-lg border border-[color:var(--input)] bg-[var(--background-50)] px-3 py-2 text-[var(--text-800)] focus:border-[color:var(--brand-500)] focus:outline-none"
                     />
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-gray-500">集成方向</span>
+                    <span className="text-[var(--text-500)]">集成方向</span>
                     <select
                       value={form.direction}
                       onChange={(event) =>
                         setForm({ ...form, direction: event.target.value as MCPAppDirection })
                       }
-                      className="w-full rounded-lg border border-gray-700 bg-black px-3 py-2 text-gray-200 focus:border-yellow-500 focus:outline-none"
+                      className="w-full rounded-lg border border-[color:var(--input)] bg-[var(--background-50)] px-3 py-2 text-[var(--text-800)] focus:border-[color:var(--brand-500)] focus:outline-none"
                     >
                       <option value="inbound">inbound</option>
                       <option value="outbound">outbound</option>
@@ -649,26 +652,26 @@ export default function AdminMCPIntegrationCenterPanel() {
                     </select>
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-gray-500">Transport</span>
+                    <span className="text-[var(--text-500)]">Transport</span>
                     <select
                       value={form.transport}
                       onChange={(event) =>
                         setForm({ ...form, transport: event.target.value as MCPAppTransport })
                       }
-                      className="w-full rounded-lg border border-gray-700 bg-black px-3 py-2 text-gray-200 focus:border-yellow-500 focus:outline-none"
+                      className="w-full rounded-lg border border-[color:var(--input)] bg-[var(--background-50)] px-3 py-2 text-[var(--text-800)] focus:border-[color:var(--brand-500)] focus:outline-none"
                     >
                       <option value="streamable-http">streamable-http</option>
                       <option value="http-jsonrpc">http-jsonrpc</option>
                     </select>
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-gray-500">鉴权方式</span>
+                    <span className="text-[var(--text-500)]">鉴权方式</span>
                     <select
                       value={form.authMode}
                       onChange={(event) =>
                         setForm({ ...form, authMode: event.target.value as MCPAppAuthMode })
                       }
-                      className="w-full rounded-lg border border-gray-700 bg-black px-3 py-2 text-gray-200 focus:border-yellow-500 focus:outline-none"
+                      className="w-full rounded-lg border border-[color:var(--input)] bg-[var(--background-50)] px-3 py-2 text-[var(--text-800)] focus:border-[color:var(--brand-500)] focus:outline-none"
                     >
                       <option value="none">none</option>
                       <option value="bearer">bearer</option>
@@ -676,38 +679,38 @@ export default function AdminMCPIntegrationCenterPanel() {
                     </select>
                   </label>
                   <label className="space-y-1 text-sm">
-                    <span className="text-gray-500">默认 workspace_id</span>
+                    <span className="text-[var(--text-500)]">默认 workspace_id</span>
                     <input
                       value={form.defaultWorkspaceId}
                       onChange={(event) =>
                         setForm({ ...form, defaultWorkspaceId: event.target.value })
                       }
-                      className="w-full rounded-lg border border-gray-700 bg-black px-3 py-2 text-gray-200 focus:border-yellow-500 focus:outline-none"
+                      className="w-full rounded-lg border border-[color:var(--input)] bg-[var(--background-50)] px-3 py-2 text-[var(--text-800)] focus:border-[color:var(--brand-500)] focus:outline-none"
                     />
                   </label>
                   <label className="space-y-1 text-sm lg:col-span-2">
-                    <span className="text-gray-500">说明</span>
+                    <span className="text-[var(--text-500)]">说明</span>
                     <textarea
                       value={form.description}
                       onChange={(event) =>
                         setForm({ ...form, description: event.target.value })
                       }
-                      className="h-20 w-full resize-none rounded-lg border border-gray-700 bg-black px-3 py-2 text-gray-200 focus:border-yellow-500 focus:outline-none"
+                      className="h-20 w-full resize-none rounded-lg border border-[color:var(--input)] bg-[var(--background-50)] px-3 py-2 text-[var(--text-800)] focus:border-[color:var(--brand-500)] focus:outline-none"
                     />
                   </label>
-                  <div className="rounded-lg border border-gray-800 bg-black p-4 lg:col-span-2">
+                  <div className="rounded-lg border border-[color:var(--border)] bg-[var(--background-100)] p-4 lg:col-span-2">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                       <div>
                         <div className="flex items-center gap-2">
-                          <ShieldCheck className="h-4 w-4 text-yellow-400" />
-                          <span className="text-sm font-bold text-gray-200">入站 MCP Token</span>
+                          <ShieldCheck className="h-4 w-4 text-[var(--state-warning)]" />
+                          <span className="text-sm font-bold text-[var(--text-800)]">入站 MCP Token</span>
                           <span
                             className={`rounded border px-2 py-0.5 text-xs ${statusClass(selectedApp.hasMcpToken)}`}
                           >
                             {selectedApp.hasMcpToken ? '已签发' : '未签发'}
                           </span>
                         </div>
-                        <p className="mt-1 text-xs text-gray-600">
+                        <p className="mt-1 text-xs text-[var(--text-500)]">
                           {selectedApp.mcpTokenIssuedAt
                             ? `签发时间：${new Date(selectedApp.mcpTokenIssuedAt).toLocaleString('zh-CN')}`
                             : '用于外部应用调用平台 /mcp，明文 token 只在签发时展示一次。'}
@@ -715,7 +718,7 @@ export default function AdminMCPIntegrationCenterPanel() {
                       </div>
                       <button
                         onClick={issueInboundToken}
-                        className="flex items-center justify-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-2 text-sm text-yellow-400 hover:bg-yellow-500/20"
+                        className="flex items-center justify-center gap-2 rounded-lg border border-[color:var(--state-warning-border)] bg-[var(--state-warning-surface)] px-4 py-2 text-sm text-[var(--state-warning)] hover:brightness-95"
                       >
                         {actionLoading === 'issue-token' ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -726,25 +729,25 @@ export default function AdminMCPIntegrationCenterPanel() {
                       </button>
                     </div>
                     {issuedInboundToken && (
-                      <div className="mt-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
+                      <div className="mt-4 rounded-lg border border-[color:var(--state-warning-border)] bg-[var(--state-warning-surface)] p-3">
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <p className="text-xs font-bold text-yellow-300">
+                            <p className="text-xs font-bold text-[var(--state-warning)]">
                               本次签发的明文 Token
                             </p>
-                            <p className="mt-1 text-xs text-gray-500">
+                            <p className="mt-1 text-xs text-[var(--text-500)]">
                               只展示这一次，请复制到外部 MCP 应用配置中。
                             </p>
                           </div>
                           <button
                             onClick={copyIssuedInboundToken}
-                            className="flex shrink-0 items-center gap-2 rounded border border-yellow-500/30 bg-black px-3 py-1.5 text-xs text-yellow-400 hover:bg-yellow-500/10"
+                            className="flex shrink-0 items-center gap-2 rounded border border-[color:var(--state-warning-border)] bg-[var(--background-50)] px-3 py-1.5 text-xs text-[var(--state-warning)] hover:bg-[var(--state-warning-surface)]"
                           >
                             <Copy className="h-3.5 w-3.5" />
                             复制
                           </button>
                         </div>
-                        <pre className="mt-3 max-h-24 overflow-auto whitespace-pre-wrap break-all rounded border border-gray-800 bg-black p-3 font-mono text-xs text-yellow-100">
+                        <pre className="mt-3 max-h-24 overflow-auto whitespace-pre-wrap break-all rounded border border-[color:var(--border)] bg-[var(--surface-code)] p-3 font-mono text-xs text-[var(--text-100)]">
                           {issuedInboundToken}
                         </pre>
                       </div>
@@ -756,13 +759,13 @@ export default function AdminMCPIntegrationCenterPanel() {
               {activeTab === 'external' && (
                 <ToolListPanel
                   title="外部 Tool"
-                  icon={<Wrench className="h-4 w-4 text-cyan-400" />}
+                  icon={<Wrench className="h-4 w-4 text-[var(--brand-600)]" />}
                   tools={externalTools}
                   emptyText="尚未发现外部 Tool"
                   action={
                     <button
                       onClick={discoverTools}
-                      className="flex items-center gap-2 rounded-lg bg-cyan-500 px-3 py-2 text-xs font-bold text-black hover:bg-cyan-400"
+                      className="flex items-center gap-2 rounded-lg bg-[var(--brand-500)] px-3 py-2 text-xs font-bold text-white hover:bg-[var(--brand-strong)]"
                     >
                       {actionLoading === 'discover' ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -779,7 +782,7 @@ export default function AdminMCPIntegrationCenterPanel() {
               {activeTab === 'platform' && (
                 <ToolListPanel
                   title="平台开放 Tool"
-                  icon={<ShieldCheck className="h-4 w-4 text-yellow-400" />}
+                  icon={<ShieldCheck className="h-4 w-4 text-[var(--state-warning)]" />}
                   tools={platformTools}
                   emptyText="暂无平台 Tool"
                   onToggle={togglePlatformTool}
@@ -787,16 +790,16 @@ export default function AdminMCPIntegrationCenterPanel() {
               )}
 
               {activeTab === 'capabilities' && (
-                <div className="overflow-hidden rounded-xl border border-gray-800 bg-[#111]">
-                  <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
+                <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background-50)]">
+                  <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <Database className="h-4 w-4 text-yellow-400" />
+                      <Database className="h-4 w-4 text-[var(--state-warning)]" />
                       <span className="text-sm font-bold">业务能力</span>
-                      <span className="text-xs text-gray-600">{capabilities.length}</span>
+                      <span className="text-xs text-[var(--text-500)]">{capabilities.length}</span>
                     </div>
                     <button
                       onClick={syncCapabilities}
-                      className="flex items-center gap-2 rounded-lg bg-yellow-500 px-3 py-2 text-xs font-bold text-black hover:bg-yellow-400"
+                      className="flex items-center gap-2 rounded-lg bg-[var(--brand-500)] px-3 py-2 text-xs font-bold text-white hover:bg-[var(--brand-strong)]"
                     >
                       {actionLoading === 'sync' ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -806,16 +809,16 @@ export default function AdminMCPIntegrationCenterPanel() {
                       同步能力
                     </button>
                   </div>
-                  <div className="divide-y divide-gray-800">
+                  <div className="divide-y divide-[color:var(--border)]">
                     {capabilities.map((item) => (
                       <div key={item.id} className="grid grid-cols-[110px_1fr_120px] gap-3 px-4 py-3 text-sm">
-                        <span className="rounded border border-gray-700 bg-black px-2 py-1 text-center text-xs text-gray-400">
+                        <span className="rounded border border-[color:var(--border)] bg-[var(--background-100)] px-2 py-1 text-center text-xs text-[var(--text-600)]">
                           {item.capabilityType}
                         </span>
                         <div>
-                          <p className="font-medium text-gray-200">{item.name}</p>
-                          <p className="mt-1 text-xs text-gray-600">{item.code}</p>
-                          <p className="mt-1 line-clamp-2 text-xs text-gray-500">
+                          <p className="font-medium text-[var(--text-800)]">{item.name}</p>
+                          <p className="mt-1 text-xs text-[var(--text-500)]">{item.code}</p>
+                          <p className="mt-1 line-clamp-2 text-xs text-[var(--text-500)]">
                             {item.description || '无说明'}
                           </p>
                         </div>
@@ -825,7 +828,7 @@ export default function AdminMCPIntegrationCenterPanel() {
                       </div>
                     ))}
                     {capabilities.length === 0 && (
-                      <div className="py-12 text-center text-sm text-gray-600">
+                      <div className="py-12 text-center text-sm text-[var(--text-500)]">
                         暂无业务能力
                       </div>
                     )}
@@ -837,7 +840,6 @@ export default function AdminMCPIntegrationCenterPanel() {
                 <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
                   <CallPanel
                     title={`平台 -> ${selectedApp.name}`}
-                    accent="cyan"
                     tools={externalTools}
                     selectedTool={selectedExternalTool}
                     argsText={externalArgs}
@@ -852,7 +854,6 @@ export default function AdminMCPIntegrationCenterPanel() {
                   />
                   <CallPanel
                     title={`${selectedApp.name} -> 平台`}
-                    accent="yellow"
                     tools={platformTools}
                     selectedTool={selectedPlatformTool}
                     argsText={platformArgs}
@@ -865,21 +866,21 @@ export default function AdminMCPIntegrationCenterPanel() {
                     onFormat={() => setPlatformArgs(stringifyJson(JSON.parse(platformArgs)))}
                     onRun={callPlatformTool}
                   />
-                  <div className="overflow-hidden rounded-xl border border-gray-800 bg-[#111] xl:col-span-2">
-                    <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
+                  <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background-50)] xl:col-span-2">
+                    <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <FileJson className="h-4 w-4 text-yellow-400" />
+                        <FileJson className="h-4 w-4 text-[var(--state-warning)]" />
                         <span className="text-sm font-bold">最近响应</span>
                       </div>
                       <button
                         onClick={copyResponse}
                         disabled={!response}
-                        className="p-2 text-gray-500 hover:text-yellow-400 disabled:opacity-30"
+                        className="p-2 text-[var(--text-500)] hover:text-[var(--brand-600)] disabled:opacity-30"
                       >
                         <Copy className="h-4 w-4" />
                       </button>
                     </div>
-                    <pre className="max-h-[360px] overflow-auto bg-black p-4 font-mono text-xs text-gray-300">
+                    <pre className="max-h-[360px] overflow-auto bg-[var(--surface-code)] p-4 font-mono text-xs text-[var(--text-200)]">
                       {response ? stringifyJson(response) : '暂无响应'}
                     </pre>
                   </div>
@@ -889,36 +890,36 @@ export default function AdminMCPIntegrationCenterPanel() {
               {activeTab === 'bindings' && (
                 <div className="space-y-5">
                   <div className="grid grid-cols-1 gap-5 xl:grid-cols-[360px_1fr]">
-                    <div className="overflow-hidden rounded-xl border border-gray-800 bg-[#111]">
-                      <div className="border-b border-gray-800 px-4 py-3">
+                    <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background-50)]">
+                      <div className="border-b border-[color:var(--border)] px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <Database className="h-4 w-4 text-yellow-400" />
+                          <Database className="h-4 w-4 text-[var(--state-warning)]" />
                           <span className="text-sm font-bold">提交外部任务</span>
                         </div>
                       </div>
                       <div className="space-y-3 p-4">
                         <label className="block space-y-1 text-sm">
-                          <span className="text-gray-500">平台任务 ID</span>
+                          <span className="text-[var(--text-500)]">平台任务 ID</span>
                           <input
                             value={bindingPlatformTaskId}
                             onChange={(event) =>
                               setBindingPlatformTaskId(event.target.value)
                             }
-                            className="w-full rounded-lg border border-gray-700 bg-black px-3 py-2 text-gray-200 focus:border-yellow-500 focus:outline-none"
+                            className="w-full rounded-lg border border-[color:var(--input)] bg-[var(--background-50)] px-3 py-2 text-[var(--text-800)] focus:border-[color:var(--brand-500)] focus:outline-none"
                           />
                         </label>
                         <label className="block space-y-1 text-sm">
-                          <span className="text-gray-500">平台订单 ID</span>
+                          <span className="text-[var(--text-500)]">平台订单 ID</span>
                           <input
                             value={bindingPlatformOrderId}
                             onChange={(event) =>
                               setBindingPlatformOrderId(event.target.value)
                             }
-                            className="w-full rounded-lg border border-gray-700 bg-black px-3 py-2 text-gray-200 focus:border-yellow-500 focus:outline-none"
+                            className="w-full rounded-lg border border-[color:var(--input)] bg-[var(--background-50)] px-3 py-2 text-[var(--text-800)] focus:border-[color:var(--brand-500)] focus:outline-none"
                           />
                         </label>
                         <label className="block space-y-1 text-sm">
-                          <span className="text-gray-500">外部提交 Tool</span>
+                          <span className="text-[var(--text-500)]">外部提交 Tool</span>
                           <select
                             value={bindingToolName}
                             onChange={(event) => {
@@ -927,7 +928,7 @@ export default function AdminMCPIntegrationCenterPanel() {
                               const tool = externalTools.find((item) => item.name === next);
                               setBindingArgs(stringifyJson(sampleExternalArgs(tool)));
                             }}
-                            className="w-full rounded-lg border border-gray-700 bg-black px-3 py-2 text-gray-200 focus:border-yellow-500 focus:outline-none"
+                            className="w-full rounded-lg border border-[color:var(--input)] bg-[var(--background-50)] px-3 py-2 text-[var(--text-800)] focus:border-[color:var(--brand-500)] focus:outline-none"
                           >
                             <option value="">选择 Tool</option>
                             {externalTools.map((tool) => (
@@ -940,7 +941,7 @@ export default function AdminMCPIntegrationCenterPanel() {
                         <button
                           onClick={submitTaskBinding}
                           disabled={!bindingToolName || actionLoading === 'submit-binding'}
-                          className="flex w-full items-center justify-center gap-2 rounded-lg bg-yellow-500 px-4 py-2 text-sm font-bold text-black hover:bg-yellow-400 disabled:opacity-50"
+                          className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--brand-500)] px-4 py-2 text-sm font-bold text-white hover:bg-[var(--brand-strong)] disabled:opacity-50"
                         >
                           {actionLoading === 'submit-binding' ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -951,12 +952,12 @@ export default function AdminMCPIntegrationCenterPanel() {
                         </button>
                       </div>
                     </div>
-                    <div className="overflow-hidden rounded-xl border border-gray-800 bg-[#111]">
-                      <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
+                    <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background-50)]">
+                      <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3">
                         <span className="text-sm font-bold">提交参数 JSON</span>
                         <button
                           onClick={() => setBindingArgs(stringifyJson(JSON.parse(bindingArgs)))}
-                          className="p-2 text-gray-500 hover:text-yellow-400"
+                          className="p-2 text-[var(--text-500)] hover:text-[var(--brand-600)]"
                           title="格式化"
                         >
                           <FileJson className="h-4 w-4" />
@@ -966,21 +967,21 @@ export default function AdminMCPIntegrationCenterPanel() {
                         value={bindingArgs}
                         onChange={(event) => setBindingArgs(event.target.value)}
                         spellCheck={false}
-                        className="h-72 w-full resize-none bg-black p-4 font-mono text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+                        className="h-72 w-full resize-none bg-[var(--surface-code)] p-4 font-mono text-xs text-[var(--text-200)] focus:outline-none focus:ring-1 focus:ring-[color:var(--brand-500)]"
                       />
                     </div>
                   </div>
 
-                  <div className="overflow-hidden rounded-xl border border-gray-800 bg-[#111]">
-                    <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
+                  <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background-50)]">
+                    <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <Database className="h-4 w-4 text-yellow-400" />
+                        <Database className="h-4 w-4 text-[var(--state-warning)]" />
                         <span className="text-sm font-bold">任务绑定</span>
-                        <span className="text-xs text-gray-600">{bindings.length}</span>
+                        <span className="text-xs text-[var(--text-500)]">{bindings.length}</span>
                       </div>
                       <button
                         onClick={() => selectedApp && void loadAppData(selectedApp.id)}
-                        className="text-gray-500 hover:text-yellow-400"
+                        className="text-[var(--text-500)] hover:text-[var(--brand-600)]"
                       >
                         <RefreshCw className="h-4 w-4" />
                       </button>
@@ -988,21 +989,21 @@ export default function AdminMCPIntegrationCenterPanel() {
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-gray-800 text-gray-500">
-                            <th className="px-4 py-3 text-left">外部任务</th>
-                            <th className="px-4 py-3 text-left">平台订单</th>
-                            <th className="px-4 py-3 text-left">状态</th>
-                            <th className="px-4 py-3 text-left">结果</th>
-                            <th className="px-4 py-3 text-right">操作</th>
+                          <tr className="border-b border-[color:var(--border)] text-[var(--text-500)]">
+                            <th scope="col" className="px-4 py-3 text-left">外部任务</th>
+                            <th scope="col" className="px-4 py-3 text-left">平台订单</th>
+                            <th scope="col" className="px-4 py-3 text-left">状态</th>
+                            <th scope="col" className="px-4 py-3 text-left">结果</th>
+                            <th scope="col" className="px-4 py-3 text-right">操作</th>
                           </tr>
                         </thead>
                         <tbody>
                           {bindings.map((binding) => (
-                            <tr key={binding.id} className="border-b border-gray-800/50">
-                              <td className="max-w-[220px] truncate px-4 py-3 text-xs text-gray-300">
+                            <tr key={binding.id} className="border-b border-[color:var(--border)]">
+                              <td className="max-w-[220px] truncate px-4 py-3 text-xs text-[var(--text-700)]">
                                 {binding.externalTaskId || '-'}
                               </td>
-                              <td className="max-w-[220px] truncate px-4 py-3 text-xs text-gray-500">
+                              <td className="max-w-[220px] truncate px-4 py-3 text-xs text-[var(--text-500)]">
                                 {binding.platformOrderId || '-'}
                               </td>
                               <td className="px-4 py-3">
@@ -1010,13 +1011,13 @@ export default function AdminMCPIntegrationCenterPanel() {
                                   {binding.errorMessage ? 'failed' : binding.status || '-'}
                                 </span>
                               </td>
-                              <td className="max-w-[260px] truncate px-4 py-3 text-xs text-gray-500">
+                              <td className="max-w-[260px] truncate px-4 py-3 text-xs text-[var(--text-500)]">
                                 {binding.resultUrl || '-'}
                               </td>
                               <td className="px-4 py-3 text-right">
                                 <button
                                   onClick={() => void pollBinding(binding)}
-                                  className="rounded border border-yellow-500/30 bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-400 hover:bg-yellow-500/20"
+                                  className="rounded border border-[color:var(--state-warning-border)] bg-[var(--state-warning-surface)] px-3 py-1.5 text-xs text-[var(--state-warning)] hover:brightness-95"
                                 >
                                   {actionLoading === `poll-${binding.id}` ? '同步中' : '同步状态'}
                                 </button>
@@ -1026,7 +1027,7 @@ export default function AdminMCPIntegrationCenterPanel() {
                         </tbody>
                       </table>
                       {bindings.length === 0 && (
-                        <div className="py-12 text-center text-sm text-gray-600">
+                        <div className="py-12 text-center text-sm text-[var(--text-500)]">
                           暂无任务绑定
                         </div>
                       )}
@@ -1036,16 +1037,16 @@ export default function AdminMCPIntegrationCenterPanel() {
               )}
 
               {activeTab === 'invocations' && (
-                <div className="overflow-hidden rounded-xl border border-gray-800 bg-[#111]">
-                  <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
+                <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background-50)]">
+                  <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <Database className="h-4 w-4 text-yellow-400" />
+                      <Database className="h-4 w-4 text-[var(--state-warning)]" />
                       <span className="text-sm font-bold">调用审计</span>
-                      <span className="text-xs text-gray-600">{invocations.length}</span>
+                      <span className="text-xs text-[var(--text-500)]">{invocations.length}</span>
                     </div>
                     <button
                       onClick={() => selectedApp && void loadAppData(selectedApp.id)}
-                      className="text-gray-500 hover:text-yellow-400"
+                      className="text-[var(--text-500)] hover:text-[var(--brand-600)]"
                     >
                       <RefreshCw className="h-4 w-4" />
                     </button>
@@ -1053,12 +1054,12 @@ export default function AdminMCPIntegrationCenterPanel() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-800 text-gray-500">
-                          <th className="px-4 py-3 text-left">时间</th>
-                          <th className="px-4 py-3 text-left">方向</th>
-                          <th className="px-4 py-3 text-left">Tool</th>
-                          <th className="px-4 py-3 text-left">状态</th>
-                          <th className="px-4 py-3 text-right">耗时</th>
+                        <tr className="border-b border-[color:var(--border)] text-[var(--text-500)]">
+                          <th scope="col" className="px-4 py-3 text-left">时间</th>
+                          <th scope="col" className="px-4 py-3 text-left">方向</th>
+                          <th scope="col" className="px-4 py-3 text-left">Tool</th>
+                          <th scope="col" className="px-4 py-3 text-left">状态</th>
+                          <th scope="col" className="px-4 py-3 text-right">耗时</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1066,19 +1067,19 @@ export default function AdminMCPIntegrationCenterPanel() {
                           <tr
                             key={item.id}
                             onClick={() => void showInvocation(item.id)}
-                            className="cursor-pointer border-b border-gray-800/50 hover:bg-white/5"
+                            className="cursor-pointer border-b border-[color:var(--border)] hover:bg-[var(--background-100)]"
                           >
-                            <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-500">
+                            <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--text-500)]">
                               {new Date(item.createdAt).toLocaleString('zh-CN')}
                             </td>
-                            <td className="px-4 py-3 text-xs text-gray-300">{item.direction}</td>
-                            <td className="px-4 py-3 text-xs text-gray-300">{item.toolName}</td>
+                            <td className="px-4 py-3 text-xs text-[var(--text-700)]">{item.direction}</td>
+                            <td className="px-4 py-3 text-xs text-[var(--text-700)]">{item.toolName}</td>
                             <td className="px-4 py-3">
                               <span className={`rounded border px-2 py-0.5 text-xs ${statusClass(item.status)}`}>
                                 {item.status}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-right text-xs text-gray-500">
+                            <td className="px-4 py-3 text-right text-xs text-[var(--text-500)]">
                               {item.durationMs ?? '-'} ms
                             </td>
                           </tr>
@@ -1086,7 +1087,7 @@ export default function AdminMCPIntegrationCenterPanel() {
                       </tbody>
                     </table>
                     {invocations.length === 0 && (
-                      <div className="py-12 text-center text-sm text-gray-600">
+                      <div className="py-12 text-center text-sm text-[var(--text-500)]">
                         暂无调用记录
                       </div>
                     )}
@@ -1095,7 +1096,7 @@ export default function AdminMCPIntegrationCenterPanel() {
               )}
             </>
           ) : (
-            <div className="rounded-xl border border-gray-800 bg-[#111] py-16 text-center text-sm text-gray-600">
+            <div className="rounded-xl border border-[color:var(--border)] bg-[var(--background-50)] py-16 text-center text-sm text-[var(--text-500)]">
               暂无 MCP 应用
             </div>
           )}
@@ -1103,34 +1104,43 @@ export default function AdminMCPIntegrationCenterPanel() {
       </div>
 
       {detail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
-          <div className="max-h-[86vh] w-full max-w-5xl overflow-hidden rounded-xl border border-gray-800 bg-[#111]">
-            <div className="flex items-center justify-between border-b border-gray-800 px-5 py-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label="MCP 请求详情"
+        >
+          <div
+            ref={detailDialogRef}
+            className="max-h-[86vh] w-full max-w-5xl overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background-50)]"
+          >
+            <div className="flex items-center justify-between border-b border-[color:var(--border)] px-5 py-4">
               <div>
                 <p className="font-bold">{detail.toolName}</p>
-                <p className="text-xs text-gray-600">{detail.id}</p>
+                <p className="text-xs text-[var(--text-500)]">{detail.id}</p>
               </div>
               <button
                 onClick={() => setDetail(null)}
-                className="text-gray-500 hover:text-gray-300"
+                aria-label="关闭请求详情"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-[var(--text-500)] hover:bg-[var(--background-100)] hover:text-[var(--text-700)]"
               >
                 <XCircle className="h-5 w-5" />
               </button>
             </div>
             <div className="grid max-h-[72vh] grid-cols-1 overflow-auto lg:grid-cols-2">
-              <div className="border-r border-gray-800">
-                <div className="border-b border-gray-800 px-4 py-2 text-xs text-gray-500">
+              <div className="border-r border-[color:var(--border)]">
+                <div className="border-b border-[color:var(--border)] px-4 py-2 text-xs text-[var(--text-500)]">
                   request_json
                 </div>
-                <pre className="whitespace-pre-wrap p-4 font-mono text-xs text-gray-300">
+                <pre className="whitespace-pre-wrap p-4 font-mono text-xs text-[var(--text-700)]">
                   {stringifyJson(detail.requestJson)}
                 </pre>
               </div>
               <div>
-                <div className="border-b border-gray-800 px-4 py-2 text-xs text-gray-500">
+                <div className="border-b border-[color:var(--border)] px-4 py-2 text-xs text-[var(--text-500)]">
                   response_json
                 </div>
-                <pre className="whitespace-pre-wrap p-4 font-mono text-xs text-gray-300">
+                <pre className="whitespace-pre-wrap p-4 font-mono text-xs text-[var(--text-700)]">
                   {stringifyJson(detail.responseJson)}
                 </pre>
               </div>
@@ -1158,36 +1168,36 @@ function ToolListPanel({
   onToggle: (tool: MCPIntegrationTool) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-800 bg-[#111]">
-      <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
+    <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background-50)]">
+      <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3">
         <div className="flex items-center gap-2">
           {icon}
           <span className="text-sm font-bold">{title}</span>
-          <span className="text-xs text-gray-600">{tools.length}</span>
+          <span className="text-xs text-[var(--text-500)]">{tools.length}</span>
         </div>
         {action}
       </div>
-      <div className="divide-y divide-gray-800">
+      <div className="divide-y divide-[color:var(--border)]">
         {tools.map((tool) => (
           <div key={tool.id} className="grid grid-cols-[1fr_90px_110px] gap-3 px-4 py-3">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <p className="break-all text-sm font-medium text-gray-200">{tool.name}</p>
+                <p className="break-all text-sm font-medium text-[var(--text-800)]">{tool.name}</p>
                 <span
                   className={`rounded border px-2 py-0.5 text-[10px] ${
                     tool.isWrite
-                      ? 'border-orange-500/20 bg-orange-500/10 text-orange-400'
-                      : 'border-cyan-500/20 bg-cyan-500/10 text-cyan-400'
+                      ? 'border-[color:var(--state-warning-border)] bg-[var(--state-warning-surface)] text-[var(--state-warning)]'
+                      : 'border-[color:var(--brand-200)] bg-[var(--brand-50)] text-[var(--brand-600)]'
                   }`}
                 >
                   {tool.isWrite ? '写' : '读'}
                 </span>
               </div>
-              <p className="mt-1 line-clamp-2 text-xs text-gray-600">
+              <p className="mt-1 line-clamp-2 text-xs text-[var(--text-500)]">
                 {tool.description || '无说明'}
               </p>
               {tool.lastError && (
-                <p className="mt-1 line-clamp-1 text-xs text-red-400">{tool.lastError}</p>
+                <p className="mt-1 line-clamp-1 text-xs text-[var(--state-error)]">{tool.lastError}</p>
               )}
             </div>
             <span className={`h-fit rounded border px-2 py-1 text-center text-xs ${statusClass(tool.lastStatus)}`}>
@@ -1197,8 +1207,8 @@ function ToolListPanel({
               onClick={() => onToggle(tool)}
               className={`h-fit rounded border px-3 py-1.5 text-xs ${
                 tool.enabled
-                  ? 'border-green-500/20 bg-green-500/10 text-green-400'
-                  : 'border-gray-700 bg-black text-gray-500'
+                  ? 'border-[color:var(--state-success-border)] bg-[var(--state-success-surface)] text-[var(--state-success-text)]'
+                  : 'border-[color:var(--border)] bg-[var(--background-100)] text-[var(--text-500)]'
               }`}
             >
               {tool.enabled ? '已启用' : '已停用'}
@@ -1206,7 +1216,7 @@ function ToolListPanel({
           </div>
         ))}
         {tools.length === 0 && (
-          <div className="py-12 text-center text-sm text-gray-600">{emptyText}</div>
+          <div className="py-12 text-center text-sm text-[var(--text-500)]">{emptyText}</div>
         )}
       </div>
     </div>
@@ -1215,7 +1225,6 @@ function ToolListPanel({
 
 function CallPanel({
   title,
-  accent,
   tools,
   selectedTool,
   argsText,
@@ -1226,7 +1235,6 @@ function CallPanel({
   onRun,
 }: {
   title: string;
-  accent: 'cyan' | 'yellow';
   tools: MCPIntegrationTool[];
   selectedTool: string;
   argsText: string;
@@ -1236,30 +1244,27 @@ function CallPanel({
   onFormat: () => void;
   onRun: () => void;
 }) {
-  const accentClass =
-    accent === 'cyan'
-      ? 'bg-cyan-500 text-black hover:bg-cyan-400'
-      : 'bg-yellow-500 text-black hover:bg-yellow-400';
+  const accentClass = 'bg-[var(--brand-500)] text-white hover:bg-[var(--brand-strong)]';
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-800 bg-[#111]">
-      <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
+    <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-[var(--background-50)]">
+      <div className="flex items-center justify-between border-b border-[color:var(--border)] px-4 py-3">
         <div>
           <p className="text-sm font-bold">{title}</p>
-          <p className="mt-1 text-xs text-gray-600">JSON-RPC tools/call</p>
+          <p className="mt-1 text-xs text-[var(--text-500)]">JSON-RPC tools/call</p>
         </div>
         <button
           onClick={onFormat}
-          className="p-2 text-gray-500 hover:text-yellow-400"
+          className="p-2 text-[var(--text-500)] hover:text-[var(--brand-600)]"
           title="格式化"
         >
           <FileJson className="h-4 w-4" />
         </button>
       </div>
-      <div className="border-b border-gray-800 p-3">
+      <div className="border-b border-[color:var(--border)] p-3">
         <select
           value={selectedTool}
           onChange={(event) => onSelect(event.target.value)}
-          className="w-full rounded-lg border border-gray-700 bg-black px-3 py-2 text-sm text-gray-200 focus:border-yellow-500 focus:outline-none"
+          className="w-full rounded-lg border border-[color:var(--input)] bg-[var(--background-50)] px-3 py-2 text-sm text-[var(--text-800)] focus:border-[color:var(--brand-500)] focus:outline-none"
         >
           <option value="">选择 Tool</option>
           {tools.map((tool) => (
@@ -1273,9 +1278,9 @@ function CallPanel({
         value={argsText}
         onChange={(event) => onArgsChange(event.target.value)}
         spellCheck={false}
-        className="h-72 w-full resize-none bg-black p-4 font-mono text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-yellow-500"
+        className="h-72 w-full resize-none bg-[var(--surface-code)] p-4 font-mono text-xs text-[var(--text-200)] focus:outline-none focus:ring-1 focus:ring-[color:var(--brand-500)]"
       />
-      <div className="flex items-center justify-end border-t border-gray-800 px-4 py-3">
+      <div className="flex items-center justify-end border-t border-[color:var(--border)] px-4 py-3">
         <button
           onClick={onRun}
           disabled={!selectedTool || running}

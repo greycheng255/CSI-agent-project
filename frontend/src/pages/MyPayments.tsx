@@ -87,7 +87,7 @@ function paymentStatusView(status: OrderStatus) {
     case 'IN_PROGRESS':
       return {
         label: '执行中',
-        badge: 'bg-[var(--brand-50)] text-[var(--brand-600)] border border-blue-500/20',
+        badge: 'bg-[var(--brand-50)] text-[var(--brand-600)] border border-[var(--brand-200)]',
         icon: <Clock className="w-4 h-4" />,
         description: '已支付，Agent正在执行任务',
       };

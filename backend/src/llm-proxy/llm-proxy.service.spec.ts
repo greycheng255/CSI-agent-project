@@ -120,6 +120,71 @@ describe('LlmProxyService（AI 网关直连代理：流式直通 + 非流式缓�
     }
   });
 
+  it('gpt-5.x 别名 → 转发时改写为上游真名，响应 model 回写为调用方原名', async () => {
+    global.fetch = jest.fn().mockResolvedValue(
+      jsonResponse({
+        model: 'deepseek-v4.1-flash',
+        choices: [{ message: { role: 'assistant', content: 'ok' } }],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      }),
+    ) as unknown as typeof fetch;
+
+    const result = await service.forward('org-1', 'ws-1', {
+      model: 'gpt-5.4',
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(JSON.parse(init.body as string).model).toBe('deepseek-v4.1-flash');
+    expect(result.mode).toBe('json');
+    if (result.mode === 'json') {
+      expect((result.body as { model: string }).model).toBe('gpt-5.4');
+    }
+  });
+
+  it('openai/ 命名空间形态的别名同样改写；zen 真名原样透传', async () => {
+    // 每次调用返回新的 Response（body 只能读一次）
+    const fetchMock = jest.fn().mockImplementation(() =>
+      Promise.resolve(
+        jsonResponse({ model: 'deepseek-v4.1-flash', choices: [], usage: { total_tokens: 1 } }),
+      ),
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await service.forward('org-1', 'ws-1', { model: 'openai/gpt-5.5', messages: [] });
+    const real = await service.forward('org-1', 'ws-1', { model: 'deepseek-v4.1-flash', messages: [] });
+
+    const calls = fetchMock.mock.calls;
+    expect(JSON.parse(calls[0][1].body as string).model).toBe('deepseek-v4.1-flash');
+    expect(JSON.parse(calls[1][1].body as string).model).toBe('deepseek-v4.1-flash');
+    // 未走别名的请求：响应 model 保持上游原值
+    expect(real.mode).toBe('json');
+    if (real.mode === 'json') {
+      expect((real.body as { model: string }).model).toBe('deepseek-v4.1-flash');
+    }
+  });
+
+  it('别名 + 流式 → ForwardResult 携带 modelRestore 供 SSE 回写', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(sseResponse(['data: [DONE]\n\n'])) as unknown as typeof fetch;
+
+    const result = await service.forward('org-1', 'ws-1', {
+      model: 'gpt-5.5',
+      stream: true,
+      messages: [],
+    });
+    const [, init] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(JSON.parse(init.body as string).model).toBe('deepseek-v4.1-flash');
+    expect(result.mode).toBe('stream');
+    if (result.mode === 'stream') {
+      expect(result.modelRestore).toEqual({
+        upstreamModel: 'deepseek-v4.1-flash',
+        requestedModel: 'gpt-5.5',
+      });
+    }
+  });
+
   it('非流式成功 → json 模式并按 usage 上报计量', async () => {
     global.fetch = jest.fn().mockResolvedValue(
       jsonResponse({
@@ -280,6 +345,25 @@ describe('pipeSseResponse（SSE 直通管道）', () => {
     const body = Buffer.concat(res.written).toString('utf8');
     expect(body).toContain('response.completed');
     expect(body).toContain('"total_tokens":23');
+  });
+
+  it('modelRestore 生效：data 帧回写调用方原名，跨 chunk 切断的字面量也能正确改写', async () => {
+    const upstream = sseResponseHelper([
+      'data: {"model":"deepseek-v4.1-flash","delta":"a"}\n\n',
+      'data: {"model":"deep', // 故意在字面量中间切断
+      'seek-v4.1-flash","delta":"b"}\n\n',
+      'data: [DONE]\n\n',
+    ]);
+    const res = makeMockRes();
+    pipeSseResponse(res, upstream, undefined, {
+      upstreamModel: 'deepseek-v4.1-flash',
+      requestedModel: 'gpt-5.4',
+    });
+    await new Promise((r) => setTimeout(r, 80));
+    const body = Buffer.concat(res.written).toString('utf8');
+    expect(body).not.toContain('deepseek-v4.1-flash');
+    expect(body.match(/"model":"gpt-5\.4"/g)).toHaveLength(2);
+    expect(body).toContain('data: [DONE]');
   });
 
   function sseResponseHelper(chunks: string[]): Response {

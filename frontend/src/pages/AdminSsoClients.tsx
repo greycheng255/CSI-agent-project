@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
 import { WorkbenchPageHeader } from '../components/workbench/WorkbenchPrimitives';
+import { Skeleton } from '../components/ui/Skeleton';
 import {
   CheckCircle,
   Copy,
@@ -178,7 +179,7 @@ export default function AdminSsoClients() {
             client_secret 已生成，仅显示一次，请立即复制保存
           </div>
           <div className="flex items-stretch gap-2">
-            <code className="min-w-0 flex-1 break-all rounded-lg bg-white/70 px-3 py-2 font-mono text-xs text-[var(--text-800)]">
+            <code className="min-w-0 flex-1 break-all rounded-lg bg-[var(--background-100)] px-3 py-2 font-mono text-xs text-[var(--text-800)]">
               {newSecret}
             </code>
             <button
@@ -276,9 +277,9 @@ export default function AdminSsoClients() {
           <h2 className="text-sm font-semibold text-[var(--text-800)]">已注册接入方（{clients.length}）</h2>
         </div>
         {loading ? (
-          <div className="space-y-3 p-5" aria-label="正在加载接入方列表">
-            {[0, 1].map((i) => (
-              <div key={i} className="h-14 animate-pulse rounded-lg bg-[var(--background-100)]" />
+          <div className="space-y-3 p-5" aria-busy="true" aria-label="正在加载接入方列表">
+            {Array.from({ length: 3 }, (_, i) => (
+              <Skeleton key={i} className="h-14 w-full" rounded="lg" />
             ))}
           </div>
         ) : clients.length === 0 ? (

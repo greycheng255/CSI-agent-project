@@ -10,7 +10,8 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
-import { WorkbenchPageHeader } from '../components/workbench/WorkbenchPrimitives';
+import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { Skeleton } from '../components/ui/Skeleton';
 
 type WithdrawalRow = {
   id: string;
@@ -42,7 +43,7 @@ const statusBadge: Record<string, string> = {
   PENDING:
     'bg-[var(--state-warning-surface)] text-[var(--state-warning)] border border-yellow-500/20',
   APPROVED:
-    'bg-[var(--brand-50)] text-[var(--brand-600)] border border-blue-500/20',
+    'bg-[var(--brand-50)] text-[var(--brand-600)] border border-[var(--brand-200)]',
   PROCESSING: 'bg-purple-500/10 text-purple-500 border border-purple-500/20',
   COMPLETED:
     'bg-[var(--state-success-surface)] text-[var(--state-success-text)] border border-[color:var(--state-success-border)]',
@@ -216,11 +217,34 @@ export default function AdminWithdrawals() {
       </div>
 
       {loading ? (
-        <div className="flex min-h-[200px] items-center justify-center">
-          <Loader2 className="h-6 w-6 animate-spin text-[var(--brand-600)]" />
-        </div>
+        <ul className="space-y-3" aria-busy="true" aria-label="正在读取提现记录">
+          {Array.from({ length: 4 }, (_, index) => (
+            <li
+              key={index}
+              className="rounded-2xl border border-[color:var(--border)] bg-white p-4 sm:p-5"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <Skeleton className="h-5 w-48" rounded="sm" />
+                  <Skeleton className="mt-2 h-4 w-72 max-w-full" rounded="sm" />
+                </div>
+                <Skeleton className="h-6 w-20" rounded="pill" />
+              </div>
+              <div className="mt-4 flex flex-col gap-2 border-t border-[color:var(--border)] pt-4 sm:flex-row">
+                <Skeleton className="h-11 w-full" rounded="lg" />
+                <Skeleton className="h-11 w-32" rounded="lg" />
+              </div>
+            </li>
+          ))}
+        </ul>
       ) : error ? (
-        <p className="text-sm text-[var(--state-error)]">{error}</p>
+        <WorkbenchStatePanel
+          icon={CircleAlert}
+          title="提现记录暂时无法加载"
+          description={error}
+          tone="error"
+          action={<button type="button" onClick={() => void load()} className="btn-cs btn-primary btn-sm">重试</button>}
+        />
       ) : rows.length === 0 ? (
         <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 text-[var(--text-500)]">
           <Inbox className="h-8 w-8" />

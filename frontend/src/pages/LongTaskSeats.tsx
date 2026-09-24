@@ -451,7 +451,7 @@ export default function LongTaskSeats() {
                     value={price}
                     onChange={(event) => setPrice(event.target.value)}
                     placeholder={task.budgetMaxCny != null ? `不超过 ${task.budgetMaxCny}` : '你的报价'}
-                    className="h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+                    className="h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)]"
                   />
                 </label>
                 <label className="min-w-0">
@@ -462,7 +462,7 @@ export default function LongTaskSeats() {
                     type="date"
                     value={delivery}
                     onChange={(event) => setDelivery(event.target.value)}
-                    className="h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+                    className="h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)]"
                   />
                 </label>
               </div>
@@ -475,7 +475,7 @@ export default function LongTaskSeats() {
                   value={plan}
                   onChange={(event) => setPlan(event.target.value)}
                   placeholder="简要说明你的执行思路与优势"
-                  className="w-full resize-none rounded-xl border border-[color:var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+                  className="w-full resize-none rounded-xl border border-[color:var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)]"
                 />
               </label>
               <div className="flex flex-wrap items-center gap-3">
@@ -554,7 +554,7 @@ export default function LongTaskSeats() {
                   onChange={(event) =>
                     setSortBy(event.target.value as SeatSortKey)
                   }
-                  className="h-9 rounded-lg border border-[color:var(--border)] bg-white px-2 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+                  className="h-9 rounded-lg border border-[color:var(--border)] bg-white px-2 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)]"
                 >
                   {SEAT_SORT_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>

@@ -8,9 +8,12 @@ import {
   LogOut,
   Mail,
   Menu,
+  Monitor,
+  Moon,
   PlusCircle,
   Shield,
   ShoppingBag,
+  Sun,
   UserCircle,
   X,
 } from 'lucide-react';
@@ -18,6 +21,7 @@ import type { LucideIcon } from 'lucide-react';
 import PageFade from '../components/PageFade';
 import { isUserWorkbenchPath } from '../config/workbenchNavigation';
 import { useAuthStore } from '../store/authStore';
+import { useThemeStore, type ThemeMode } from '../store/themeStore';
 import { getCurrentUser } from '../services/auth.service';
 import { useConfirm } from '../components/ui/confirm-context';
 
@@ -28,6 +32,36 @@ function FadedOutlet() {
     <PageFade key={location.pathname}>
       <Outlet />
     </PageFade>
+  );
+}
+
+/** 主题外观三态：浅色 / 深色 / 跟随系统 */
+const THEME_OPTIONS: { mode: ThemeMode; label: string; Icon: LucideIcon }[] = [
+  { mode: 'light', label: '浅色', Icon: Sun },
+  { mode: 'dark', label: '深色', Icon: Moon },
+  { mode: 'system', label: '跟随系统', Icon: Monitor },
+];
+
+function ThemeToggle({ className = '' }: { className?: string }) {
+  const mode = useThemeStore((state) => state.mode);
+  const setMode = useThemeStore((state) => state.setMode);
+
+  return (
+    <div className={`theme-toggle ${className}`.trim()} role="group" aria-label="主题外观">
+      {THEME_OPTIONS.map(({ mode: value, label, Icon }) => (
+        <button
+          key={value}
+          type="button"
+          className={`theme-toggle-btn${mode === value ? ' active' : ''}`}
+          aria-pressed={mode === value}
+          title={label}
+          onClick={() => setMode(value)}
+        >
+          <Icon className="h-4 w-4" aria-hidden="true" />
+          <span className="sr-only">{label}</span>
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -219,6 +253,7 @@ export default function MainLayout() {
           </nav>
 
           <div className="nav-right">
+            <ThemeToggle className="nav-desktop-only" />
             <div className="nav-desktop-only flex items-center gap-2">{accountActions}</div>
             <button
               type="button"
@@ -262,6 +297,10 @@ export default function MainLayout() {
               </>
             )}
             <div className="nav-mobile-divider" />
+            <div className="nav-mobile-theme">
+              <span>外观</span>
+              <ThemeToggle />
+            </div>
             {admin && !user ? (
               <>
                 {adminChip}

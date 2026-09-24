@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CircleAlert, ClipboardList, ExternalLink, Gavel, Inbox, Loader2, Package, Plus, Clock, CheckCircle, Sparkles, Store, XCircle } from 'lucide-react';
+import { CircleAlert, ClipboardList, ExternalLink, Gavel, Inbox, Package, Plus, Clock, CheckCircle, Sparkles, Store, XCircle } from 'lucide-react';
 import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { Skeleton, SkeletonText } from '../components/ui/Skeleton';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
 import { formatShanghaiDate } from '../utils/date';
@@ -220,52 +221,58 @@ export default function MyOrders() {
     void loadLongTasks();
   }, [loadLongTasks]);
 
+  const loadTasks = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const [tasksRes, ordersRes] = await Promise.all([
+        fetch(`${apiBase}/api/v1/tasks/my-tasks?clientId=${user.id}`),
+        fetch(`${apiBase}/api/v1/orders/client/${user.id}`),
+      ]);
+      const tasksData = tasksRes.ok ? await tasksRes.json() : [];
+      const ordersData = ordersRes.ok ? await ordersRes.json() : [];
+
+      setError('');
+
+      // 处理订单数据 - 将 task.id 映射到 taskId
+      const ordersArray: OrderItem[] = Array.isArray(ordersData) ? ordersData.map((o: ApiOrder) => ({
+        ...o,
+        taskId: o.task?.id || o.taskId || '',
+        status: (o.status as OrderStatus) || 'PENDING_PAYMENT',
+        amountCny: o.amountCny || 0,
+        createdAt: o.createdAt || '',
+      })) : [];
+      setOrders(ordersArray);
+
+      // 处理任务数据
+      const myTasks: TaskItem[] = Array.isArray(tasksData) ? tasksData.map((t: ApiTask) => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        status: (t.status as TaskStatus) || 'CLOSED',
+        createdAt: t.createdAt,
+        budgetCny: t.budgetCny,
+        expectedDeliveryAt: t.expectedDeliveryAt,
+        hasOrder: ordersArray.some((o: OrderItem) => o.taskId === t.id)
+      })) : [];
+
+      setTasks(myTasks);
+    } catch {
+      setTasks([]);
+      setOrders([]);
+      setError('读取数据失败，请检查后端服务是否正常运行。');
+    } finally {
+      setLoading(false);
+    }
+  }, [apiBase, user]);
+
   useEffect(() => {
     if (!user) {
       navigate('/login');
       return;
     }
-
-    // 同时获取用户的任务列表和订单列表
-    Promise.all([
-      fetch(`${apiBase}/api/v1/tasks/my-tasks?clientId=${user.id}`).then(res => res.ok ? res.json() : []),
-      fetch(`${apiBase}/api/v1/orders/client/${user.id}`).then(res => res.ok ? res.json() : [])
-    ])
-      .then(([tasksData, ordersData]) => {
-        setError('');
-        
-        // 处理订单数据 - 将 task.id 映射到 taskId
-        const ordersArray: OrderItem[] = Array.isArray(ordersData) ? ordersData.map((o: ApiOrder) => ({
-          ...o,
-          taskId: o.task?.id || o.taskId || '',
-          status: (o.status as OrderStatus) || 'PENDING_PAYMENT',
-          amountCny: o.amountCny || 0,
-          createdAt: o.createdAt || '',
-        })) : [];
-        setOrders(ordersArray);
-        
-        // 处理任务数据
-        const myTasks: TaskItem[] = Array.isArray(tasksData) ? tasksData.map((t: ApiTask) => ({
-          id: t.id,
-          title: t.title,
-          description: t.description,
-          status: (t.status as TaskStatus) || 'CLOSED',
-          createdAt: t.createdAt,
-          budgetCny: t.budgetCny,
-          expectedDeliveryAt: t.expectedDeliveryAt,
-          hasOrder: ordersArray.some((o: OrderItem) => o.taskId === t.id)
-        })) : [];
-        
-        setTasks(myTasks);
-        setLoading(false);
-      })
-      .catch(() => {
-        setTasks([]);
-        setOrders([]);
-        setError('读取数据失败，请检查后端服务是否正常运行。');
-        setLoading(false);
-      });
-  }, [apiBase, navigate, user]);
+    void loadTasks();
+  }, [loadTasks, navigate, user]);
 
   // 过滤显示的任务
   const filteredTasks = tasks.filter(task => {
@@ -330,9 +337,15 @@ export default function MyOrders() {
 
       {/* 长任务线：任务大厅发布的任务（竞标动态 / 选标 / 签约入口） */}
       {token && (longLoading ? (
-        <section className="flex min-h-20 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white text-sm text-[var(--text-500)]">
-          <Loader2 className="mr-3 h-4 w-4 animate-spin text-[var(--brand-500)]" />
-          正在读取长任务任务...
+        <section className="rounded-2xl border border-[color:var(--border)] bg-white p-5">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-4 w-4" rounded="sm" />
+            <Skeleton className="h-4 w-44" rounded="sm" />
+          </div>
+          <div className="mt-3 space-y-2">
+            <Skeleton className="h-11 w-full" rounded="lg" />
+            <Skeleton className="h-11 w-full" rounded="lg" />
+          </div>
         </section>
       ) : longTasks.length > 0 ? (
         <section className="space-y-3">
@@ -379,12 +392,35 @@ export default function MyOrders() {
       </div>
 
       {loading ? (
-        <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white text-sm text-[var(--text-500)]">
-          <Loader2 className="mr-3 h-5 w-5 animate-spin text-[var(--brand-500)]" />
-          正在读取数据...
-        </div>
+        <section className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white divide-y divide-[color:var(--border)]">
+          {Array.from({ length: 4 }, (_, index) => (
+            <div key={index} className="p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-5 w-52" rounded="sm" />
+                    <Skeleton className="h-5 w-16" rounded="pill" />
+                  </div>
+                  <SkeletonText lines={2} />
+                  <div className="flex gap-4">
+                    <Skeleton className="h-4 w-28" rounded="sm" />
+                    <Skeleton className="h-4 w-24" rounded="sm" />
+                    <Skeleton className="h-4 w-32" rounded="sm" />
+                  </div>
+                </div>
+                <Skeleton className="h-9 w-24" rounded="pill" />
+              </div>
+            </div>
+          ))}
+        </section>
       ) : error ? (
-        <WorkbenchStatePanel icon={CircleAlert} title="任务记录暂时无法加载" description={error} tone="error" />
+        <WorkbenchStatePanel
+          icon={CircleAlert}
+          title="任务记录暂时无法加载"
+          description={error}
+          tone="error"
+          action={<button type="button" onClick={() => void loadTasks()} className="btn-cs btn-primary btn-sm">重试</button>}
+        />
       ) : filteredTasks.length === 0 && orders.length === 0 ? (
         <WorkbenchStatePanel icon={Inbox} title="还没有发布任务" description="发布首个任务后，可在这里持续跟进报价、支付、执行与验收。" action={<Link to="/tasks/new" className="btn-cs btn-primary btn-sm"><Plus className="h-4 w-4" />发布第一个任务</Link>} />
       ) : (
@@ -526,8 +562,8 @@ export default function MyOrders() {
                           {orderStatusViewResult.label}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-500 mb-2">{orderStatusViewResult.description}</p>
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                      <p className="text-xs text-[var(--text-500)] mb-2">{orderStatusViewResult.description}</p>
+                      <div className="flex items-center gap-4 text-xs text-[var(--text-500)]">
                         <span>成交价：<span className="font-medium text-[var(--text-800)]">¥{order.amountCny}</span></span>
                         <span>Agent：<span className="font-medium text-[var(--text-800)]">{order.bid?.agent?.name || '未知'}</span></span>
                       </div>
@@ -567,8 +603,8 @@ export default function MyOrders() {
                           {orderStatusViewResult.label}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-500 mb-2">{orderStatusViewResult.description}</p>
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                      <p className="text-xs text-[var(--text-500)] mb-2">{orderStatusViewResult.description}</p>
+                      <div className="flex items-center gap-4 text-xs text-[var(--text-500)]">
                         <span>成交价：<span className="font-medium text-[var(--text-800)]">¥{order.amountCny}</span></span>
                         <span>Agent：<span className="font-medium text-[var(--text-800)]">{order.bid?.agent?.name || '未知'}</span></span>
                         {order.acceptedAt && (
@@ -579,7 +615,7 @@ export default function MyOrders() {
                       {/* 交付物信息 */}
                       {order.deliveryUrl && (
                         <div className="mt-3 rounded-xl bg-[var(--background-100)] p-3">
-                          <div className="text-xs text-gray-500 mb-1">交付物:</div>
+                          <div className="text-xs text-[var(--text-500)] mb-1">交付物:</div>
                           <a 
                             href={order.deliveryUrl} 
                             target="_blank" 
@@ -590,7 +626,7 @@ export default function MyOrders() {
                             {order.deliveryUrl}
                           </a>
                           {order.deliverySummary && (
-                            <p className="text-xs text-gray-500 mt-1">{order.deliverySummary}</p>
+                            <p className="text-xs text-[var(--text-500)] mt-1">{order.deliverySummary}</p>
                           )}
                         </div>
                       )}
@@ -716,7 +752,7 @@ function LongTaskCard({
           {task.status === 'open' && bidCount > 0 && (
             <Link
               to={`/longtask/tasks/${task.id}/seats`}
-              className="min-h-9 rounded-full bg-[var(--brand-500)] px-3 py-2 text-center text-sm font-medium text-white hover:bg-[var(--brand-600)]"
+              className="min-h-9 rounded-full bg-[var(--brand-500)] px-3 py-2 text-center text-sm font-medium text-white hover:bg-[var(--brand-strong)]"
             >
               去选标
             </Link>

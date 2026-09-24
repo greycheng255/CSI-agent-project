@@ -110,7 +110,7 @@ const statusConfig: Record<OrderStatus, {
   },
   IN_PROGRESS: {
     label: '执行中',
-    badge: 'bg-[var(--brand-50)] text-[var(--brand-600)] border border-blue-500/20',
+    badge: 'bg-[var(--brand-50)] text-[var(--brand-600)] border border-[var(--brand-200)]',
     icon: <TrendingUp className="w-4 h-4" />,
     description: '任务正在执行中',
     progress: 50,

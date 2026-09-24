@@ -176,7 +176,7 @@ export function OnlineAlipayPayment({
             </p>
           )}
           {error && (
-            <p className="mt-3 text-sm text-[var(--state-error)]">{error}</p>
+            <p role="alert" className="mt-3 text-sm text-[var(--state-error)]">{error}</p>
           )}
         </div>
 

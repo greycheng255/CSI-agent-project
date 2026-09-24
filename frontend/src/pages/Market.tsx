@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { API_BASE } from '../config/api';
 import { cssNumber, cssSeconds } from '../components/reactbits/animVars';
 import { formatShanghaiDateTime } from '../utils/date';
+import { Skeleton } from '../components/ui/Skeleton';
 
 type StatusGroup = 'all' | 'bidding' | 'executing' | 'completed' | 'abnormal';
 
@@ -78,13 +79,13 @@ function TaskSkeleton() {
     <div className="rounded-2xl border border-[color:var(--border)] bg-white p-5">
       <div className="flex justify-between gap-6">
         <div className="min-w-0 flex-1 space-y-3">
-          <div className="h-5 w-2/3 animate-pulse rounded bg-[color:var(--background-200)]" />
-          <div className="h-4 w-full animate-pulse rounded bg-[color:var(--background-200)]" />
-          <div className="h-4 w-4/5 animate-pulse rounded bg-[color:var(--background-200)]" />
+          <Skeleton className="h-5 w-2/3" rounded="sm" />
+          <Skeleton className="h-4 w-full" rounded="sm" />
+          <Skeleton className="h-4 w-4/5" rounded="sm" />
         </div>
-        <div className="h-8 w-24 animate-pulse rounded bg-[color:var(--background-200)]" />
+        <Skeleton className="h-8 w-24" rounded="sm" />
       </div>
-      <div className="mt-5 h-14 animate-pulse rounded-xl bg-[color:var(--background-100)]" />
+      <Skeleton className="mt-5 h-14 w-full" rounded="lg" />
     </div>
   );
 }
@@ -299,7 +300,7 @@ export default function Market() {
                   value={keyword}
                   onChange={(event) => setKeyword(event.target.value)}
                   placeholder="任务标题或描述"
-                  className="h-11 w-full rounded-xl border border-[color:var(--border)] bg-white pl-9 pr-3 text-sm text-[color:var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[color:var(--text-500)] focus:border-[color:var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+                  className="h-11 w-full rounded-xl border border-[color:var(--border)] bg-white pl-9 pr-3 text-sm text-[color:var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[color:var(--text-500)] focus:border-[color:var(--brand-500)]"
                 />
               </div>
             </div>
@@ -359,7 +360,7 @@ export default function Market() {
                 value={tagFilter}
                 onChange={(event) => setTagFilter(event.target.value)}
                 placeholder="也可输入标签，逗号分隔"
-                className="mt-3 h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[color:var(--text-500)] focus:border-[color:var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+                className="mt-3 h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[color:var(--text-500)] focus:border-[color:var(--brand-500)]"
                 aria-label="输入能力标签"
               />
             </div>
@@ -375,7 +376,7 @@ export default function Market() {
                     value={minBudget}
                     onChange={(event) => setMinBudget(event.target.value)}
                     placeholder="最低"
-                    className="h-11 w-full min-w-0 rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[color:var(--text-500)] focus:border-[color:var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+                    className="h-11 w-full min-w-0 rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[color:var(--text-500)] focus:border-[color:var(--brand-500)]"
                   />
                 </label>
                 <label className="min-w-0">
@@ -386,7 +387,7 @@ export default function Market() {
                     value={maxBudget}
                     onChange={(event) => setMaxBudget(event.target.value)}
                     placeholder="最高"
-                    className="h-11 w-full min-w-0 rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[color:var(--text-500)] focus:border-[color:var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+                    className="h-11 w-full min-w-0 rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--text-800)] outline-none transition-[border-color,box-shadow] placeholder:text-[color:var(--text-500)] focus:border-[color:var(--brand-500)]"
                   />
                 </label>
               </div>
@@ -439,7 +440,7 @@ export default function Market() {
               <select
                 value={sortBy}
                 onChange={(event) => setSortBy(event.target.value)}
-                className="h-11 rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm font-semibold text-[color:var(--text-600)] outline-none transition-[border-color,box-shadow] focus:border-[color:var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+                className="h-11 rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm font-semibold text-[color:var(--text-600)] outline-none transition-[border-color,box-shadow] focus:border-[color:var(--brand-500)]"
                 aria-label="任务排序方式"
               >
                 <option value="newest">最新发布</option>

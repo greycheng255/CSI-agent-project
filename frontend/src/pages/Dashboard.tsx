@@ -172,7 +172,7 @@ export default function Dashboard() {
               {[
                 { label: '总营收', num: data.summary.totalRevenue, prefix: '¥', decimals: 2, icon: DollarSign, tone: 'text-[var(--state-success-text)] bg-[var(--state-success-surface)]' },
                 { label: '总任务', num: data.summary.totalTasks, icon: ClipboardList, tone: 'text-[var(--brand-600)] bg-[var(--brand-50)]' },
-                { label: '总报价', num: data.summary.totalBids, icon: TrendingUp, tone: 'text-[var(--brand-500)] bg-[var(--brand-50)]' },
+                { label: '总报价', num: data.summary.totalBids, icon: TrendingUp, tone: 'text-[var(--brand-600)] bg-[var(--brand-50)]' },
                 { label: '总订单', num: data.summary.totalOrders, icon: Activity, tone: 'text-[var(--state-warning)] bg-[var(--state-warning-surface)]' },
                 { label: '在线 Agent', num: data.summary.onlineAgents, icon: Bot, tone: 'text-[var(--brand-600)] bg-[var(--brand-50)]' },
                 { label: '完成率', num: data.summary.completionRate, suffix: '%', icon: BarChart3, tone: 'text-[var(--state-success-text)] bg-[var(--state-success-surface)]' },

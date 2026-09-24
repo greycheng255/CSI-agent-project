@@ -190,7 +190,7 @@ export default function ApiDocs() {
                 </div>
                 <pre className="max-w-full overflow-x-auto bg-white p-4 text-[13px] leading-6 text-[color:var(--text-700)]"><code><span className="font-semibold text-[color:var(--brand-600)]">Authorization</span>: Bearer YOUR_ACCESS_TOKEN</code></pre>
               </div>
-              <div className="mt-4 flex gap-3 rounded-xl bg-[color:var(--brand-50)] px-4 py-3.5 text-sm leading-6 text-[color:var(--brand-800)]">
+              <div className="mt-4 flex gap-3 rounded-xl bg-[color:var(--brand-50)] px-4 py-3.5 text-sm leading-6 text-[color:var(--brand-600)]">
                 <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--brand-600)]" />
                 {isLoggedIn
                   ? '当前账户已登录。请在可信的服务端环境保存访问凭证，并为不同用途使用独立凭证。'

@@ -14,10 +14,10 @@ interface AcceptanceChecklistProps {
 }
 
 const statusConfig: Record<ChecklistItemStatus, { label: string; icon: typeof Circle; color: string }> = {
-  PENDING: { label: '待检查', icon: Circle, color: 'text-gray-400' },
-  PASSED: { label: '通过', icon: CheckCircle, color: 'text-green-500' },
-  FAILED: { label: '未通过', icon: XCircle, color: 'text-red-500' },
-  NA: { label: '不适用', icon: MinusCircle, color: 'text-gray-400' },
+  PENDING: { label: '待检查', icon: Circle, color: 'text-[var(--text-400)]' },
+  PASSED: { label: '通过', icon: CheckCircle, color: 'text-[var(--state-success-text)]' },
+  FAILED: { label: '未通过', icon: XCircle, color: 'text-[var(--state-error)]' },
+  NA: { label: '不适用', icon: MinusCircle, color: 'text-[var(--text-400)]' },
 };
 
 export default function AcceptanceChecklistComponent({
@@ -110,14 +110,14 @@ export default function AcceptanceChecklistComponent({
   if (checklist.length === 0) {
     return (
       <section className={containerClass}>
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">验收检查清单</h3>
+        <h3 className="text-lg font-semibold text-[var(--text-900)] mb-4">验收检查清单</h3>
         <div className="text-center py-8">
-          <p className="text-gray-500 mb-4">暂无验收检查清单</p>
+          <p className="text-[var(--text-500)] mb-4">暂无验收检查清单</p>
           {isClient && (
             <button
               onClick={handleGenerate}
               disabled={generating}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 rounded-lg bg-[var(--brand-strong)] text-white hover:bg-[var(--brand-strong-hover)] disabled:opacity-50"
             >
               {generating ? '生成中...' : '从验收标准生成'}
             </button>
@@ -130,19 +130,19 @@ export default function AcceptanceChecklistComponent({
   return (
     <section className={containerClass}>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">验收检查清单</h3>
+        <h3 className="text-lg font-semibold text-[var(--text-900)]">验收检查清单</h3>
         {stats && (
           <div className="flex items-center space-x-4 text-sm">
             <div className="flex items-center">
-              <div className="w-24 bg-gray-200 rounded-full h-2 mr-2">
+              <div className="w-24 bg-[var(--background-300)] rounded-full h-2 mr-2">
                 <div
-                  className="bg-green-500 h-2 rounded-full transition-all"
+                  className="bg-[var(--state-success)] h-2 rounded-full transition-all"
                   style={{ width: `${stats.passRate}%` }}
                 ></div>
               </div>
-              <span className="text-gray-600">{stats.passRate}% 通过</span>
+              <span className="text-[var(--text-600)]">{stats.passRate}% 通过</span>
             </div>
-            <span className="text-gray-500">
+            <span className="text-[var(--text-500)]">
               {stats.passed}/{stats.total - stats.na} 项通过
             </span>
           </div>
@@ -150,7 +150,7 @@ export default function AcceptanceChecklistComponent({
       </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
+        <div role="alert" className="mb-4 p-3 bg-[var(--state-error-surface)] border border-[color:var(--state-error-border)] rounded text-[var(--state-error)] text-sm">
           {error}
         </div>
       )}
@@ -166,20 +166,22 @@ export default function AcceptanceChecklistComponent({
             <div
               key={item.id}
               className={`border rounded-lg transition-all ${
-                item.status === 'FAILED' ? 'border-red-200 bg-red-50' : 'border-gray-200'
+                item.status === 'FAILED'
+                  ? 'border-[color:var(--state-error-border)] bg-[var(--state-error-surface)]'
+                  : 'border-[color:var(--border)]'
               }`}
             >
               <div className="flex items-start p-4">
-                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-gray-100 rounded-full text-sm text-gray-600 mr-3">
+                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-[var(--background-100)] rounded-full text-sm text-[var(--text-600)] mr-3">
                   {index + 1}
                 </span>
 
                 <div className="flex-grow">
                   <div className="flex items-center justify-between">
-                    <p className="text-gray-800">{item.criteriaText}</p>
+                    <p className="text-[var(--text-800)]">{item.criteriaText}</p>
                     <button
                       onClick={() => toggleExpand(item.id)}
-                      className="ml-2 p-1 text-gray-400 hover:text-gray-600"
+                      className="ml-2 p-1 text-[var(--text-400)] hover:text-[var(--text-600)]"
                     >
                       {isExpanded ? (
                         <ChevronUp className="w-4 h-4" />
@@ -202,8 +204,8 @@ export default function AcceptanceChecklistComponent({
                             disabled={updating}
                             className={`flex items-center px-3 py-1 rounded-full text-sm transition-colors ${
                               item.status === status
-                                ? `${btnConfig.color} bg-gray-100`
-                                : 'text-gray-500 hover:bg-gray-50'
+                                ? `${btnConfig.color} bg-[var(--background-100)]`
+                                : 'text-[var(--text-500)] hover:bg-[var(--background-100)]'
                             }`}
                           >
                             <BtnIcon className="w-4 h-4 mr-1" />
@@ -216,8 +218,8 @@ export default function AcceptanceChecklistComponent({
 
                   {/* 展开详情 */}
                   {isExpanded && (
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                      <div className="flex items-center text-sm text-gray-500 mb-2">
+                    <div className="mt-3 pt-3 border-t border-[color:var(--border)]">
+                      <div className="flex items-center text-sm text-[var(--text-500)] mb-2">
                         <StatusIcon className={`w-4 h-4 mr-1 ${config.color}`} />
                         <span>当前状态: {config.label}</span>
                         {item.checkedAt && (
@@ -228,7 +230,7 @@ export default function AcceptanceChecklistComponent({
                       </div>
 
                       {item.comment && (
-                        <div className="bg-gray-50 p-2 rounded text-sm text-gray-600">
+                        <div className="bg-[var(--background-100)] p-2 rounded text-sm text-[var(--text-600)]">
                           <span className="font-medium">备注:</span> {item.comment}
                         </div>
                       )}
@@ -238,7 +240,7 @@ export default function AcceptanceChecklistComponent({
                           <input
                             type="text"
                             placeholder="添加备注..."
-                            className="w-full px-3 py-2 border rounded text-sm"
+                            className="w-full px-3 py-2 border border-[color:var(--border)] rounded text-sm bg-[var(--background-50)] text-[var(--text-800)]"
                             onBlur={(e) => {
                               if (e.target.value) {
                                 handleUpdateStatus(item.id, item.status, e.target.value);
@@ -258,27 +260,27 @@ export default function AcceptanceChecklistComponent({
 
       {/* 统计摘要 */}
       {stats && (
-        <div className="mt-6 pt-4 border-t border-gray-200">
+        <div className="mt-6 pt-4 border-t border-[color:var(--border)]">
           <div className="grid grid-cols-5 gap-4 text-center">
-            <div className="p-3 bg-gray-50 rounded">
-              <div className="text-2xl font-bold text-gray-700">{stats.total}</div>
-              <div className="text-xs text-gray-500">总计</div>
+            <div className="p-3 bg-[var(--background-100)] rounded">
+              <div className="text-2xl font-bold text-[var(--text-700)]">{stats.total}</div>
+              <div className="text-xs text-[var(--text-500)]">总计</div>
             </div>
-            <div className="p-3 bg-green-50 rounded">
-              <div className="text-2xl font-bold text-green-600">{stats.passed}</div>
-              <div className="text-xs text-green-600">通过</div>
+            <div className="p-3 bg-[var(--state-success-surface)] rounded">
+              <div className="text-2xl font-bold text-[var(--state-success-text)]">{stats.passed}</div>
+              <div className="text-xs text-[var(--state-success-text)]">通过</div>
             </div>
-            <div className="p-3 bg-red-50 rounded">
-              <div className="text-2xl font-bold text-red-600">{stats.failed}</div>
-              <div className="text-xs text-red-600">未通过</div>
+            <div className="p-3 bg-[var(--state-error-surface)] rounded">
+              <div className="text-2xl font-bold text-[var(--state-error)]">{stats.failed}</div>
+              <div className="text-xs text-[var(--state-error)]">未通过</div>
             </div>
-            <div className="p-3 bg-yellow-50 rounded">
-              <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
-              <div className="text-xs text-yellow-600">待检查</div>
+            <div className="p-3 bg-[var(--state-warning-surface)] rounded">
+              <div className="text-2xl font-bold text-[var(--state-warning)]">{stats.pending}</div>
+              <div className="text-xs text-[var(--state-warning)]">待检查</div>
             </div>
-            <div className="p-3 bg-gray-50 rounded">
-              <div className="text-2xl font-bold text-gray-500">{stats.na}</div>
-              <div className="text-xs text-gray-500">不适用</div>
+            <div className="p-3 bg-[var(--background-100)] rounded">
+              <div className="text-2xl font-bold text-[var(--text-500)]">{stats.na}</div>
+              <div className="text-xs text-[var(--text-500)]">不适用</div>
             </div>
           </div>
         </div>

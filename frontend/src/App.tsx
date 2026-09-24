@@ -4,6 +4,7 @@ import MainLayout from './layouts/MainLayout';
 import WorkbenchLayout from './layouts/WorkbenchLayout';
 import { ToastProvider } from './components/ui/Toast';
 import { ConfirmProvider } from './components/ui/ConfirmDialog';
+import { ThemeProvider } from './components/ui/ThemeProvider';
 
 const Home = lazy(() => import('./pages/Home'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -65,9 +66,10 @@ function PageFallback() {
 function App() {
   return (
     <BrowserRouter>
-      {/* 反馈层挂在路由之外：页面跳转不会卸载 Provider，Toast 不会被中断 */}
-      <ToastProvider>
-        <ConfirmProvider>
+      <ThemeProvider>
+        {/* 反馈层挂在路由之外：页面跳转不会卸载 Provider，Toast 不会被中断 */}
+        <ToastProvider>
+          <ConfirmProvider>
           <Suspense fallback={<PageFallback />}>
             <Routes>
         {/* 统一登录页 - 已移除独立的 /admin/login */}
@@ -147,8 +149,9 @@ function App() {
         </Route>
             </Routes>
           </Suspense>
-        </ConfirmProvider>
-      </ToastProvider>
+          </ConfirmProvider>
+        </ToastProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

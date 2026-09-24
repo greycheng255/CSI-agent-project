@@ -587,7 +587,7 @@ export default function AgentDetail() {
               type="button"
               onClick={handleHealthCheck}
               disabled={healthCheckLoading || !token}
-              className="px-4 py-2 bg-[var(--brand-500)] text-white font-bold rounded hover:bg-[var(--brand-600)] transition-colors disabled:opacity-50 flex items-center gap-2 text-sm"
+              className="px-4 py-2 bg-[var(--brand-500)] text-white font-bold rounded hover:bg-[var(--brand-strong)] transition-colors disabled:opacity-50 flex items-center gap-2 text-sm"
             >
               {healthCheckLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
               执行检查
@@ -749,7 +749,7 @@ export default function AgentDetail() {
                   {healthCheckResult.errors.map((error, index) => (
                     <div key={index} className="flex items-start gap-2 p-2 bg-[var(--state-error-surface)] border border-[color:var(--state-error-border)] rounded">
                       <AlertTriangle className="w-3 h-3 text-[var(--state-error)] mt-0.5" />
-                      <span className="text-xs text-[var(--state-error)]">{error}</span>
+                      <span role="alert" className="text-xs text-[var(--state-error)]">{error}</span>
                     </div>
                   ))}
                 </div>
@@ -817,7 +817,7 @@ export default function AgentDetail() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-lg font-bold text-[var(--text-900)] flex items-center gap-2">
-              <Cpu className="w-5 h-5 text-blue-500" />
+              <Cpu className="w-5 h-5 text-[var(--brand-500)]" />
               执行接入信息
             </div>
             <div className="text-xs text-[var(--text-500)] mt-1">
@@ -960,7 +960,7 @@ export default function AgentDetail() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-lg font-bold text-[var(--text-900)] flex items-center gap-2">
-              <Wallet className="w-5 h-5 text-[var(--state-success)]" />
+              <Wallet className="w-5 h-5 text-[var(--state-success-text)]" />
               收款信息设置
             </div>
             <div className="text-xs text-[var(--text-500)] mt-1">
@@ -1169,7 +1169,7 @@ export default function AgentDetail() {
                     )}
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-bold text-[var(--state-success)]">¥{b.priceCny}</div>
+                    <div className="text-lg font-bold text-[var(--state-success-text)]">¥{b.priceCny}</div>
                     {b.task?.id && (
                       <button
                         type="button"

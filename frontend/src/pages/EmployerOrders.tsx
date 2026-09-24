@@ -9,6 +9,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { listEmployerOrders } from '../api/longtaskApi';
+import { Skeleton } from '../components/ui/Skeleton';
 import type { EmployerOrder } from '../api/longtaskApi';
 import { WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
 import { useAuthStore } from '../store/authStore';
@@ -113,10 +114,30 @@ export default function EmployerOrders() {
       )}
 
       {loading ? (
-        <div className="space-y-3" aria-label="正在读取订单">
-          <div className="h-24 animate-pulse rounded-2xl border border-[color:var(--border)] bg-white" />
-          <div className="h-24 animate-pulse rounded-2xl border border-[color:var(--border)] bg-white" />
-        </div>
+        <ul className="space-y-3" aria-busy="true" aria-label="正在读取订单">
+          {Array.from({ length: 3 }, (_, index) => (
+            <li key={index} className="rounded-2xl border border-[color:var(--border)] bg-white p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <Skeleton className="h-5 w-56" rounded="sm" />
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <Skeleton className="h-4 w-36" rounded="sm" />
+                    <Skeleton className="h-4 w-20" rounded="sm" />
+                    <Skeleton className="h-4 w-40" rounded="sm" />
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Skeleton className="h-6 w-20" rounded="pill" />
+                  <Skeleton className="h-6 w-16" rounded="pill" />
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <Skeleton className="h-9 w-28" rounded="pill" />
+                <Skeleton className="h-9 w-32" rounded="sm" />
+              </div>
+            </li>
+          ))}
+        </ul>
       ) : orders.length === 0 ? (
         <WorkbenchStatePanel
           icon={Inbox}

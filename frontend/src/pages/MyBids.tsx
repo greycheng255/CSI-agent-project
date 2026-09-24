@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle, ChevronRight, CircleAlert, Clock, FileText, Inbox, Loader2, Package, RefreshCw, TrendingUp, X, XCircle } from 'lucide-react';
+import { CheckCircle, ChevronRight, CircleAlert, Clock, FileText, Inbox, Package, RefreshCw, TrendingUp, X, XCircle } from 'lucide-react';
 import { WorkbenchPageHeader, WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { Skeleton, SkeletonText } from '../components/ui/Skeleton';
 import { useAuthStore } from '../store/authStore';
 import { API_BASE } from '../config/api';
+import { useDialogA11y } from '../components/ui/useDialogA11y';
 
 type BidStatus = 'ACTIVE' | 'EXPIRED' | 'ACCEPTED' | 'REJECTED';
 
@@ -107,6 +109,8 @@ export default function MyBids() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedBid, setSelectedBid] = useState<BidItem | null>(null);
+  const bidDialogRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(Boolean(selectedBid), bidDialogRef, () => setSelectedBid(null));
 
   useEffect(() => {
     fetchMyBids();
@@ -252,7 +256,26 @@ export default function MyBids() {
       />
 
       {loading && bids.length === 0 ? (
-        <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--border)] bg-white text-sm text-[var(--text-500)]"><Loader2 className="mr-3 h-5 w-5 animate-spin text-[var(--brand-500)]" />正在读取报价记录...</div>
+        <section className="overflow-hidden rounded-2xl border border-[color:var(--border)] bg-white">
+          <div className="divide-y divide-[color:var(--border)]">
+            {Array.from({ length: 4 }, (_, index) => (
+              <div key={index} className="grid gap-5 px-5 py-5 lg:grid-cols-[minmax(0,1fr)_220px]">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-6 w-20" rounded="pill" />
+                    <Skeleton className="h-4 w-32" rounded="sm" />
+                  </div>
+                  <Skeleton className="mt-3 h-5 w-2/3" rounded="sm" />
+                  <SkeletonText lines={2} className="mt-2" />
+                </div>
+                <div className="flex flex-col justify-center gap-3 lg:items-end">
+                  <Skeleton className="h-4 w-16" rounded="sm" />
+                  <Skeleton className="h-7 w-28" rounded="sm" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       ) : error && bids.length === 0 ? (
         <WorkbenchStatePanel icon={CircleAlert} title="报价记录暂时无法加载" description={error} tone="error" action={<button type="button" onClick={() => void fetchMyBids()} className="btn-cs btn-primary btn-sm">重新加载</button>} />
       ) : (
@@ -306,8 +329,8 @@ export default function MyBids() {
 
       {selectedBid && (
         <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/35 p-4" role="dialog" aria-modal="true" aria-label="报价详情">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-[color:var(--border)] bg-white">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[color:var(--border)] bg-white px-6 py-4"><div><h2 className="text-lg font-semibold text-[var(--text-900)]">报价详情</h2><p className="mt-1 text-xs text-[var(--text-500)]">提交于 {formatDate(selectedBid.createdAt)}</p></div><button type="button" onClick={() => setSelectedBid(null)} className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-500)] hover:bg-[var(--background-100)] hover:text-[var(--text-800)]" aria-label="关闭"><X className="h-5 w-5" /></button></div>
+          <div ref={bidDialogRef} className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-[color:var(--border)] bg-white">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[color:var(--border)] bg-white px-6 py-4"><div><h2 className="text-lg font-semibold text-[var(--text-900)]">报价详情</h2><p className="mt-1 text-xs text-[var(--text-500)]">提交于 {formatDate(selectedBid.createdAt)}</p></div><button type="button" onClick={() => setSelectedBid(null)} className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--text-500)] hover:bg-[var(--background-100)] hover:text-[var(--text-800)]" aria-label="关闭"><X className="h-5 w-5" /></button></div>
             <div className="space-y-6 p-6">
               <div><p className="text-xs font-semibold text-[var(--text-500)]">关联任务</p><Link to={`/tasks/${selectedBid.taskId}`} className="mt-2 block text-lg font-semibold text-[var(--brand-600)] hover:text-[var(--brand-700)]">{selectedBid.task?.title || '未知任务'}</Link>{selectedBid.task?.description && <p className="mt-2 text-sm leading-6 text-[var(--text-500)]">{selectedBid.task.description}</p>}</div>
               <div className="grid overflow-hidden rounded-xl border border-[color:var(--border)] sm:grid-cols-2 sm:divide-x sm:divide-[color:var(--border)]"><div className="p-4"><p className="text-xs text-[var(--text-500)]">报价金额</p><p className="mt-1 text-2xl font-bold text-[var(--text-900)]">{formatPrice(selectedBid.priceCny)}</p></div><div className="border-t border-[color:var(--border)] p-4 sm:border-t-0"><p className="mb-2 text-xs text-[var(--text-500)]">当前状态</p><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium ${bidStatusView(selectedBid.status).badge}`}>{bidStatusView(selectedBid.status).icon}{bidStatusView(selectedBid.status).label}</span></div></div>

@@ -59,9 +59,11 @@ echo "=== 5.5 预置 L 族 AI Token（套餐内置，联调期临时方案 DR-12
 # 联调期把 OneLLM 平台 token 内置进 beta-free 套餐，Console 读套餐时返回 base_url+key_prefix，
 # 明文 key 走 E7 取；L1/L2/L3 forward 走 plan 内置 fallback。
 # 真值由联调窗口线下注入：LLM_BASE_URL + LLM_API_KEY（OneLLM 方案二或自有网关方案一）。
-# 默认值=OneLLM 联调期真值（用户提供，后续生成多租户真值后切 BYOK）。
-LLM_BASE_URL="${LLM_BASE_URL:-http://212.129.240.112:4200}"
-LLM_API_KEY="${LLM_API_KEY:-sk-7cb9efb16e5042be0fcfc8149b11efe116265d30bedafefe}"
+# 默认值=opencode zen 网关真值（2026-09-24 由 CherryIN 切换，用户提供，后续生成多租户真值后切 BYOK）。
+# 注意：该网关须走 /zen/go/v1 路径，且强制 x-opencode-session 头（llm-proxy 已按主机名自动注入）；
+# 套餐模型目录须用 zen 目录名（如 muse-spark-1.3-contributor），无 gpt-5.x。
+LLM_BASE_URL="${LLM_BASE_URL:-https://opencode.ai/zen/go/v1}"
+LLM_API_KEY="${LLM_API_KEY:-oc_sk_3b2f6ac66a81_ALyxzzACO8ttS21l5axtwU6B9v2bk1od}"
 KEY_PREFIX="${LLM_API_KEY:0:8}"
 ENC_BLOB=$(cd "$PROJECT_DIR/backend" && LLM_API_KEY="$LLM_API_KEY" node -e "
 const crypto=require('crypto');

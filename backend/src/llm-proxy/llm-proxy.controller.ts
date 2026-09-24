@@ -37,7 +37,7 @@ export class LlmProxyController {
       ...(agentRunId ? { agent_run_id: agentRunId } : {}),
     });
     if (result.mode === 'stream') {
-      pipeSseResponse(res, result.upstream, result.recordStreamUsage);
+      pipeSseResponse(res, result.upstream, result.recordStreamUsage, result.modelRestore);
       return;
     }
     res.status(result.status).json(result.body);

@@ -31,6 +31,7 @@ import type {
   EmployerOrderSpecChange,
 } from '../api/longtaskApi';
 import { WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import { Skeleton } from '../components/ui/Skeleton';
 import { useConfirm } from '../components/ui/confirm-context';
 import { useAuthStore } from '../store/authStore';
 
@@ -164,10 +165,10 @@ export default function EmployerOrderDetail() {
 
   if (loading) {
     return (
-      <div className="space-y-4" aria-label="正在读取订单详情">
-        <div className="h-8 w-56 animate-pulse rounded-lg bg-[var(--background-100)]" />
-        <div className="h-28 animate-pulse rounded-2xl border border-[color:var(--border)] bg-white" />
-        <div className="h-40 animate-pulse rounded-2xl border border-[color:var(--border)] bg-white" />
+      <div className="space-y-4" aria-busy="true" aria-label="正在读取订单详情">
+        <Skeleton className="h-8 w-56" rounded="sm" />
+        <Skeleton className="h-28 w-full" rounded="lg" />
+        <Skeleton className="h-40 w-full" rounded="lg" />
       </div>
     );
   }
@@ -408,7 +409,7 @@ export default function EmployerOrderDetail() {
                 value={rejectReason}
                 onChange={(event) => setRejectReason(event.target.value)}
                 placeholder="例如：里程碑验收标准不明确"
-                className="h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+                className="h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)]"
               />
             </label>
             <div className="flex flex-wrap items-center gap-3">
@@ -514,7 +515,7 @@ export default function EmployerOrderDetail() {
                 value={changeDesc}
                 onChange={(event) => setChangeDesc(event.target.value)}
                 placeholder="例如：增加数据导出为 Excel 的能力"
-                className="h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+                className="h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)]"
               />
             </label>
             <div className="flex flex-wrap items-center gap-3">
@@ -571,7 +572,7 @@ export default function EmployerOrderDetail() {
                 value={rejectReason}
                 onChange={(event) => setRejectReason(event.target.value)}
                 placeholder="例如：第 3 项验收标准未达标"
-                className="h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+                className="h-11 w-full rounded-xl border border-[color:var(--border)] bg-white px-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)]"
               />
             </label>
             <div className="flex flex-wrap items-center gap-3">
@@ -694,7 +695,7 @@ export default function EmployerOrderDetail() {
                   value={disputeReason}
                   onChange={(event) => setDisputeReason(event.target.value)}
                   placeholder="纠纷原因（可选）"
-                  className="h-10 w-full rounded-lg border border-[color:var(--border)] bg-white px-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)] focus:ring-4 focus:ring-blue-500/10"
+                  className="h-10 w-full rounded-lg border border-[color:var(--border)] bg-white px-3 text-sm text-[var(--text-800)] outline-none focus:border-[var(--brand-500)]"
                 />
                 <button
                   type="button"
