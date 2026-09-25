@@ -204,6 +204,7 @@ export class SpecContractService {
 
     const existing = await this.mentionsRepo.findOne({ where: { mentionId } });
     if (existing) {
+      this.assertMentionPayloadMatches(existing, { orderId, text });
       return this.mentionAck(existing, true);
     }
 
@@ -264,6 +265,7 @@ export class SpecContractService {
       // 并发同 mention_id：唯一约束兜底，回读后按重复处理
       const dup = await this.mentionsRepo.findOne({ where: { mentionId } });
       if (!dup) throw err;
+      this.assertMentionPayloadMatches(dup, { orderId, text });
       return this.mentionAck(dup, true);
     }
 
@@ -590,6 +592,27 @@ export class SpecContractService {
     );
 
     return { ...saved, duplicate: false };
+  }
+
+  /**
+   * §22.3：同一幂等键（mention_id）但 payload 不同 → 409 VALIDATION_IDEMPOTENCY_CONFLICT。
+   * 只比对业务实质字段（order_id + content.text）；刻意不比 `sent_at` / `attachments` /
+   * `from` —— 这些在合法重试时可能被对端重新序列化或省略，一并比对会把重试误判成冲突。
+   */
+  private assertMentionPayloadMatches(
+    row: EmployerMention,
+    incoming: { orderId: string; text: string },
+  ): void {
+    if (
+      row.orderId !== incoming.orderId ||
+      readString(row.content?.text) !== incoming.text
+    ) {
+      throw new ContractError(
+        409,
+        CONTRACT_ERROR_CODE.VALIDATION_IDEMPOTENCY_CONFLICT,
+        'mention_id reused with a different payload',
+      );
+    }
   }
 
   private mentionAck(

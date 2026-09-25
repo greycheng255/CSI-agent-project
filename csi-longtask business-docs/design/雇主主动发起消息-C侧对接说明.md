@@ -4,7 +4,7 @@
 > 面向：Console（csi-beta-server，multica fork）开发同事
 > 依据：`employer-integration-api.md` §13.1 / §13.2 / §13.3；承接《C 侧修改需求-澄清等待回路与雇主Mention回传.md》第 6 节
 > M 侧实现：`marketplace-contract.controller.ts`（入站）、`employer-marketplace-orders.controller.ts`、`spec-contract.service.ts`（`receiveEmployerMention` / `sendEmployerMessage` / `enqueueEmployerReply`）
-> 版本：v3（2026-09-25：扩写为双向通道说明；同日晚补 `STATE_PROJECT_NOT_SPEC_SIGNING` 422 的实现，见 §3.5。文件名沿用「雇主主动发起消息」以保持既有链接可用）
+> 版本：v3（2026-09-25：扩写为双向通道说明；同日晚补 `STATE_PROJECT_NOT_SPEC_SIGNING`(422) 与 `VALIDATION_IDEMPOTENCY_CONFLICT`(409) 的实现，见 §3.5。文件名沿用「雇主主动发起消息」以保持既有链接可用）
 
 ---
 
@@ -193,7 +193,13 @@ POST /v1/marketplace/orders/{order_id}/employer-mentions
 | 400 | `VALIDATION_INVALID_PAYLOAD` | `mention_id` 缺失/非 uuid；`content.text` 缺失；`from.id` 非 uuid；可选 uuid 字段格式非法 |
 | 404 | `NOT_FOUND_ORDER` | `order_id` 不存在 |
 | 422 | `STATE_PROJECT_NOT_SPEC_SIGNING` | 订单 `contract_status` **不在签约阶段**（仅 `signing` / `awaiting_confirmation` 受理；`signed`、`cancelled` 等一律 422） |
+| 409 | `VALIDATION_IDEMPOTENCY_CONFLICT` | 同一 `mention_id` 但 **payload 不同**（判定口径见下） |
 | 401 | `AUTH_TOKEN_INVALID` / `AUTH_HMAC_SIGNATURE_MISMATCH` / `AUTH_TIMESTAMP_EXPIRED` / `AUTH_NONCE_MISSING` | 鉴权、签名、时间戳、nonce 任一不通过 |
+
+**409 的判定口径**：M 侧只比对 `order_id` 与 `content.text`（两侧均 `trim` 后比较）。`sent_at`、`attachments`、`from`、以及未知字段**不参与**比对——合法重试时这些可能被重新序列化或省略，若一并比对会把**正常重试误判为冲突**。
+
+> 对 C 侧的可操作结论：**同一 `mention_id` 重试时，请保持 `content.text` 与首次一致**（其余字段可变）。
+> 若确实需要修改提问正文，请改用**新的 `mention_id`**——沿用旧键改正文会得到 409，且新正文**不会**被受理。
 
 **签约阶段的判定口径**（M 侧 `SPEC_SIGNING_STAGES`）：
 
@@ -207,7 +213,8 @@ POST /v1/marketplace/orders/{order_id}/employer-mentions
 > **幂等优先于阶段校验**：已受理过的 `mention_id` 再次推送，即使订单此时已推进到 `signed`，仍返回 `duplicate=true`（不会变成 422）——保证 at-least-once 重试语义。
 > 若你侧在交付期也需要向雇主提问，请告知，M 侧可放宽 `SPEC_SIGNING_STAGES`。
 
-> ⚠️ **与总契约 §13.2 的差异（请以本节为准）**：§13.2 列出的 `STATE_PROJECT_NOT_SPEC_SIGNING`（422）**已实现**（2026-09-25 补，口径见上）；`CONFLICT_PROCESSING_IN_PROGRESS`（409）**仍未实现**——M 侧不做「同幂等键在途」判定，并发由 `mention_id` 唯一约束兜底（结果是不重复落库，而非返回 409）。若你侧依赖 409 语义，请告知。
+> ⚠️ **与总契约 §13.2 的差异（请以本节为准）**：§13.2 列出的 `STATE_PROJECT_NOT_SPEC_SIGNING`（422）与 `VALIDATION_IDEMPOTENCY_CONFLICT`（409）**均已实现**（2026-09-25 补，口径见上）；`CONFLICT_PROCESSING_IN_PROGRESS`（409）**仍未实现**——M 侧不做「同幂等键在途」判定，并发由 `mention_id` 唯一约束兜底（结果是不重复落库，而非返回 409）。若你侧依赖该语义，请告知。
+> 另注：总契约 §6.4 要求调用方在收到该码后「延后重试」，但 §5.3/§22.3 又把 `CONFLICT_*` 标为不可重试——两处自相矛盾，建议一并澄清。
 >
 > ⚠️ §13.2 提到的 `Idempotency-Key` 头 M 侧**不读取**，去重完全依赖 `mention_id`。
 
@@ -365,6 +372,7 @@ CSI 订单详情页新增「沟通」区块（`EmployerOrderDetail.tsx` + `Emplo
 8. **顶层 Comment 回流（§4.2）**：雇主主动开新话题 → Agent/Owner 在该 Comment 下回复 → **必须**回推 `employer-mentions` → CSI 雇主页面能看到该回复。
 9. **重试**：同 `mention_id` + 新 `X-Request-Id` 重发 → 不产生重复行、不报 401。
 10. **非签约阶段拦截**：对一条 `contract_status=signed` 的订单推送新 `mention_id` → 返回 `422 STATE_PROJECT_NOT_SPEC_SIGNING`，M 侧不留行；而对该订单**已受理过**的 `mention_id` 重发 → 仍 `duplicate=true`（不 422）。
+11. **同键改正文**：同 `mention_id`、`content.text` 改为不同文本 → 返回 `409 VALIDATION_IDEMPOTENCY_CONFLICT`，M 侧不留行、不通知；仅 `sent_at` / `attachments` 变化时仍返回 `duplicate=true`（不得误判）。
 
 ```sql
 -- Console 侧（库 multica_beta）：确认评论与线程化

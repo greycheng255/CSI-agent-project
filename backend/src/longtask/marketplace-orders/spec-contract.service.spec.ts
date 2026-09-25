@@ -144,6 +144,8 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
     mockMentionsRepo.findOne.mockResolvedValueOnce({
       id: 'row-1',
       mentionId: MENTION_ID,
+      orderId: 'o1',
+      content: { text: 'dup', attachments: [] },
       createdAt: new Date('2026-09-02T10:00:01Z'),
     });
 
@@ -258,6 +260,8 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
     mockMentionsRepo.findOne.mockResolvedValueOnce({
       id: 'row-1',
       mentionId: MENTION_ID,
+      orderId: 'o1',
+      content: { text: 'late retry', attachments: [] },
       createdAt: new Date('2026-09-02T10:00:01Z'),
     });
 
@@ -272,6 +276,98 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
       duplicate: true,
     });
     expect(mockMentionsRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('employer-mentions：同 mention_id 但 content.text 不同 → 409 VALIDATION_IDEMPOTENCY_CONFLICT（§22.3）', async () => {
+    mockOrdersRepo.findOne.mockResolvedValueOnce(order());
+    mockMentionsRepo.findOne.mockResolvedValueOnce({
+      id: 'row-1',
+      mentionId: MENTION_ID,
+      orderId: 'o1',
+      content: { text: '原始提问', attachments: [] },
+      createdAt: new Date('2026-09-02T10:00:01Z'),
+    });
+
+    await expect(
+      service.receiveEmployerMention('o1', {
+        mention_id: MENTION_ID,
+        content: { text: '修正后的提问' },
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      errorCode: 'VALIDATION_IDEMPOTENCY_CONFLICT',
+    });
+    expect(mockMentionsRepo.save).not.toHaveBeenCalled();
+    expect(mockNotify.notifyEmployerMention).not.toHaveBeenCalled();
+  });
+
+  it('employer-mentions：同 mention_id 但订单不同 → 409', async () => {
+    mockOrdersRepo.findOne.mockResolvedValueOnce(order());
+    mockMentionsRepo.findOne.mockResolvedValueOnce({
+      id: 'row-1',
+      mentionId: MENTION_ID,
+      orderId: 'other-order',
+      content: { text: 'x', attachments: [] },
+      createdAt: new Date('2026-09-02T10:00:01Z'),
+    });
+
+    await expect(
+      service.receiveEmployerMention('o1', {
+        mention_id: MENTION_ID,
+        content: { text: 'x' },
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      errorCode: 'VALIDATION_IDEMPOTENCY_CONFLICT',
+    });
+  });
+
+  it('employer-mentions：同 mention_id、同正文，仅 sent_at/attachments 不同 → 仍幂等（不得误判为冲突）', async () => {
+    mockOrdersRepo.findOne.mockResolvedValueOnce(order());
+    mockMentionsRepo.findOne.mockResolvedValueOnce({
+      id: 'row-1',
+      mentionId: MENTION_ID,
+      orderId: 'o1',
+      content: { text: '同一条提问', attachments: [] },
+      sentAt: new Date('2026-09-02T10:00:00Z'),
+      createdAt: new Date('2026-09-02T10:00:01Z'),
+    });
+
+    const res = await service.receiveEmployerMention('o1', {
+      mention_id: MENTION_ID,
+      sent_at: '2026-09-02T11:30:00.000Z',
+      content: {
+        text: '  同一条提问  ',
+        attachments: [{ name: 'a.png' }],
+      },
+    });
+
+    expect(res).toMatchObject({ ok: true, duplicate: true });
+    expect(mockMentionsRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('employer-mentions：并发唯一约束冲突回读时 payload 不同 → 409（不静默吞掉）', async () => {
+    mockOrdersRepo.findOne.mockResolvedValueOnce(order());
+    mockMentionsRepo.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: 'row-concurrent',
+      mentionId: MENTION_ID,
+      orderId: 'o1',
+      content: { text: '并发的另一份内容', attachments: [] },
+      createdAt: new Date('2026-09-02T10:00:01Z'),
+    });
+    mockMentionsRepo.save.mockRejectedValueOnce(
+      Object.assign(new Error('duplicate key'), { code: '23505' }),
+    );
+
+    await expect(
+      service.receiveEmployerMention('o1', {
+        mention_id: MENTION_ID,
+        content: { text: '本请求的内容' },
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      errorCode: 'VALIDATION_IDEMPOTENCY_CONFLICT',
+    });
   });
 
   it('submitSpec：校验权重和=100%、落快照、启动 7 天计时、注册超时', async () => {
