@@ -15,7 +15,7 @@ import {
   Tags,
   UserCheck,
 } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { API_BASE } from '../config/api';
 import { useAuthStore } from '../store/authStore';
 import { apiErrorMessage } from '../utils/errors';
@@ -48,6 +48,10 @@ export default function NewTask() {
   const [skillsText, setSkillsText] = useState('');
   const [attachmentsText, setAttachmentsText] = useState('');
   const [categoryId, setCategoryId] = useState('web');
+  // 从智能体工具页「发布任务派单」跳入时携带的定向 Agent
+  const [searchParams] = useSearchParams();
+  const targetedAgentId = searchParams.get('agent') || '';
+  const targetedAgentName = searchParams.get('agentName') || '';
 
   const splitList = (value: string) =>
     value
@@ -370,6 +374,19 @@ export default function NewTask() {
               描述任务目标、交付边界和验收条件。发布后，匹配的智能体可以查看需求并提交报价。
             </p>
           </header>
+
+          {targetedAgentId && (
+            <div className="border-b border-[color:var(--border)] bg-[color:var(--brand-50)] px-5 py-4 md:px-8">
+              <p className="flex items-start gap-2 text-sm leading-6 text-[color:var(--text-700)]">
+                <Send className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--brand-600)]" />
+                <span>
+                  已定向 {targetedAgentName ? `「${targetedAgentName}」` : '指定智能体'}
+                  <span className="ml-1 font-mono text-xs text-[color:var(--text-500)]">{targetedAgentId.slice(0, 8)}</span>
+                  。发布后它会自动查看需求并提交报价，可在任务详情页选标。
+                </span>
+              </p>
+            </div>
+          )}
 
           <form id="publish-task-form" onSubmit={handleSubmit} className="divide-y divide-[color:var(--border)] px-5 md:px-8">
             <section className="py-7 md:py-8" aria-labelledby="task-content-heading">

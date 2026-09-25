@@ -18,10 +18,12 @@ import {
   Zap,
 } from 'lucide-react';
 import {
+  buildExternalCatalogItems,
   isCatalogItemRunnable,
   loadAgentDirectory,
   type AgentDirectory,
 } from '../api/agentMarketApi';
+import { discoverAgents } from '../api/agentsApi';
 import { OPENNOTEBOOK_AGENT_PROVIDER } from '../config/api';
 import { AGENT_CATALOG, AGENT_STYLE, type AgentCatalogItem } from '../data/agentMarketCatalog';
 import { getOpenNotebookOAuthAuthorization } from '../features/agent-market/openNotebookOAuth';
@@ -159,6 +161,8 @@ export default function AgentMarketHub() {
   const [availability, setAvailability] = useState<AvailabilityFilter>('all');
   const [showAllTags, setShowAllTags] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  // 平台注册表里的外部自托管 Agent：与内置工具合并展示，点击入口走「发布任务派单」
+  const [externalAgents, setExternalAgents] = useState<AgentCatalogItem[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -183,16 +187,39 @@ export default function AgentMarketHub() {
     };
   }, [provider]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    discoverAgents({ limit: 50 })
+      .then((res) => {
+        if (cancelled) return;
+        setExternalAgents(buildExternalCatalogItems(res.items || []));
+      })
+      .catch(() => {
+        if (!cancelled) setExternalAgents([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 内置工具 + 外部 Agent 的统一列表
+  const catalog = useMemo(
+    () => [...AGENT_CATALOG, ...externalAgents],
+    [externalAgents],
+  );
+
   const tagOptions = useMemo(() => {
     const counts = new Map<string, number>();
-    AGENT_CATALOG.forEach((agent) => {
+    catalog.forEach((agent) => {
       agent.tags.forEach((tag) => counts.set(tag, (counts.get(tag) || 0) + 1));
     });
 
     return Array.from(counts.entries())
       .map(([tag, count]) => ({ tag, count }))
       .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'zh-CN'));
-  }, []);
+  }, [catalog]);
 
   const visibleTags = useMemo(() => {
     if (showAllTags) return tagOptions;
@@ -208,13 +235,13 @@ export default function AgentMarketHub() {
 
   const runnableCount = useMemo(() => {
     if (!directory) return 0;
-    return AGENT_CATALOG.filter((agent) => isCatalogItemRunnable(agent, directory)).length;
-  }, [directory]);
+    return catalog.filter((agent) => isCatalogItemRunnable(agent, directory)).length;
+  }, [directory, catalog]);
 
   const filteredAgents = useMemo(() => {
     const keyword = search.trim().toLowerCase();
 
-    return AGENT_CATALOG.filter((agent) => {
+    return catalog.filter((agent) => {
       if (activeTag && !agent.tags.includes(activeTag)) return false;
       if (
         availability === 'runnable' &&
@@ -230,7 +257,7 @@ export default function AgentMarketHub() {
         agent.tags.some((tag) => tag.toLowerCase().includes(keyword))
       );
     });
-  }, [activeTag, availability, directory, search]);
+  }, [activeTag, availability, directory, search, catalog]);
 
   const filteredRunnableCount = useMemo(() => {
     if (!directory) return 0;
@@ -337,7 +364,7 @@ export default function AgentMarketHub() {
                   }`}
                   aria-pressed={availability === 'all'}
                 >
-                  全部 {AGENT_CATALOG.length}
+                  全部 {catalog.length}
                 </button>
                 <button
                   type="button"

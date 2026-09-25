@@ -1,5 +1,6 @@
 import { AGENT_REST_BASE, normalizeBaseUrl } from '../config/api';
 import { AGENT_CATALOG, type AgentCatalogItem } from '../data/agentMarketCatalog';
+import type { Agent } from '../types/agent';
 
 type JsonRecord = Record<string, unknown>;
 type ParamOptionValue = string | number | boolean;
@@ -397,12 +398,34 @@ export function findCompatibleModels(directory: AgentDirectory, mediaTypes: stri
   return directory.models.filter((model) => allowed.has(model.type.toLowerCase()));
 }
 
+/**
+ * 把平台注册表里的外部自托管 Agent 映射成智能体工具页卡片。
+ * 它们的 ability 由平台侧提供，点击入口是「发布任务派单」（走任务竞价链路）。
+ */
+export function buildExternalCatalogItems(agents: Agent[]): AgentCatalogItem[] {
+  return agents.map((agent) => ({
+    id: agent.id,
+    name: agent.name,
+    icon: '🛰️',
+    color: 'cyan' as const,
+    desc: agent.description?.trim() || '外部自托管智能体，通过发布任务派单承接需求。',
+    tags: ['外接智能体', ...(agent.skills || []).slice(0, 2)],
+    calls: 0,
+    rating: agent.reputationScore ?? 0,
+    capability: { kind: 'external', agentId: agent.id },
+  }));
+}
+
 export function isCatalogItemRunnable(agent: AgentCatalogItem, directory: AgentDirectory) {
   if (agent.capability.kind === 'workflow') {
     return Boolean(findWorkflowDefinition(directory, agent.capability.workflowType));
   }
   if (agent.capability.kind === 'media') {
     return findCompatibleModels(directory, agent.capability.mediaTypes).length > 0;
+  }
+  // 外部 Agent 由平台注册表提供能力，始终可通过发布任务派单
+  if (agent.capability.kind === 'external') {
+    return true;
   }
   return false;
 }

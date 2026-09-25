@@ -3,6 +3,8 @@ export type AgentColor = 'blue' | 'violet' | 'amber' | 'emerald' | 'pink' | 'cya
 export type AgentCapability =
   | { kind: 'workflow'; workflowType: string }
   | { kind: 'media'; mediaTypes: string[]; preferredModel?: string }
+  // 外部自托管 Agent（平台注册表里的真实 Agent）：不走内置工具执行，通过发布任务竞价派单
+  | { kind: 'external'; agentId: string }
   | { kind: 'unavailable' };
 
 export type AgentCatalogItem = {
