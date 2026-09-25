@@ -76,6 +76,7 @@ import { OpportunityDispatch } from './longtask/marketplace-tasks/opportunity-di
 import { MarketplaceBid } from './longtask/marketplace-bids/marketplace-bid.entity';
 import { MarketplaceOrder } from './longtask/marketplace-orders/marketplace-order.entity';
 import { EmployerMention } from './longtask/marketplace-orders/employer-mention.entity';
+import { EmployerOutboundMessage } from './longtask/marketplace-orders/employer-outbound-message.entity';
 import { MarketplaceCancelRequest } from './longtask/marketplace-orders/cancel-request.entity';
 import { MarketplaceDelivery } from './longtask/marketplace-orders/delivery.entity';
 import { MarketplaceRevisionNegotiation } from './longtask/marketplace-orders/negotiation.entity';
@@ -222,6 +223,7 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
         MarketplaceBid,
         MarketplaceOrder,
         EmployerMention,
+        EmployerOutboundMessage,
         MarketplaceCancelRequest,
         MarketplaceDelivery,
         MarketplaceRevisionNegotiation,

@@ -17,9 +17,11 @@ export const CONTRACT_ERROR_CODE = {
   CONFLICT_SPEC_VERSION: 'CONFLICT_SPEC_VERSION_CONFLICT',
   CONFLICT_DUPLICATE: 'CONFLICT_DUPLICATE',
   CONFLICT_SLUG: 'CONFLICT_WORKSPACE_SLUG',
-  CONFLICT_SETTLEMENT_ALREADY_TRIGGERED: 'CONFLICT_SETTLEMENT_ALREADY_TRIGGERED',
+  CONFLICT_SETTLEMENT_ALREADY_TRIGGERED:
+    'CONFLICT_SETTLEMENT_ALREADY_TRIGGERED',
   STATE_INVALID_TRANSITION: 'STATE_INVALID_TRANSITION',
   STATE_PROJECT_NOT_DELIVERABLE: 'STATE_PROJECT_NOT_DELIVERABLE',
+  STATE_PROJECT_NOT_SPEC_SIGNING: 'STATE_PROJECT_NOT_SPEC_SIGNING',
   STATE_COUNTER_PROPOSAL_UNSUPPORTED: 'COUNTER_PROPOSAL_UNSUPPORTED',
   FORBIDDEN: 'FORBIDDEN',
   RATE_LIMIT_TOO_MANY: 'RATE_LIMIT_TOO_MANY',
@@ -41,6 +43,7 @@ export function isRetryableErrorCode(code: string): boolean {
 export class ContractError extends Error {
   constructor(
     public readonly status: number,
+    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- 除枚举码外，鉴权等链路会传未纳入枚举的原始码（如 AUTH_NONCE_MISSING）
     public readonly errorCode: ContractErrorCode | string,
     message: string,
     public readonly details?: Record<string, unknown>,

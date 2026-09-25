@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthGuard } from '../../auth/auth.guard';
 import type { RequestWithUser } from '../../auth/auth.guard';
 import { MarketplaceOrdersService } from './marketplace-orders.service';
@@ -9,10 +17,7 @@ import { SpecChangeService } from './spec-change.service';
 import { DisputesService } from '../disputes/disputes.service';
 import { MarketplaceTasksService } from '../marketplace-tasks/marketplace-tasks.service';
 import { WorkspacesService } from '../workspaces/workspaces.service';
-import {
-  CONTRACT_ERROR_CODE,
-  ContractError,
-} from '../contract/errors';
+import { CONTRACT_ERROR_CODE, ContractError } from '../contract/errors';
 
 /**
  * 雇主侧订单操作（平台前端，长任务线内部 REST）。
@@ -47,17 +52,21 @@ export class EmployerMarketplaceOrdersController {
     const orders = await this.ordersService.listByEmployer(
       this.requireUserId(req.user?.id),
     );
-    const taskIds = [...new Set(orders.map((order) => order.marketplaceTaskId))];
+    const taskIds = [
+      ...new Set(orders.map((order) => order.marketplaceTaskId)),
+    ];
     const workspaceIds = [...new Set(orders.map((order) => order.workspaceId))];
     const [tasks, workspaces] = await Promise.all([
       Promise.all(taskIds.map((id) => this.tasksService.findById(id))),
-      Promise.all(workspaceIds.map((id) => this.workspacesService.findById(id))),
+      Promise.all(
+        workspaceIds.map((id) => this.workspacesService.findById(id)),
+      ),
     ]);
     const taskTitles = new Map(
-      tasks.filter((t) => !!t).map((t) => [t!.id, t!.title]),
+      tasks.filter((t) => !!t).map((t) => [t.id, t.title]),
     );
     const workspaceNames = new Map(
-      workspaces.filter((w) => !!w).map((w) => [w!.id, w!.name]),
+      workspaces.filter((w) => !!w).map((w) => [w.id, w.name]),
     );
     return orders.map((order) => ({
       ...order,
@@ -114,7 +123,10 @@ export class EmployerMarketplaceOrdersController {
    * 无主订单（employer_user_id 为空）由当前登录用户首次操作时认领。
    */
   private async assertOrderEmployer(orderId: string, userId?: string) {
-    return this.ordersService.claimEmployer(orderId, this.requireUserId(userId));
+    return this.ordersService.claimEmployer(
+      orderId,
+      this.requireUserId(userId),
+    );
   }
 
   /** 场景四 #12：雇主确认 / 驳回 Spec（7 天计时由平台侧登记） */
@@ -275,6 +287,50 @@ export class EmployerMarketplaceOrdersController {
     return this.specContractService.employerReplyMention(orderId, mentionId, {
       text: typeof body.text === 'string' ? body.text : '',
       attachments: Array.isArray(body.attachments) ? body.attachments : [],
+      fromId: req.user?.id ?? null,
+      fromDisplayName: req.user?.displayName ?? req.user?.email ?? null,
+    });
+  }
+
+  /**
+   * 雇主侧沟通时间线（旧→新）：入站提问 + 雇主回复 + 雇主主动发起。
+   * 独立于订单详情，供前端沟通区块单独轮询（不触发 claimEmployer 写库）。
+   */
+  @Get(':id/messages')
+  @UseGuards(AuthGuard)
+  async listMessages(
+    @Param('id') orderId: string,
+    @Req() req: RequestWithUser,
+  ) {
+    await this.assertOrderEmployer(orderId, req.user?.id);
+    return {
+      items: await this.specContractService.listEmployerThread(orderId),
+    };
+  }
+
+  /** 雇主主动发起消息 → 落库 + 复用 §13.3 employer-reply 写回 Console（新开顶层 Comment） */
+  @Post(':id/messages')
+  @UseGuards(AuthGuard)
+  async sendMessage(
+    @Param('id') orderId: string,
+    @Body()
+    body: {
+      text?: unknown;
+      attachments?: unknown;
+      client_message_id?: unknown;
+    },
+    @Req() req: RequestWithUser,
+  ) {
+    await this.assertOrderEmployer(orderId, req.user?.id);
+    return this.specContractService.sendEmployerMessage(orderId, {
+      text: typeof body.text === 'string' ? body.text : '',
+      attachments: Array.isArray(body.attachments)
+        ? body.attachments
+        : undefined,
+      clientMessageId:
+        typeof body.client_message_id === 'string'
+          ? body.client_message_id
+          : null,
       fromId: req.user?.id ?? null,
       fromDisplayName: req.user?.displayName ?? req.user?.email ?? null,
     });

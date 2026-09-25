@@ -31,6 +31,7 @@ import type {
   EmployerOrderSpecChange,
 } from '../api/longtaskApi';
 import { WorkbenchStatePanel } from '../components/workbench/WorkbenchPrimitives';
+import EmployerOrderChat from '../components/longtask/EmployerOrderChat';
 import { Skeleton } from '../components/ui/Skeleton';
 import { useConfirm } from '../components/ui/confirm-context';
 import { useAuthStore } from '../store/authStore';
@@ -547,6 +548,9 @@ export default function EmployerOrderDetail() {
           </div>
         )}
       </section>
+
+      {/* 沟通（场景四 #9/#10：Console 推来的 @employer 提问 + 雇主回复 / 主动发起） */}
+      <EmployerOrderChat orderId={order.id} token={token} />
 
       {/* 支付/交付物与验收（场景五 #13/#14） */}
       <section className="rounded-2xl border border-[color:var(--border)] bg-white p-5">

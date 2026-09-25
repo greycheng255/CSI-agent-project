@@ -206,6 +206,25 @@ const DDL = [
     received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (event_id, event_type)
   )`,
+
+  // 雇主主动发起消息（M→C，复用 §13.3 employer-reply 通道）
+  `CREATE TABLE IF NOT EXISTS employer_outbound_messages (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id          UUID NOT NULL,
+    project_id        UUID,
+    project_task_id   UUID,
+    employer_user_id  UUID,
+    client_message_id UUID NOT NULL,
+    from_type         VARCHAR(32) NOT NULL DEFAULT 'employer',
+    from_display_name VARCHAR(255),
+    content           JSONB NOT NULL DEFAULT '{}',
+    addressees        JSONB,
+    status            VARCHAR(16) NOT NULL DEFAULT 'queued',
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (client_message_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_employer_outbound_order
+    ON employer_outbound_messages(order_id)`,
 ];
 
 async function main() {

@@ -578,6 +578,77 @@ export async function getEmployerOrderDetail(
   );
 }
 
+/** 沟通消息附件（Console 生成的签名 URL 或平台上传地址） */
+export interface EmployerMessageAttachment {
+  name?: string;
+  url?: string;
+  type?: string;
+}
+
+/**
+ * 沟通时间线项：direction=inbound 为 Console 推来的提问，
+ * outbound 为雇主回复（kind=reply）或雇主主动发起（kind=message）。
+ */
+export interface EmployerThreadItem {
+  id: string;
+  direction: 'inbound' | 'outbound';
+  kind: 'question' | 'reply' | 'message';
+  text: string;
+  attachments: EmployerMessageAttachment[];
+  from: { type: string; id: string | null; displayName: string | null };
+  status: string | null;
+  createdAt: string;
+}
+
+/** 雇主侧沟通时间线（旧→新） */
+export async function listEmployerOrderMessages(
+  token: string,
+  orderId: string,
+): Promise<EmployerThreadItem[]> {
+  const res = await requestJson<{ items: EmployerThreadItem[] }>(
+    `/api/v1/longtask/employer/orders/${encodeURIComponent(orderId)}/messages`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  return res.items ?? [];
+}
+
+/** 雇主回复 Console 推来的提问（写回 Console Task Comment） */
+export async function employerReplyMention(
+  token: string,
+  orderId: string,
+  mentionId: string,
+  text: string,
+  attachments: EmployerMessageAttachment[] = [],
+): Promise<void> {
+  await requestJson<unknown>(
+    `/api/v1/longtask/employer/orders/${encodeURIComponent(orderId)}/mentions/${encodeURIComponent(mentionId)}/replies`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ text, attachments }),
+    },
+  );
+}
+
+/** 雇主主动发起消息（复用 employer-reply 通道，Console 侧新开顶层 Comment） */
+export async function sendEmployerOrderMessage(
+  token: string,
+  orderId: string,
+  input: { text: string; clientMessageId: string },
+): Promise<void> {
+  await requestJson<unknown>(
+    `/api/v1/longtask/employer/orders/${encodeURIComponent(orderId)}/messages`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        text: input.text,
+        client_message_id: input.clientMessageId,
+      }),
+    },
+  );
+}
+
 /** 场景四 #12：雇主确认 / 驳回 Spec */
 export async function employerSpecAction(
   token: string,

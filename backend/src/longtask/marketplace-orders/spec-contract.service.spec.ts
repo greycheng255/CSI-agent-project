@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { SpecContractService } from './spec-contract.service';
 import { MarketplaceOrder } from './marketplace-order.entity';
 import { EmployerMention } from './employer-mention.entity';
+import { EmployerOutboundMessage } from './employer-outbound-message.entity';
 import { CancelSkeletonService } from './cancel-skeleton.service';
 import { MarketplaceTasksService } from '../marketplace-tasks/marketplace-tasks.service';
 import { WebhookDispatcherService } from '../contract/webhook-dispatcher.service';
@@ -15,12 +16,22 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
 
   const MENTION_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3300';
 
-  const mockOrdersRepo = { findOne: jest.fn(), find: jest.fn(), save: jest.fn() };
+  const mockOrdersRepo = {
+    findOne: jest.fn(),
+    find: jest.fn(),
+    save: jest.fn(),
+  };
   const mockMentionsRepo = {
     findOne: jest.fn(),
     find: jest.fn(),
-    create: jest.fn((v) => v),
-    save: jest.fn((v) => v),
+    create: jest.fn((v: Partial<EmployerMention>) => v),
+    save: jest.fn((v: Partial<EmployerMention>) => v),
+  };
+  const mockOutboundRepo = {
+    findOne: jest.fn(),
+    find: jest.fn(),
+    create: jest.fn((v: Partial<EmployerOutboundMessage>) => v),
+    save: jest.fn((v: Partial<EmployerOutboundMessage>) => v),
   };
   const mockTasksService = {
     reopenBidding: jest.fn(),
@@ -33,14 +44,36 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    mockMentionsRepo.create.mockImplementation((v) => v);
-    mockMentionsRepo.save.mockImplementation((v) => v);
+    mockMentionsRepo.create.mockImplementation(
+      (v: Partial<EmployerMention>) => v,
+    );
+    mockMentionsRepo.save.mockImplementation(
+      (v: Partial<EmployerMention>) => v,
+    );
+    mockOutboundRepo.create.mockImplementation(
+      (v: Partial<EmployerOutboundMessage>) => v,
+    );
+    mockOutboundRepo.save.mockImplementation(
+      (v: Partial<EmployerOutboundMessage>) => ({ id: 'msg-1', ...v }),
+    );
+    mockMentionsRepo.find.mockResolvedValue([]);
+    mockOutboundRepo.find.mockResolvedValue([]);
     mockTasksService.findById.mockResolvedValue({ employerUserId: 'emp-1' });
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SpecContractService,
-        { provide: getRepositoryToken(MarketplaceOrder), useValue: mockOrdersRepo },
-        { provide: getRepositoryToken(EmployerMention), useValue: mockMentionsRepo },
+        {
+          provide: getRepositoryToken(MarketplaceOrder),
+          useValue: mockOrdersRepo,
+        },
+        {
+          provide: getRepositoryToken(EmployerMention),
+          useValue: mockMentionsRepo,
+        },
+        {
+          provide: getRepositoryToken(EmployerOutboundMessage),
+          useValue: mockOutboundRepo,
+        },
         { provide: MarketplaceTasksService, useValue: mockTasksService },
         { provide: CancelSkeletonService, useValue: mockCancelService },
         { provide: WebhookDispatcherService, useValue: mockDispatcher },
@@ -85,7 +118,11 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
       sent_at: '2026-09-02T10:00:00Z',
     });
 
-    expect(res).toMatchObject({ ok: true, mention_id: MENTION_ID, duplicate: false });
+    expect(res).toMatchObject({
+      ok: true,
+      mention_id: MENTION_ID,
+      duplicate: false,
+    });
     expect(mockMentionsRepo.save).toHaveBeenCalledWith(
       expect.objectContaining({
         mentionId: MENTION_ID,
@@ -115,7 +152,11 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
       content: { text: 'dup' },
     });
 
-    expect(res).toMatchObject({ ok: true, mention_id: MENTION_ID, duplicate: true });
+    expect(res).toMatchObject({
+      ok: true,
+      mention_id: MENTION_ID,
+      duplicate: true,
+    });
     expect(mockMentionsRepo.save).not.toHaveBeenCalled();
     expect(mockNotify.notifyEmployerMention).not.toHaveBeenCalled();
   });
@@ -155,9 +196,87 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
     ).rejects.toMatchObject({ status: 404, errorCode: 'NOT_FOUND_ORDER' });
   });
 
+  it('employer-mentions：订单已 signed（非签约阶段）→ 422 STATE_PROJECT_NOT_SPEC_SIGNING（§13.2）', async () => {
+    mockOrdersRepo.findOne.mockResolvedValueOnce(
+      order({ contractStatus: 'signed' }),
+    );
+    mockMentionsRepo.findOne.mockResolvedValueOnce(null);
+
+    await expect(
+      service.receiveEmployerMention('o1', {
+        mention_id: MENTION_ID,
+        content: { text: '@employer 交付期问题' },
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      errorCode: 'STATE_PROJECT_NOT_SPEC_SIGNING',
+    });
+    expect(mockMentionsRepo.save).not.toHaveBeenCalled();
+    expect(mockNotify.notifyEmployerMention).not.toHaveBeenCalled();
+  });
+
+  it('employer-mentions：订单已 cancelled → 422 STATE_PROJECT_NOT_SPEC_SIGNING', async () => {
+    mockOrdersRepo.findOne.mockResolvedValueOnce(
+      order({ contractStatus: 'cancelled' }),
+    );
+    mockMentionsRepo.findOne.mockResolvedValueOnce(null);
+
+    await expect(
+      service.receiveEmployerMention('o1', {
+        mention_id: MENTION_ID,
+        content: { text: 'x' },
+      }),
+    ).rejects.toMatchObject({
+      status: 422,
+      errorCode: 'STATE_PROJECT_NOT_SPEC_SIGNING',
+    });
+  });
+
+  it('employer-mentions：awaiting_confirmation（待雇主确认 Spec）属签约阶段 → 受理', async () => {
+    mockOrdersRepo.findOne.mockResolvedValueOnce(
+      order({ contractStatus: 'awaiting_confirmation' }),
+    );
+    mockMentionsRepo.findOne.mockResolvedValueOnce(null);
+
+    const res = await service.receiveEmployerMention('o1', {
+      mention_id: MENTION_ID,
+      content: { text: '@employer 请确认 Spec' },
+    });
+
+    expect(res).toMatchObject({
+      ok: true,
+      mention_id: MENTION_ID,
+      duplicate: false,
+    });
+    expect(mockMentionsRepo.save).toHaveBeenCalled();
+  });
+
+  it('employer-mentions：已受理的 mention_id 重试 + 订单已 signed → 仍幂等返回 duplicate（不变 422）', async () => {
+    mockOrdersRepo.findOne.mockResolvedValueOnce(
+      order({ contractStatus: 'signed' }),
+    );
+    mockMentionsRepo.findOne.mockResolvedValueOnce({
+      id: 'row-1',
+      mentionId: MENTION_ID,
+      createdAt: new Date('2026-09-02T10:00:01Z'),
+    });
+
+    const res = await service.receiveEmployerMention('o1', {
+      mention_id: MENTION_ID,
+      content: { text: 'late retry' },
+    });
+
+    expect(res).toMatchObject({
+      ok: true,
+      mention_id: MENTION_ID,
+      duplicate: true,
+    });
+    expect(mockMentionsRepo.save).not.toHaveBeenCalled();
+  });
+
   it('submitSpec：校验权重和=100%、落快照、启动 7 天计时、注册超时', async () => {
     mockOrdersRepo.findOne.mockResolvedValueOnce(order());
-    mockOrdersRepo.save.mockImplementation((v) => v);
+    mockOrdersRepo.save.mockImplementation((v: MarketplaceOrder) => v);
 
     const saved = await service.submitSpec('o1', {
       specHash: 'hash-abc',
@@ -180,7 +299,7 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
 
   it('submitSpec：未传 spec_hash → 平台默认口径补算（canonical JSON + SHA-256）', async () => {
     mockOrdersRepo.findOne.mockResolvedValueOnce(order());
-    mockOrdersRepo.save.mockImplementation((v) => v);
+    mockOrdersRepo.save.mockImplementation((v: MarketplaceOrder) => v);
 
     const saved = await service.submitSpec('o1', {
       specContent: { b: 1, a: 2 },
@@ -224,7 +343,7 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
     mockOrdersRepo.findOne.mockResolvedValueOnce(
       order({ contractStatus: 'awaiting_confirmation', specVersion: 1 }),
     );
-    mockOrdersRepo.save.mockImplementation((v) => v);
+    mockOrdersRepo.save.mockImplementation((v: MarketplaceOrder) => v);
 
     const saved = await service.employerAction('o1', 'confirmed');
     expect(saved.contractStatus).toBe('signed');
@@ -245,9 +364,13 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
 
   it('雇主驳回：计数 + 投递 spec.rejected；第 5 次触发协商取消', async () => {
     mockOrdersRepo.findOne.mockResolvedValue(
-      order({ contractStatus: 'awaiting_confirmation', specVersion: 1, specRejectionCount: 4 }),
+      order({
+        contractStatus: 'awaiting_confirmation',
+        specVersion: 1,
+        specRejectionCount: 4,
+      }),
     );
-    mockOrdersRepo.save.mockImplementation((v) => v);
+    mockOrdersRepo.save.mockImplementation((v: MarketplaceOrder) => v);
 
     const saved = await service.employerAction('o1', 'rejected', '不认可范围');
     expect(saved.specRejectionCount).toBe(5);
@@ -267,8 +390,12 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
   });
 
   it('雇主动作：非等待确认状态 → 422', async () => {
-    mockOrdersRepo.findOne.mockResolvedValueOnce(order({ contractStatus: 'signed' }));
-    await expect(service.employerAction('o1', 'confirmed')).rejects.toMatchObject({
+    mockOrdersRepo.findOne.mockResolvedValueOnce(
+      order({ contractStatus: 'signed' }),
+    );
+    await expect(
+      service.employerAction('o1', 'confirmed'),
+    ).rejects.toMatchObject({
       status: 422,
     });
   });
@@ -280,9 +407,11 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
       specDeadline: new Date('2026-08-20T00:00:00Z'),
     });
     mockOrdersRepo.find.mockResolvedValueOnce([expired]);
-    mockOrdersRepo.save.mockImplementation((v) => v);
+    mockOrdersRepo.save.mockImplementation((v: MarketplaceOrder) => v);
 
-    const count = await service.scanSpecTimeouts(new Date('2026-08-27T00:00:00Z'));
+    const count = await service.scanSpecTimeouts(
+      new Date('2026-08-27T00:00:00Z'),
+    );
     expect(count).toBe(1);
     expect(expired.contractStatus).toBe('cancelled');
     expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
@@ -322,8 +451,15 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
         project_task_id: 'pt-1',
         order_id: 'o1',
         in_reply_to_comment_id: 'c-1',
-        content: expect.objectContaining({ text: '需要支持微信和 Google 登录' }),
-        from: expect.objectContaining({ type: 'employer', display_name: 'ABC 公司' }),
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- objectContaining 返回 any，仅作断言匹配器
+        content: expect.objectContaining({
+          text: '需要支持微信和 Google 登录',
+        }),
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- 同上
+        from: expect.objectContaining({
+          type: 'employer',
+          display_name: 'ABC 公司',
+        }),
       }),
     );
   });
@@ -337,7 +473,10 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
     });
     await expect(
       service.employerReplyMention('o1', 'row-1', { text: 'again' }),
-    ).rejects.toMatchObject({ status: 422, errorCode: 'STATE_INVALID_TRANSITION' });
+    ).rejects.toMatchObject({
+      status: 422,
+      errorCode: 'STATE_INVALID_TRANSITION',
+    });
     expect(mockDispatcher.enqueue).not.toHaveBeenCalled();
   });
 
@@ -346,5 +485,204 @@ describe('SpecContractService（T15/T16：场景四 + 7 天重开）', () => {
     await expect(
       service.employerReplyMention('o1', 'nope', { text: 'x' }),
     ).rejects.toMatchObject({ status: 404, errorCode: 'NOT_FOUND_MENTION' });
+  });
+
+  it('雇主主动发起消息：落库 queued + 投递 employer-reply（mention/thread 三字段为 null，eventId=行 id）', async () => {
+    mockOrdersRepo.findOne.mockResolvedValueOnce(order());
+    mockOutboundRepo.findOne.mockResolvedValueOnce(null);
+    mockMentionsRepo.findOne.mockResolvedValueOnce({
+      id: 'row-1',
+      projectTaskId: 'pt-1',
+    });
+
+    const res = await service.sendEmployerMessage('o1', {
+      text: '请补充一下数据导出的格式',
+      fromId: 'emp-1',
+      fromDisplayName: '用户24565',
+    });
+
+    expect(res.duplicate).toBe(false);
+    expect(mockOutboundRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderId: 'o1',
+        projectId: 'p1',
+        projectTaskId: 'pt-1',
+        employerUserId: 'emp-1',
+        fromType: 'employer',
+        addressees: [{ type: 'agent_owner' }],
+        status: 'queued',
+      }),
+    );
+    expect(mockDispatcher.enqueue).toHaveBeenCalledWith(
+      'task.employer_reply',
+      expect.stringContaining('/v1/webhooks/task/employer-reply'),
+      expect.objectContaining({
+        // null = Console 新开顶层 Comment，不挂旧评论
+        mention_id: null,
+        source_comment_id: null,
+        in_reply_to_comment_id: null,
+        project_id: 'p1',
+        project_task_id: 'pt-1',
+        // Console 顶层 Comment 契约：task_id / 字符串 content / marketplace_comment_id
+        task_id: 'pt-1',
+        marketplace_comment_id: 'msg-1',
+        order_id: 'o1',
+        workspace_id: 'ws-1',
+        marketplace_task_id: 'task-1',
+        initiated_by: 'employer',
+        addressees: [{ type: 'agent_owner' }],
+        content: '请补充一下数据导出的格式',
+      }),
+      'msg-1',
+    );
+  });
+
+  it('雇主主动发起消息：订单无 Console task_id → 422 不发（避免 Console 400 进死信）', async () => {
+    mockOrdersRepo.findOne.mockResolvedValueOnce(order());
+    mockOutboundRepo.findOne.mockResolvedValueOnce(null);
+    mockMentionsRepo.findOne.mockResolvedValueOnce(null);
+
+    await expect(
+      service.sendEmployerMessage('o1', { text: '尚无入站提问时不可开新线程' }),
+    ).rejects.toMatchObject({
+      status: 422,
+      errorCode: 'STATE_INVALID_TRANSITION',
+    });
+    expect(mockOutboundRepo.save).not.toHaveBeenCalled();
+    expect(mockDispatcher.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('雇主主动发起消息：同 client_message_id 幂等，不新增、不重复投递', async () => {
+    const CLIENT_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3309';
+    mockOrdersRepo.findOne.mockResolvedValueOnce(order());
+    mockOutboundRepo.findOne.mockResolvedValueOnce({
+      id: 'msg-1',
+      orderId: 'o1',
+      clientMessageId: CLIENT_ID,
+    });
+
+    const res = await service.sendEmployerMessage('o1', {
+      text: '重复提交',
+      clientMessageId: CLIENT_ID,
+    });
+
+    expect(res.duplicate).toBe(true);
+    expect(mockOutboundRepo.save).not.toHaveBeenCalled();
+    expect(mockDispatcher.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('雇主主动发起消息：空 text → 400；client_message_id 非 uuid → 400', async () => {
+    mockOrdersRepo.findOne.mockResolvedValue(order());
+    await expect(
+      service.sendEmployerMessage('o1', { text: '   ' }),
+    ).rejects.toMatchObject({
+      status: 400,
+      errorCode: 'VALIDATION_INVALID_PAYLOAD',
+    });
+    await expect(
+      service.sendEmployerMessage('o1', {
+        text: 'hi',
+        clientMessageId: 'not-a-uuid',
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+      errorCode: 'VALIDATION_INVALID_PAYLOAD',
+    });
+    expect(mockDispatcher.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('雇主主动发起消息：订单无 project_id → 422 且不投递（避免 Console 400 死信）', async () => {
+    mockOrdersRepo.findOne.mockResolvedValueOnce(order({ projectId: null }));
+
+    await expect(
+      service.sendEmployerMessage('o1', { text: 'hello' }),
+    ).rejects.toMatchObject({
+      status: 422,
+      errorCode: 'STATE_INVALID_TRANSITION',
+    });
+    expect(mockOutboundRepo.save).not.toHaveBeenCalled();
+    expect(mockDispatcher.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('雇主主动发起消息：订单已取消 → 422', async () => {
+    mockOrdersRepo.findOne.mockResolvedValueOnce(
+      order({ contractStatus: 'cancelled' }),
+    );
+
+    await expect(
+      service.sendEmployerMessage('o1', { text: 'hello' }),
+    ).rejects.toMatchObject({
+      status: 422,
+      errorCode: 'STATE_INVALID_TRANSITION',
+    });
+    expect(mockDispatcher.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('沟通时间线：入站提问 + 回复展开 + 主动发起按时间升序合并', async () => {
+    mockMentionsRepo.find.mockResolvedValueOnce([
+      {
+        id: 'm-row-1',
+        fromType: 'agent',
+        fromId: 'agent-1',
+        fromDisplayName: 'Dev Agent',
+        content: { text: '是否需要支持微信登录？', attachments: [] },
+        status: 'replied',
+        reply: {
+          text: '需要支持微信和 Google 登录',
+          attachments: [],
+          from: { type: 'employer', id: 'emp-1', display_name: '用户24565' },
+        },
+        repliedAt: new Date('2026-09-02T10:05:00Z'),
+        createdAt: new Date('2026-09-02T10:00:00Z'),
+      },
+    ]);
+    mockOutboundRepo.find.mockResolvedValueOnce([
+      {
+        id: 'msg-1',
+        fromType: 'employer',
+        employerUserId: 'emp-1',
+        fromDisplayName: '用户24565',
+        content: { text: '请补充导出格式', attachments: [] },
+        status: 'queued',
+        createdAt: new Date('2026-09-02T10:10:00Z'),
+      },
+    ]);
+
+    const items = await service.listEmployerThread('o1');
+
+    expect(items.map((i) => i.kind)).toEqual(['question', 'reply', 'message']);
+    expect(items.map((i) => i.direction)).toEqual([
+      'inbound',
+      'outbound',
+      'outbound',
+    ]);
+    expect(items[1]).toMatchObject({
+      id: 'm-row-1:reply',
+      text: '需要支持微信和 Google 登录',
+      from: { type: 'employer', displayName: '用户24565' },
+    });
+    expect(items[2]).toMatchObject({ id: 'msg-1', text: '请补充导出格式' });
+  });
+
+  it('沟通时间线：未回复的提问不展开回复项', async () => {
+    mockMentionsRepo.find.mockResolvedValueOnce([
+      {
+        id: 'm-row-2',
+        fromType: 'agent_owner',
+        fromId: null,
+        fromDisplayName: '张三',
+        content: { text: '@employer 这一版怎么样', attachments: [] },
+        status: 'pending',
+        reply: null,
+        repliedAt: null,
+        createdAt: new Date('2026-09-02T11:00:00Z'),
+      },
+    ]);
+    mockOutboundRepo.find.mockResolvedValueOnce([]);
+
+    const items = await service.listEmployerThread('o1');
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ kind: 'question', status: 'pending' });
   });
 });

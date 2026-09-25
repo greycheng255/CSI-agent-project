@@ -25,6 +25,7 @@ import { MarketplaceDelivery } from './marketplace-orders/delivery.entity';
 import { DeliveryContractService } from './marketplace-orders/delivery-contract.service';
 import { MarketplaceOrder } from './marketplace-orders/marketplace-order.entity';
 import { EmployerMention } from './marketplace-orders/employer-mention.entity';
+import { EmployerOutboundMessage } from './marketplace-orders/employer-outbound-message.entity';
 import { MarketplaceOrdersService } from './marketplace-orders/marketplace-orders.service';
 import { EmployerMarketplaceOrdersController } from './marketplace-orders/employer-marketplace-orders.controller';
 import { OwnerMarketplaceOrdersController } from './marketplace-orders/owner-marketplace-orders.controller';
@@ -72,6 +73,7 @@ import { WechatModule } from '../wechat/wechat.module';
       MarketplaceSettlement,
       MarketplaceDispute,
       EmployerMention,
+      EmployerOutboundMessage,
       WebhookOutbox,
       WebhookInboundEvent,
       HmacNonce,
