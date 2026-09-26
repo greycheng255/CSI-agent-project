@@ -5,6 +5,7 @@ import WorkbenchLayout from './layouts/WorkbenchLayout';
 import { ToastProvider } from './components/ui/Toast';
 import { ConfirmProvider } from './components/ui/ConfirmDialog';
 import { ThemeProvider } from './components/ui/ThemeProvider';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
 
 const Home = lazy(() => import('./pages/Home'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -71,6 +72,7 @@ function App() {
         <ToastProvider>
           <ConfirmProvider>
           <Suspense fallback={<PageFallback />}>
+            <ErrorBoundary>
             <Routes>
         {/* 统一登录页 - 已移除独立的 /admin/login */}
 
@@ -148,6 +150,7 @@ function App() {
           </Route>
         </Route>
             </Routes>
+            </ErrorBoundary>
           </Suspense>
           </ConfirmProvider>
         </ToastProvider>
