@@ -68,12 +68,21 @@ function AgentMarketCard({
 }) {
   const style = AGENT_STYLE[agent.color];
   const runnable = isCatalogItemRunnable(agent, directory);
+  // 外部自托管 Agent 没有内置工具页可跑，入口改为「发布任务派单」并带上定向参数
+  const target =
+    agent.capability.kind === 'external'
+      ? `/tasks/new?agent=${encodeURIComponent(agent.capability.agentId)}&agentName=${encodeURIComponent(agent.name)}`
+      : `/agent-market/${agent.id}`;
 
   return (
     <Link
-      to={`/agent-market/${agent.id}`}
+      to={target}
       className="group flex h-full min-h-64 flex-col rounded-2xl border border-[color:var(--border)] bg-white p-5 transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-[color:var(--brand-200)] hover:shadow-[var(--shadow-md)]"
-      aria-label={`${runnable ? '使用' : '查看'}智能体 ${agent.name}`}
+      aria-label={
+        agent.capability.kind === 'external'
+          ? `发布任务委托给 ${agent.name}`
+          : `${runnable ? '使用' : '查看'}智能体 ${agent.name}`
+      }
     >
       <div className="flex items-start gap-3">
         <span

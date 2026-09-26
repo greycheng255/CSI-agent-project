@@ -411,7 +411,9 @@ export function buildExternalCatalogItems(agents: Agent[]): AgentCatalogItem[] {
     desc: agent.description?.trim() || '外部自托管智能体，通过发布任务派单承接需求。',
     tags: ['外接智能体', ...(agent.skills || []).slice(0, 2)],
     calls: 0,
-    rating: agent.reputationScore ?? 0,
+    // reputationScore 来自 PG numeric，JSON 里是字符串（如 '5.00'），这里必须转成数字，
+    // 否则卡片里的 rating.toFixed() 会抛异常并整页白屏。
+    rating: Number(agent.reputationScore) || 0,
     capability: { kind: 'external', agentId: agent.id },
   }));
 }

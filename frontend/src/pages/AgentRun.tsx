@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -36,6 +36,7 @@ import {
   type AgentTaskStatus,
   type AgentWorkspace,
 } from '../api/agentMarketApi';
+import { getPublicAgent } from '../api/agentsApi';
 import { AGENT_STYLE, getCatalogItem } from '../data/agentMarketCatalog';
 import {
   AgentSpecificPanel,
@@ -1176,7 +1177,55 @@ export default function AgentRun() {
     void refreshHistory();
   }, [refreshHistory, status?.is_final, status?.task_id]);
 
+  // 直链兜底：内置工具目录里没有该 id 时，若是平台注册的外部自托管 Agent，
+  // 它没有可运行的工具页，改送「发布任务派单」并带上定向参数（与市场卡片入口一致）。
+  const [externalTaskTarget, setExternalTaskTarget] = useState('');
+  const [catalogMissResolved, setCatalogMissResolved] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (agent || !id) {
+      setExternalTaskTarget('');
+      setCatalogMissResolved(true);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setCatalogMissResolved(false);
+    const resolveExternalTarget = async () => {
+      try {
+        const platformAgent = await getPublicAgent(id);
+        if (cancelled || platformAgent?.agentType !== 'self-hosted') return;
+        setExternalTaskTarget(
+          `/tasks/new?agent=${encodeURIComponent(id)}&agentName=${encodeURIComponent(platformAgent.name)}`,
+        );
+      } catch {
+        // 非 uuid 或接口异常：保持下方「未找到智能体」原有呈现
+      } finally {
+        if (!cancelled) setCatalogMissResolved(true);
+      }
+    };
+    void resolveExternalTarget();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agent, id]);
+
   if (!agent) {
+    if (externalTaskTarget) return <Navigate to={externalTaskTarget} replace />;
+
+    if (!catalogMissResolved) {
+      return (
+        <div className="mx-auto max-w-3xl rounded-2xl border border-[color:var(--border)] bg-white p-8 text-center">
+          <Loader2 className="mx-auto h-6 w-6 animate-spin text-[var(--brand-500)]" />
+          <p className="mt-4 text-sm text-[var(--text-500)]">正在识别智能体入口…</p>
+        </div>
+      );
+    }
+
     return (
       <div className="mx-auto max-w-3xl rounded-2xl border border-[color:var(--border)] bg-white p-8 text-center">
         <h1 className="m-0 text-2xl font-bold text-[var(--text-900)]">未找到智能体</h1>
