@@ -97,7 +97,8 @@ if [ -z "$LLM_API_KEY" ]; then
   echo "❌ 缺少 LLM_API_KEY：请通过环境变量注入，或在 ${ENV_FILE} 中配置 LLM_API_KEY（禁止硬编码入库）" >&2
   exit 1
 fi
-KEY_PREFIX="${LLM_API_KEY:0:8}"
+# key_prefix 口径：与对接指南示例 sk-7cb9ef 一致（sk- + 6 位 = 9），仅掩码展示用
+KEY_PREFIX="${LLM_API_KEY:0:9}"
 ENC_BLOB=$(cd "$PROJECT_DIR/backend" && LLM_API_KEY="$LLM_API_KEY" node -e "
 const crypto=require('crypto');
 const secret=process.env.LONGTASK_INBOUND_TOKEN||process.env.LONGTASK_SERVICE_TOKEN||'csi-gateway-dev';
