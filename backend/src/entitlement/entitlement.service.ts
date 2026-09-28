@@ -81,10 +81,11 @@ export class EntitlementService {
       period_end: subscription.periodEnd,
       reset_at: subscription.periodEnd,
     };
-    // 套餐内置 LLM 配置摘要（联调期，DR-12 §4.6）：仅 base_url + key_prefix，明文 key 走 E7 取
+    // 套餐内置 LLM 配置摘要（联调期，DR-12 §4.6）：base_url + model + key_prefix，明文 key 走 E7 取
     if (plan.llmBaseUrl) {
       resp.llm_config = {
         base_url: plan.llmBaseUrl,
+        model: plan.llmModel ?? null,
         key_prefix: plan.llmKeyPrefix ?? '',
         source: 'plan_builtin',
       };
@@ -94,13 +95,15 @@ export class EntitlementService {
 
   /**
    * 取 org 的 LLM 凭证（联调期优先级：BYOK user_llm_configs → 订阅 plan 内置）。
-   * 返回明文 api_key + base_url + source（'byok' | 'plan_builtin'）。
+   * 返回明文 api_key + base_url + model + source（'byok' | 'plan_builtin' | 'env_default'）。
+   * model 为网关可直接调用的口径（含 vendor 前缀）；BYOK/env 无模型字段时为 null。
    * 用于 E7 GET /llm-config/:orgId 与 L1/L2/L3 forward 的统一 fallback。
    * 两处都无 → 404/409 由调用方决定（E7=404, L1/L2/L3=409）。
    */
   async resolveLlmConfig(orgId: string): Promise<{
     base_url: string;
     api_key: string;
+    model: string | null;
     key_prefix: string;
     source: 'byok' | 'plan_builtin' | 'env_default';
   } | null> {
@@ -118,6 +121,8 @@ export class EntitlementService {
       return {
         base_url: row.baseUrl,
         api_key: apiKey,
+        // BYOK 表无模型字段：模型由调用方自选，平台不代持
+        model: null,
         key_prefix: row.keyPrefix,
         source: 'byok',
       };
@@ -134,6 +139,7 @@ export class EntitlementService {
       return {
         base_url: plan.llmBaseUrl,
         api_key: apiKey,
+        model: plan.llmModel ?? null,
         key_prefix: plan.llmKeyPrefix ?? '',
         source: 'plan_builtin',
       };
@@ -147,6 +153,8 @@ export class EntitlementService {
       return {
         base_url: envBaseUrl,
         api_key: envApiKey,
+        // env 兜底路径不带套餐模型，由调用方指定
+        model: null,
         key_prefix: `${envApiKey.slice(0, 8)}…`,
         source: 'env_default',
       };

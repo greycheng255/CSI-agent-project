@@ -78,6 +78,13 @@ export class EntitlementPlan {
   @Column({ name: 'llm_key_prefix', type: 'varchar', length: 16, nullable: true })
   llmKeyPrefix: string | null;
 
+  /**
+   * 套餐内置默认模型（网关调用口径，含 vendor 前缀，如 openai/gpt-5.5）。
+   * cherryin 等网关要求带前缀，裸名会 404，故按可直接调用的形式存储。
+   */
+  @Column({ name: 'llm_model', type: 'varchar', length: 128, nullable: true })
+  llmModel: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

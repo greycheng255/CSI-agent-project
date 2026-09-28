@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { LlmProxyService, pipeSseResponse } from './llm-proxy.service';
 import { EntitlementService } from '../entitlement/entitlement.service';
 import { LlmModelPriceService } from './llm-model-price.service';
+import { LlmChannelService } from './llm-channel.service';
 
 describe('LlmProxyService（AI 网关直连代理：流式直通 + 非流式缓冲）', () => {
   let service: LlmProxyService;
@@ -15,8 +16,28 @@ describe('LlmProxyService（AI 网关直连代理：流式直通 + 非流式缓�
   const mockModelPrice = {
     getPrice: jest.fn(),
     getPriceOrFallback: jest.fn((model) =>
-      model === 'gpt-5.4' ? { input: 200, output: 800 } : { input: 200, output: 800 },
+      model === 'gpt-5.4'
+        ? { input: 200, output: 800 }
+        : { input: 200, output: 800 },
     ),
+  };
+
+  // zen 渠道（4 条别名映射），默认命中；测试可覆盖为其它渠道验证按渠道读取
+  const ZEN_CHANNEL = {
+    host: 'opencode.ai',
+    label: 'OpenCode Zen',
+    aliases: {
+      'gpt-5.4': 'deepseek-v4.1-flash',
+      'gpt-5.5': 'deepseek-v4.1-flash',
+      'openai/gpt-5.4': 'deepseek-v4.1-flash',
+      'openai/gpt-5.5': 'deepseek-v4.1-flash',
+    },
+    note: null,
+  };
+
+  const mockChannel = {
+    resolveChannel: jest.fn(),
+    resolveAliases: jest.fn(),
   };
 
   const cfg = {
@@ -49,11 +70,13 @@ describe('LlmProxyService（AI 网关直连代理：流式直通 + 非流式缓�
   beforeEach(async () => {
     jest.clearAllMocks();
     mockEntitlement.resolveLlmConfig.mockResolvedValue(cfg);
+    mockChannel.resolveChannel.mockReturnValue(ZEN_CHANNEL);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         LlmProxyService,
         { provide: EntitlementService, useValue: mockEntitlement },
         { provide: LlmModelPriceService, useValue: mockModelPrice },
+        { provide: LlmChannelService, useValue: mockChannel },
       ],
     }).compile();
     service = module.get(LlmProxyService);
@@ -64,10 +87,12 @@ describe('LlmProxyService（AI 网关直连代理：流式直通 + 非流式缓�
   });
 
   it('stream=true + 上游 text/event-stream → 流式直通（不缓冲），且注入 stream_options.include_usage', async () => {
-    const fetchMock = jest.fn().mockResolvedValue(
-      sseResponse(['data: {"delta":"你"}\n\n', 'data: [DONE]\n\n']),
-    );
-    global.fetch = fetchMock as unknown as typeof fetch;
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(
+        sseResponse(['data: {"delta":"你"}\n\n', 'data: [DONE]\n\n']),
+      );
+    global.fetch = fetchMock;
 
     const result = await service.forward('org-1', 'ws-1', {
       model: 'gpt-5.5',
@@ -86,10 +111,14 @@ describe('LlmProxyService（AI 网关直连代理：流式直通 + 非流式缓�
   });
 
   it('responses 端点流式 → 直通且不注入 stream_options', async () => {
-    const fetchMock = jest.fn().mockResolvedValue(
-      sseResponse(['event: response.output_text.delta\ndata: {"type":"response.output_text.delta"}\n\n']),
-    );
-    global.fetch = fetchMock as unknown as typeof fetch;
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValue(
+        sseResponse([
+          'event: response.output_text.delta\ndata: {"type":"response.output_text.delta"}\n\n',
+        ]),
+      );
+    global.fetch = fetchMock;
 
     const result = await service.forward('org-1', 'ws-1', {
       model: 'gpt-5.5',
@@ -106,8 +135,12 @@ describe('LlmProxyService（AI 网关直连代理：流式直通 + 非流式缓�
 
   it('stream=true 但上游返回 JSON（未按流式应答）→ 回退 json 模式', async () => {
     global.fetch = jest.fn().mockResolvedValue(
-      jsonResponse({ id: 'chatcmpl-1', choices: [], usage: { total_tokens: 3 } }),
-    ) as unknown as typeof fetch;
+      jsonResponse({
+        id: 'chatcmpl-1',
+        choices: [],
+        usage: { total_tokens: 3 },
+      }),
+    );
 
     const result = await service.forward('org-1', 'ws-1', {
       model: 'gpt-5.5',
@@ -127,7 +160,7 @@ describe('LlmProxyService（AI 网关直连代理：流式直通 + 非流式缓�
         choices: [{ message: { role: 'assistant', content: 'ok' } }],
         usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
       }),
-    ) as unknown as typeof fetch;
+    );
 
     const result = await service.forward('org-1', 'ws-1', {
       model: 'gpt-5.4',
@@ -146,28 +179,93 @@ describe('LlmProxyService（AI 网关直连代理：流式直通 + 非流式缓�
     // 每次调用返回新的 Response（body 只能读一次）
     const fetchMock = jest.fn().mockImplementation(() =>
       Promise.resolve(
-        jsonResponse({ model: 'deepseek-v4.1-flash', choices: [], usage: { total_tokens: 1 } }),
+        jsonResponse({
+          model: 'deepseek-v4.1-flash',
+          choices: [],
+          usage: { total_tokens: 1 },
+        }),
       ),
     );
-    global.fetch = fetchMock as unknown as typeof fetch;
+    global.fetch = fetchMock;
 
-    await service.forward('org-1', 'ws-1', { model: 'openai/gpt-5.5', messages: [] });
-    const real = await service.forward('org-1', 'ws-1', { model: 'deepseek-v4.1-flash', messages: [] });
+    await service.forward('org-1', 'ws-1', {
+      model: 'openai/gpt-5.5',
+      messages: [],
+    });
+    const real = await service.forward('org-1', 'ws-1', {
+      model: 'deepseek-v4.1-flash',
+      messages: [],
+    });
 
     const calls = fetchMock.mock.calls;
-    expect(JSON.parse(calls[0][1].body as string).model).toBe('deepseek-v4.1-flash');
-    expect(JSON.parse(calls[1][1].body as string).model).toBe('deepseek-v4.1-flash');
+    expect(JSON.parse(calls[0][1].body as string).model).toBe(
+      'deepseek-v4.1-flash',
+    );
+    expect(JSON.parse(calls[1][1].body as string).model).toBe(
+      'deepseek-v4.1-flash',
+    );
     // 未走别名的请求：响应 model 保持上游原值
     expect(real.mode).toBe('json');
     if (real.mode === 'json') {
-      expect((real.body as { model: string }).model).toBe('deepseek-v4.1-flash');
+      expect((real.body as { model: string }).model).toBe(
+        'deepseek-v4.1-flash',
+      );
     }
+  });
+
+  it('渠道别名表为空（cherryin）→ 模型名原样透传，不并入合成别名', async () => {
+    mockChannel.resolveChannel.mockReturnValue({
+      host: 'open.cherryin.ai',
+      label: 'Cherry Studio (cherryin)',
+      aliases: {},
+      note: null,
+    });
+    const fetchMock = jest
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          jsonResponse({ object: 'list', data: [{ id: 'openai/gpt-5.5' }] }),
+        ),
+      );
+    global.fetch = fetchMock;
+
+    const chat = await service.forward('org-1', 'ws-1', {
+      model: 'openai/gpt-5.5',
+      messages: [],
+    });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string).model).toBe(
+      'openai/gpt-5.5',
+    );
+    expect(chat.mode).toBe('json');
+
+    const models = await service.forward('org-1', undefined, {
+      endpoint: 'models',
+    });
+    expect(models.mode).toBe('json');
+    if (models.mode === 'json') {
+      expect((models.body as { data: unknown[] }).data).toHaveLength(1);
+    }
+  });
+
+  it('未登记渠道 → 视同空别名表，原样透传', async () => {
+    mockChannel.resolveChannel.mockReturnValue(null);
+    const fetchMock = jest
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(jsonResponse({ model: 'gpt-5.5', choices: [] })),
+      );
+    global.fetch = fetchMock;
+
+    await service.forward('org-1', 'ws-1', { model: 'gpt-5.5', messages: [] });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string).model).toBe(
+      'gpt-5.5',
+    );
   });
 
   it('别名 + 流式 → ForwardResult 携带 modelRestore 供 SSE 回写', async () => {
     global.fetch = jest
       .fn()
-      .mockResolvedValue(sseResponse(['data: [DONE]\n\n'])) as unknown as typeof fetch;
+      .mockResolvedValue(sseResponse(['data: [DONE]\n\n']));
 
     const result = await service.forward('org-1', 'ws-1', {
       model: 'gpt-5.5',
@@ -191,15 +289,20 @@ describe('LlmProxyService（AI 网关直连代理：流式直通 + 非流式缓�
         choices: [{ message: { role: 'assistant', content: 'ok' } }],
         usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
       }),
-    ) as unknown as typeof fetch;
+    );
 
-    const result = await service.forward('org-1', '0f0e0d0c-1111-2222-3333-444455556666', {
-      model: 'gpt-5.5',
-      messages: [{ role: 'user', content: 'hi' }],
-    });
+    const result = await service.forward(
+      'org-1',
+      '0f0e0d0c-1111-2222-3333-444455556666',
+      {
+        model: 'gpt-5.5',
+        messages: [{ role: 'user', content: 'hi' }],
+      },
+    );
     expect(result.mode).toBe('json');
     expect(mockEntitlement.recordUsage).toHaveBeenCalledTimes(1);
-    const [orgId, items] = mockEntitlement.recordUsage.mock.calls[0] as unknown as [string, Array<Record<string, unknown>>];
+    const [orgId, items] = mockEntitlement.recordUsage.mock
+      .calls[0] as unknown as [string, Array<Record<string, unknown>>];
     expect(orgId).toBe('org-1');
     expect(items[0]).toMatchObject({
       workspace_id: '0f0e0d0c-1111-2222-3333-444455556666',
@@ -210,12 +313,14 @@ describe('LlmProxyService（AI 网关直连代理：流式直通 + 非流式缓�
   });
 
   it('上游 404/502 等失败 → 结构化 ContractError 502（带 upstream_status）', async () => {
-    global.fetch = jest.fn().mockResolvedValue(
-      jsonResponse(
-        { error: { message: 'Requested model is not available' } },
-        404,
-      ),
-    ) as unknown as typeof fetch;
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(
+          { error: { message: 'Requested model is not available' } },
+          404,
+        ),
+      );
 
     await expect(
       service.forward('org-1', 'ws-1', { model: 'bad-model', messages: [] }),
@@ -238,9 +343,13 @@ describe('LlmProxyService（AI 网关直连代理：流式直通 + 非流式缓�
     );
     // 直接让 text() 抛 AbortError（真实场景由 120s abort 触发）
     Object.defineProperty(stalled, 'text', {
-      value: jest.fn().mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+      value: jest
+        .fn()
+        .mockRejectedValue(
+          Object.assign(new Error('aborted'), { name: 'AbortError' }),
+        ),
     });
-    global.fetch = jest.fn().mockResolvedValue(stalled) as unknown as typeof fetch;
+    global.fetch = jest.fn().mockResolvedValue(stalled);
 
     await expect(
       service.forward('org-1', 'ws-1', { model: 'gpt-5.5', messages: [] }),
@@ -248,11 +357,15 @@ describe('LlmProxyService（AI 网关直连代理：流式直通 + 非流式缓�
   });
 
   it('models 端点（GET）→ json 模式透传', async () => {
-    global.fetch = jest.fn().mockResolvedValue(
-      jsonResponse({ object: 'list', data: [{ id: 'gpt-5.5' }] }),
-    ) as unknown as typeof fetch;
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ object: 'list', data: [{ id: 'gpt-5.5' }] }),
+      );
 
-    const result = await service.forward('org-1', undefined, { endpoint: 'models' });
+    const result = await service.forward('org-1', undefined, {
+      endpoint: 'models',
+    });
     expect(result.mode).toBe('json');
     const [url, init] = (global.fetch as jest.Mock).mock.calls[0];
     expect(url).toBe('http://upstream.test:4200/v1/models');
@@ -268,7 +381,6 @@ describe('LlmProxyService（AI 网关直连代理：流式直通 + 非流式缓�
 });
 
 describe('pipeSseResponse（SSE 直通管道）', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function makeMockRes(): any {
     const headers: Record<string, string> = {};
     const written: Buffer[] = [];

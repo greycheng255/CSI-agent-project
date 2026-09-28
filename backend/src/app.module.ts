@@ -56,6 +56,7 @@ import { GatewayModule } from './gateway/gateway.module';
 import { LlmProxyModule } from './llm-proxy/llm-proxy.module';
 import { WechatModule } from './wechat/wechat.module';
 import { LlmModelPrice } from './llm-proxy/llm-model-price.entity';
+import { LlmChannel } from './llm-proxy/llm-channel.entity';
 import { DlqAdminModule } from './admin/dlq-admin.module';
 import { GatewayApiKey } from './gateway/gateway-key.entity';
 import {
@@ -247,6 +248,8 @@ const parsePoolSetting = (value: string | undefined, fallback: number) => {
         NotificationOutbox,
         // LLM 计费单价（外置 DB）
         LlmModelPrice,
+        // LLM 渠道别名表（按渠道主机名保存对外模型名 → 上游真名映射）
+        LlmChannel,
         // 网关 workspace key 签发/轮换/吊销（K1-K4）
         GatewayApiKey,
       ],

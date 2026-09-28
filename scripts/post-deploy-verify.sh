@@ -12,6 +12,29 @@ TOKEN=$(grep '^LONGTASK_INBOUND_TOKEN=' "$ENV_FILE" | cut -d= -f2 | tr -d '[:spa
 ORG_WITH_PLAN="00000000-0000-4000-8000-00000000e001"
 ORG_NO_PLAN="00000000-0000-4000-8000-00000000e002"
 
+# ── DB 连接（K 线需临时 workspace 归属 org；末尾残留确认复用）──
+DBH="${DB_HOST:-122.51.51.177}"; DBP="${DB_PORT:-15435}"; DBU="${DB_USER:-genesis_db}"; DBN="${DB_NAME:-genesis_db}"
+export PGPASSWORD="${DB_PASSWORD:-WHcWmDaySF3NXjtf}"
+HAS_PSQL=0; command -v psql &>/dev/null && HAS_PSQL=1
+psql_q() { psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" -t -A -c "$1" 2>/dev/null; }
+
+# K 线用的临时 workspace：后端 K1 按 workspaces.org_id 校验归属，
+# 随机 UUID 会 404（WORKSPACE_NOT_FOUND），故建两个绑定到测试 org 的一次性 workspace，
+# 用完即删（避免动到 beta Console 真实 workspace 在用的 key）。
+WS_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || python3 -c 'import uuid;print(uuid.uuid4())')
+WS2=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || python3 -c 'import uuid;print(uuid.uuid4())')
+K_WS_READY=0
+cleanup_k_workspaces() {
+  [ "$HAS_PSQL" = "1" ] || return 0
+  psql_q "DELETE FROM gateway_api_keys WHERE workspace_id IN ('${WS_ID}','${WS2}');" >/dev/null || true
+  psql_q "DELETE FROM workspaces WHERE id IN ('${WS_ID}','${WS2}');" >/dev/null || true
+}
+if [ "$HAS_PSQL" = "1" ]; then
+  psql_q "INSERT INTO workspaces (id, org_id, name, slug) VALUES ('${WS_ID}','${ORG_WITH_PLAN}','verify-k1-ws','${WS_ID}'), ('${WS2}','${ORG_WITH_PLAN}','verify-k4-ws','${WS2}') ON CONFLICT (id) DO NOTHING;" >/dev/null || true
+  K_WS_READY=1
+  trap cleanup_k_workspaces EXIT
+fi
+
 hmac_get() {
   local path="$1"
   local ts=$(date +%s)
@@ -50,9 +73,11 @@ echo ""
 
 # ─────────────── K 线 ───────────────
 echo "── K 线 (gateway keys) ──"
+if [ "$K_WS_READY" != "1" ]; then
+  echo "⚠️  psql 不可用 → 跳过 K 线（K1 需要绑定 org 的 workspace）"
+else
 
-# K1 签发
-WS_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || python3 -c 'import uuid;print(uuid.uuid4())')
+# K1 签发（上面建的、绑定该 org 的一次性 workspace）
 RESP=$(hmac_post "/v1/gateway/keys" "{\"org_id\":\"${ORG_WITH_PLAN}\",\"workspace_id\":\"${WS_ID}\"}")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | head -n -1)
@@ -102,8 +127,7 @@ RESP=$(hmac_post "/v1/gateway/keys/nonexistent-id/revoke" "{}")
 CODE=$(echo "$RESP" | tail -1)
 check "K3 revoke (无效 key_id)" "404" "${CODE}" "$(echo "$RESP" | head -n -1)"
 
-# K4 rotate (用另一个新 workspace)
-WS2=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || python3 -c 'import uuid;print(uuid.uuid4())')
+# K4 rotate（用另一个一次性 workspace）
 RESP=$(hmac_post "/v1/gateway/keys" "{\"org_id\":\"${ORG_WITH_PLAN}\",\"workspace_id\":\"${WS2}\"}")
 KEY_ID2=$(echo "$RESP" | head -n -1 | python3 -c "import sys,json; print(json.load(sys.stdin).get('key_id',''))" 2>/dev/null || echo "")
 if [ -n "${KEY_ID2}" ]; then
@@ -111,6 +135,8 @@ if [ -n "${KEY_ID2}" ]; then
   CODE=$(echo "$RESP" | tail -1)
   BODY=$(echo "$RESP" | head -n -1)
   check "K4 rotate" "201" "${CODE}" "${BODY}"
+fi
+
 fi
 
 echo ""
@@ -206,15 +232,19 @@ echo ""
 
 # ─────────────── DB 残留确认 ───────────────
 echo "── DB 残留确认 ──"
-if command -v psql &>/dev/null; then
-  export PGPASSWORD="${DB_PASSWORD:-WHcWmDaySF3NXjtf}"
-  DBH="${DB_HOST:-122.51.51.177}"; DBP="${DB_PORT:-15435}"; DBU="${DB_USER:-genesis_db}"; DBN="${DB_NAME:-genesis_db}"
-  N=$(psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" -t -c "SELECT count(*) FROM marketplace_revision_negotiations WHERE id = '033b4135-b1a3-4ddc-9215-59db87ff17fc'" 2>/dev/null | xargs)
-  B=$(psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" -t -c "SELECT count(*) FROM marketplace_bids WHERE id::text LIKE 'dd8730b0-%'" 2>/dev/null | xargs)
-  D=$(psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" -t -c "SELECT count(*) FROM org_subscriptions WHERE org_id = '00000000-0000-4000-8000-00000000d104'" 2>/dev/null | xargs)
+if [ "$HAS_PSQL" = "1" ]; then
+  # 先显式清理本次 K 线的一次性 workspace 及其 key（EXIT trap 兜底，此处清一遍便于校验）
+  cleanup_k_workspaces
+  N=$(psql_q "SELECT count(*) FROM marketplace_revision_negotiations WHERE id = '033b4135-b1a3-4ddc-9215-59db87ff17fc'" | xargs)
+  B=$(psql_q "SELECT count(*) FROM marketplace_bids WHERE id::text LIKE 'dd8730b0-%'" | xargs)
+  D=$(psql_q "SELECT count(*) FROM org_subscriptions WHERE org_id = '00000000-0000-4000-8000-00000000d104'" | xargs)
+  W=$(psql_q "SELECT count(*) FROM workspaces WHERE id IN ('${WS_ID}','${WS2}')" | xargs)
+  K=$(psql_q "SELECT count(*) FROM gateway_api_keys WHERE workspace_id IN ('${WS_ID}','${WS2}')" | xargs)
   echo "negotiation 033b4135 残留: ${N} (期望 0)"
   echo "bid dd8730b0 残留: ${B} (期望 0)"
   echo "d104 探针订阅残留: ${D} (期望 0)"
+  echo "K 线一次性 workspace 残留: ${W} (期望 0)"
+  echo "K 线一次性 workspace 的 key 残留: ${K} (期望 0)"
 else
   echo "⚠️  psql 不可用，请手动确认 DB 残留已清理"
 fi

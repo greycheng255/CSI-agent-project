@@ -53,17 +53,50 @@ psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" <<'SQL'
 ALTER TABLE entitlement_plans ADD COLUMN IF NOT EXISTS llm_base_url varchar(255);
 ALTER TABLE entitlement_plans ADD COLUMN IF NOT EXISTS llm_api_key_enc text;
 ALTER TABLE entitlement_plans ADD COLUMN IF NOT EXISTS llm_key_prefix varchar(16);
+ALTER TABLE entitlement_plans ADD COLUMN IF NOT EXISTS llm_model varchar(128);
+SQL
+
+# 5.2 渠道别名表（llm_channels）：按渠道主机名保存「对外模型名 → 上游真名」映射，
+# llm-proxy 转发时按当前生效渠道的 base_url 自动读取；未登记渠道=空表=原样透传。
+echo "=== 5.2 建 llm_channels 渠道别名表 + 种子渠道（幂等）==="
+psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" <<'SQL'
+CREATE TABLE IF NOT EXISTS llm_channels (
+  host varchar(255) PRIMARY KEY,
+  label varchar(128) NOT NULL DEFAULT '',
+  aliases jsonb NOT NULL DEFAULT '{}'::jsonb,
+  note text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+-- zen：上游无 gpt-5.x，统一改写；cherryin/onellm：原样透传（空别名表）
+INSERT INTO llm_channels (host, label, aliases, note) VALUES
+  ('opencode.ai', 'OpenCode Zen',
+   '{"gpt-5.4":"deepseek-v4.1-flash","gpt-5.5":"deepseek-v4.1-flash","openai/gpt-5.4":"deepseek-v4.1-flash","openai/gpt-5.5":"deepseek-v4.1-flash"}'::jsonb,
+   'zen 上游目录无 gpt-5.x，统一改写为 deepseek-v4.1-flash'),
+  ('open.cherryin.ai', 'Cherry Studio (cherryin)',
+   '{"gpt-5.4":"openai/gpt-5.4","gpt-5.5":"openai/gpt-5.5"}'::jsonb,
+   '上游要求 vendor 前缀，裸名补 openai/ 前缀；已带前缀的名字原样透传'),
+  ('api.lk888.ai', 'ONELLM', '{}'::jsonb, '自建网关，模型名原样透传')
+ON CONFLICT (host) DO NOTHING;
+SELECT host, label, aliases FROM llm_channels ORDER BY host;
 SQL
 
 echo "=== 5.5 预置 L 族 AI Token（套餐内置，联调期临时方案 DR-12 §4.6）==="
-# 联调期把 OneLLM 平台 token 内置进 beta-free 套餐，Console 读套餐时返回 base_url+key_prefix，
+# 联调期把平台 token 内置进 beta-free 套餐，Console/multica 读套餐时返回 base_url + model + key_prefix，
 # 明文 key 走 E7 取；L1/L2/L3 forward 走 plan 内置 fallback。
-# 真值由联调窗口线下注入：LLM_BASE_URL + LLM_API_KEY（OneLLM 方案二或自有网关方案一）。
-# 默认值=opencode zen 网关真值（2026-09-24 由 CherryIN 切换，用户提供，后续生成多租户真值后切 BYOK）。
-# 注意：该网关须走 /zen/go/v1 路径，且强制 x-opencode-session 头（llm-proxy 已按主机名自动注入）；
-# 套餐模型目录须用 zen 目录名（如 muse-spark-1.3-contributor），无 gpt-5.x。
-LLM_BASE_URL="${LLM_BASE_URL:-https://opencode.ai/zen/go/v1}"
-LLM_API_KEY="${LLM_API_KEY:-oc_sk_3b2f6ac66a81_ALyxzzACO8ttS21l5axtwU6B9v2bk1od}"
+# 真值由联调窗口线下注入：LLM_BASE_URL + LLM_API_KEY + LLM_MODEL。
+# 默认值=cherry studio 套餐网关真值（用户提供，2026-09-26 由 opencode zen 切换；
+# 后续生成多租户真值后切 BYOK）。
+# 注意：该网关要求模型名带 vendor 前缀（如 openai/gpt-5.4），裸名会 404，
+# 故 llm_model 按可直接调用的口径存储。
+LLM_BASE_URL="${LLM_BASE_URL:-https://open.cherryin.ai}"
+LLM_MODEL="${LLM_MODEL:-openai/gpt-5.4}"
+# 密钥禁止硬编码入库：优先取环境变量，其次取 .env（已 gitignore），都没有则快速失败
+LLM_API_KEY="${LLM_API_KEY:-$(grep '^LLM_API_KEY=' "$ENV_FILE" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')}"
+if [ -z "$LLM_API_KEY" ]; then
+  echo "❌ 缺少 LLM_API_KEY：请通过环境变量注入，或在 ${ENV_FILE} 中配置 LLM_API_KEY（禁止硬编码入库）" >&2
+  exit 1
+fi
 KEY_PREFIX="${LLM_API_KEY:0:8}"
 ENC_BLOB=$(cd "$PROJECT_DIR/backend" && LLM_API_KEY="$LLM_API_KEY" node -e "
 const crypto=require('crypto');
@@ -78,10 +111,10 @@ echo "LLM config: base_url=${LLM_BASE_URL} key_prefix=${KEY_PREFIX}…（AES-256
 
 echo "=== 5.55 预置 beta-free 套餐 + 内置 LLM 配置（activate 前置，code unique 幂等）==="
 psql -h "$DBH" -p "$DBP" -U "$DBU" -d "$DBN" <<SQL
-INSERT INTO entitlement_plans (code, name, status, period_days, total_tokens, total_credits, max_runtime_instances, runtime_profiles, price_cents, llm_base_url, llm_api_key_enc, llm_key_prefix, created_at, updated_at)
-VALUES ('beta-free', '公测免费套餐', 'active', 90, 1000000, 200, -1, '["*"]'::jsonb, 0, '${LLM_BASE_URL}', '${ENC_BLOB}', '${KEY_PREFIX}', now(), now())
-ON CONFLICT (code) DO UPDATE SET status='active', llm_base_url=EXCLUDED.llm_base_url, llm_api_key_enc=EXCLUDED.llm_api_key_enc, llm_key_prefix=EXCLUDED.llm_key_prefix, updated_at=now()
-RETURNING id, code, status, llm_base_url, llm_key_prefix;
+INSERT INTO entitlement_plans (code, name, status, period_days, total_tokens, total_credits, max_runtime_instances, runtime_profiles, price_cents, llm_base_url, llm_api_key_enc, llm_key_prefix, llm_model, created_at, updated_at)
+VALUES ('beta-free', '公测免费套餐', 'active', 90, 1000000, 200, -1, '["*"]'::jsonb, 0, '${LLM_BASE_URL}', '${ENC_BLOB}', '${KEY_PREFIX}', '${LLM_MODEL}', now(), now())
+ON CONFLICT (code) DO UPDATE SET status='active', llm_base_url=EXCLUDED.llm_base_url, llm_api_key_enc=EXCLUDED.llm_api_key_enc, llm_key_prefix=EXCLUDED.llm_key_prefix, llm_model=EXCLUDED.llm_model, updated_at=now()
+RETURNING id, code, status, llm_base_url, llm_model, llm_key_prefix;
 SQL
 
 echo "=== 5.6 激活 test org 免费套餐（D1-D6 前置）==="

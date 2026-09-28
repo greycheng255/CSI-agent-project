@@ -3,15 +3,21 @@ import type { Response as ExpressResponse } from 'express';
 import { randomUUID } from 'node:crypto';
 import { Readable, Transform } from 'stream';
 import { ContractError } from '../longtask/contract/errors';
-import { EntitlementService, UsageIngestItem } from '../entitlement/entitlement.service';
+import {
+  EntitlementService,
+  UsageIngestItem,
+} from '../entitlement/entitlement.service';
 import { LlmModelPriceService } from './llm-model-price.service';
+import { LlmChannelService } from './llm-channel.service';
 
 const UPSTREAM_TIMEOUT_MS = 120_000;
 
 /** 解析 OpenAI 口径路径：baseUrl 以 /v1 结尾则直拼，否则补 /v1 */
 function chatCompletionsUrl(baseUrl: string): string {
   const trimmed = baseUrl.replace(/\/+$/, '');
-  return /\/v\d+$/.test(trimmed) ? `${trimmed}/chat/completions` : `${trimmed}/v1/chat/completions`;
+  return /\/v\d+$/.test(trimmed)
+    ? `${trimmed}/chat/completions`
+    : `${trimmed}/v1/chat/completions`;
 }
 
 /** 通用端点 URL 构造（chat/completions / embeddings / models） */
@@ -31,7 +37,11 @@ function toOpenAiBaseUrl(baseUrl: string): string {
  * opencode zen 网关（`/zen/go/v1`）强制要求 `x-opencode-session` 头做请求路由，
  * 缺失即回 400 MissingSessionID。其它 OpenAI 兼容网关忽略未知头，故按主机名条件注入。
  */
-function upstreamHeaders(baseUrl: string, apiKey: string, isGet: boolean): Record<string, string> {
+function upstreamHeaders(
+  baseUrl: string,
+  apiKey: string,
+  isGet: boolean,
+): Record<string, string> {
   const headers: Record<string, string> = isGet
     ? { Authorization: `Bearer ${apiKey}` }
     : { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` };
@@ -46,47 +56,51 @@ function upstreamHeaders(baseUrl: string, apiKey: string, isGet: boolean): Recor
 }
 
 /**
- * 调用方模型名 → 上游真实模型名别名表。
+ * 调用方模型名 → 上游真实模型名别名改写。
  * multica / Console 沿用 gpt-5.4、gpt-5.5（含 openai/ 命名空间形态）作为对外模型 ID，
- * 而 zen 上游目录里没有 gpt-5.x，直接透传会被上游以 "Model is unavailable" 400 拒绝，
- * 故统一改写为上游真实可用的 deepseek-v4.1-flash。
+ * 但不同上游网关的真实可用模型不同（zen 无 gpt-5.x，cherryin 要求 vendor 前缀），
+ * 故映射按渠道（base_url 主机名）存于 llm_channels 表，转发时自动读取当前渠道的别名表。
+ * 未在该渠道登记的名字原样透传，保证上游真名仍可直接调用。
  */
-const UPSTREAM_MODEL_ALIASES: Record<string, string> = {
-  'gpt-5.4': 'deepseek-v4.1-flash',
-  'gpt-5.5': 'deepseek-v4.1-flash',
-  'openai/gpt-5.4': 'deepseek-v4.1-flash',
-  'openai/gpt-5.5': 'deepseek-v4.1-flash',
-};
-
-/** 别名改写（未登记的名字原样透传，保证 zen 真名仍可直接调用） */
-function resolveUpstreamModel(model: string): string {
-  return UPSTREAM_MODEL_ALIASES[model] ?? UPSTREAM_MODEL_ALIASES[model.toLowerCase()] ?? model;
+function resolveUpstreamModel(
+  model: string,
+  aliases: Record<string, string>,
+): string {
+  return aliases[model] ?? aliases[model.toLowerCase()] ?? model;
 }
 
 /**
- * L3 /v1/models：把对外别名并入上游模型列表（去重、置顶），
+ * L3 /v1/models：把当前渠道的对外别名并入上游模型列表（去重、置顶），
  * 使 multica / Console 能按自己的硬编码模型名（gpt-5.4 / gpt-5.5）在目录中匹配到；
- * 上游真实模型条目保持不变，zen 真名仍可用。
+ * 上游真实模型条目保持不变，渠道真名仍可用。
  */
-function withModelAliases(body: unknown): unknown {
+function withModelAliases(
+  body: unknown,
+  aliases: Record<string, string>,
+): unknown {
   if (!body || typeof body !== 'object') return body;
   const list = (body as { data?: unknown }).data;
   if (!Array.isArray(list)) return body;
   const seen = new Set(
     list
-      .map((m) => (m && typeof m === 'object' ? (m as { id?: string }).id : undefined))
+      .map((m) =>
+        m && typeof m === 'object' ? (m as { id?: string }).id : undefined,
+      )
       .filter((id): id is string => typeof id === 'string'),
   );
   const created = Math.floor(Date.now() / 1000);
-  const aliasEntries = Object.keys(UPSTREAM_MODEL_ALIASES)
+  const aliasEntries = Object.keys(aliases)
     .filter((id) => !id.includes('/') && !seen.has(id))
     .map((id) => ({ id, object: 'model', created, owned_by: 'csi-gateway' }));
   if (!aliasEntries.length) return body;
-  return { ...(body as object), data: [...aliasEntries, ...list] };
+  return { ...body, data: [...aliasEntries, ...list] };
 }
 
 /** 非流式 JSON 响应：把顶层 model 字段从上游真名回写为调用方请求时用的名字 */
-function restoreBodyModel(body: unknown, restore: ModelRestore | undefined): unknown {
+function restoreBodyModel(
+  body: unknown,
+  restore: ModelRestore | undefined,
+): unknown {
   if (!restore || !body || typeof body !== 'object') return body;
   const b = body as { model?: unknown };
   if (b.model !== restore.upstreamModel) return body;
@@ -173,7 +187,9 @@ export function pipeSseResponse(
     res.end();
     return;
   }
-  const nodeStream = Readable.fromWeb(upstream.body as import('stream/web').ReadableStream);
+  const nodeStream = Readable.fromWeb(
+    upstream.body as import('stream/web').ReadableStream,
+  );
 
   // 增量扫描 data: 行捕获收尾 usage 帧（chat 流式已注入 include_usage，上游必返；
   // Responses API 由 response.completed 事件携带）。提取完整 input/output/total：
@@ -213,7 +229,11 @@ export function pipeSseResponse(
         if (u && typeof u.total_tokens === 'number') {
           const input = u.prompt_tokens ?? u.input_tokens ?? 0;
           const output = u.completion_tokens ?? u.output_tokens ?? 0;
-          usage = { input_tokens: input, output_tokens: output, total_tokens: u.total_tokens };
+          usage = {
+            input_tokens: input,
+            output_tokens: output,
+            total_tokens: u.total_tokens,
+          };
         }
       } catch {
         // 非 JSON 行（注释/心跳）忽略
@@ -223,7 +243,9 @@ export function pipeSseResponse(
   });
 
   nodeStream.on('error', (err) => {
-    streamLogger.error(`stream upstream error after ${Date.now() - startedAt}ms: ${String(err)}`);
+    streamLogger.error(
+      `stream upstream error after ${Date.now() - startedAt}ms: ${String(err)}`,
+    );
     if (!res.writableEnded) res.destroy();
   });
   nodeStream.on('end', () => {
@@ -236,7 +258,9 @@ export function pipeSseResponse(
       try {
         onStreamUsage(usage);
       } catch (err) {
-        streamLogger.warn(`stream usage record failed (ignored): ${String(err)}`);
+        streamLogger.warn(
+          `stream usage record failed (ignored): ${String(err)}`,
+        );
       }
     }
   });
@@ -257,7 +281,8 @@ export function pipeSseResponse(
   }
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * 计量单价改走 DB（LlmModelPriceService，见表 llm_model_prices）：
@@ -276,32 +301,51 @@ export class LlmProxyService {
   constructor(
     private readonly entitlementService: EntitlementService,
     private readonly modelPriceService: LlmModelPriceService,
+    private readonly channelService: LlmChannelService,
   ) {}
 
   /** 计量估算（人民币分）：查 DB 单价，未命中回退 gpt-5.4 价 */
-  private estimateCostCents(model: string, inputTokens: number, outputTokens: number): number {
+  private estimateCostCents(
+    model: string,
+    inputTokens: number,
+    outputTokens: number,
+  ): number {
     const price = this.modelPriceService.getPriceOrFallback(model);
     return Math.round(
-      (inputTokens / 1_000_000) * price.input + (outputTokens / 1_000_000) * price.output,
+      (inputTokens / 1_000_000) * price.input +
+        (outputTokens / 1_000_000) * price.output,
     );
   }
 
   /** 当前用户的全局 LLM 环境配置（runtime 启动时拉取并注入为环境变量） */
   async runtimeEnv(orgId: string): Promise<{
-    env: { OPENAI_BASE_URL: string; OPENAI_API_KEY: string; LLM_PROXY_MODE: string };
+    env: {
+      OPENAI_BASE_URL: string;
+      OPENAI_API_KEY: string;
+      LLM_PROXY_MODE: string;
+    };
     base_url: string;
     api_key: string;
   }> {
     const cfg = await this.entitlementService.resolveLlmConfig(orgId);
     if (!cfg) {
-      throw new ContractError(409, 'LLM_CONFIG_MISSING', '尚未配置 AI Token，请前往「配置 AI Token」页完成配置');
+      throw new ContractError(
+        409,
+        'LLM_CONFIG_MISSING',
+        '尚未配置 AI Token，请前往「配置 AI Token」页完成配置',
+      );
     }
     const baseUrl = toOpenAiBaseUrl(cfg.base_url);
     return {
       env: {
         OPENAI_BASE_URL: baseUrl,
         OPENAI_API_KEY: cfg.api_key,
-        LLM_PROXY_MODE: cfg.source === 'plan_builtin' ? 'plan-builtin' : cfg.source === 'env_default' ? 'env-default' : 'byok-global',
+        LLM_PROXY_MODE:
+          cfg.source === 'plan_builtin'
+            ? 'plan-builtin'
+            : cfg.source === 'env_default'
+              ? 'env-default'
+              : 'byok-global',
       },
       base_url: baseUrl,
       api_key: cfg.api_key,
@@ -329,21 +373,30 @@ export class LlmProxyService {
     );
     const cfg = await this.entitlementService.resolveLlmConfig(orgId);
     if (!cfg) {
-      throw new ContractError(409, 'LLM_CONFIG_MISSING', '尚未配置 AI Token，请前往「配置 AI Token」页完成配置');
+      throw new ContractError(
+        409,
+        'LLM_CONFIG_MISSING',
+        '尚未配置 AI Token，请前往「配置 AI Token」页完成配置',
+      );
     }
     const apiKey = cfg.api_key;
     const url = endpointUrl(cfg.base_url, endpoint);
+    // 渠道别名表：按当前生效渠道（base_url 主机名）自动读取；未登记渠道=空表=原样透传
+    const channel = this.channelService.resolveChannel(cfg.base_url);
+    const aliases = channel?.aliases ?? {};
 
     // 转发给上游的干净载荷：剔除内部路由字段
     const { endpoint: _ep, agent_run_id: _runId, ...upstreamPayload } = payload;
-    // 调用方（multica / Console）沿用 gpt-5.x 命名，zen 上游无此模型，转发前按别名改写为真实模型名；
+    // 调用方（multica / Console）沿用 gpt-5.x 命名，上游网关真实模型名不一，转发前按当前渠道别名改写；
     // 计量/日志仍按调用方原始 model 记账，保持对账口径一致。
     let modelRestore: ModelRestore | undefined;
     if (typeof upstreamPayload.model === 'string') {
       const requestedModel = upstreamPayload.model;
-      const upstreamModel = resolveUpstreamModel(requestedModel);
+      const upstreamModel = resolveUpstreamModel(requestedModel, aliases);
       if (upstreamModel !== requestedModel) {
-        this.logger.log(`model alias ${requestedModel} -> ${upstreamModel}`);
+        this.logger.log(
+          `model alias [${channel?.host ?? 'unknown'}] ${requestedModel} -> ${upstreamModel}`,
+        );
         upstreamPayload.model = upstreamModel;
         modelRestore = { upstreamModel, requestedModel };
       }
@@ -357,7 +410,7 @@ export class LlmProxyService {
     // （Console daemon 依赖最终帧计量；缺失即计量链断）。Responses API 无此参数。
     if (wantsStream && endpoint === 'chat/completions') {
       upstreamPayload.stream_options = {
-        ...((upstreamPayload.stream_options as Record<string, unknown>) ?? {}),
+        ...(upstreamPayload.stream_options ?? {}),
         include_usage: true,
       };
     }
@@ -374,16 +427,27 @@ export class LlmProxyService {
       });
     } catch (err) {
       clearTimeout(timer);
-      const reason = (err as Error)?.name === 'AbortError' ? 'upstream-timeout' : 'upstream-unreachable';
+      const reason =
+        (err as Error)?.name === 'AbortError'
+          ? 'upstream-timeout'
+          : 'upstream-unreachable';
       this.logger.error(`forward connect failed (${reason}): ${url}`);
-      throw new ContractError(502, 'LLM_UPSTREAM_ERROR', `网关调用失败（${reason}）：${url}`);
+      throw new ContractError(
+        502,
+        'LLM_UPSTREAM_ERROR',
+        `网关调用失败（${reason}）：${url}`,
+      );
     }
 
     // 流式直通：上游按 text/event-stream 应答时不缓冲整流（旧实现 await text() 会把
     // SSE 拖成"等全流→JSON.parse 失败→空 200"，即 codex 侧 Reconnecting 空转的根因）。
     // 首字节限时由上方 timer 覆盖；长流本身不设总时限（正常生成可持续数分钟）。
     const contentType = upstream.headers.get('content-type') ?? '';
-    if (upstream.ok && wantsStream && contentType.includes('text/event-stream')) {
+    if (
+      upstream.ok &&
+      wantsStream &&
+      contentType.includes('text/event-stream')
+    ) {
       clearTimeout(timer);
       this.logger.log(
         `forward stream passthrough status=${upstream.status} model=${model} ttfb=${Date.now() - startedAt}ms`,
@@ -400,13 +464,27 @@ export class LlmProxyService {
           input_tokens: u.input_tokens,
           output_tokens: u.output_tokens,
           total_tokens: u.total_tokens,
-          cost_cents: this.estimateCostCents(model, u.input_tokens, u.output_tokens),
+          cost_cents: this.estimateCostCents(
+            model,
+            u.input_tokens,
+            u.output_tokens,
+          ),
         };
         this.entitlementService
           .recordUsage(orgId, [item])
-          .catch((err) => this.logger.warn(`llm-proxy stream usage record failed (ignored): ${String(err)}`));
+          .catch((err) =>
+            this.logger.warn(
+              `llm-proxy stream usage record failed (ignored): ${String(err)}`,
+            ),
+          );
       };
-      return { mode: 'stream', status: upstream.status, upstream, recordStreamUsage, modelRestore };
+      return {
+        mode: 'stream',
+        status: upstream.status,
+        upstream,
+        recordStreamUsage,
+        modelRestore,
+      };
     }
 
     // 非流式：signal 持续覆盖响应体读取（修复旧实现 clearTimeout 过早、
@@ -417,9 +495,15 @@ export class LlmProxyService {
     } catch (err) {
       clearTimeout(timer);
       const reason =
-        (err as Error)?.name === 'AbortError' ? 'upstream-body-timeout' : 'upstream-read-failed';
+        (err as Error)?.name === 'AbortError'
+          ? 'upstream-body-timeout'
+          : 'upstream-read-failed';
       this.logger.error(`forward body read failed (${reason}): ${url}`);
-      throw new ContractError(502, 'LLM_UPSTREAM_ERROR', `网关响应体读取失败（${reason}）：${url}`);
+      throw new ContractError(
+        502,
+        'LLM_UPSTREAM_ERROR',
+        `网关响应体读取失败（${reason}）：${url}`,
+      );
     }
     clearTimeout(timer);
 
@@ -458,7 +542,15 @@ export class LlmProxyService {
     // best-effort 计量（BYOK 不拦截）：成功响应按 usage 字段上报；workspace 缺省/非法时跳过（uuid 归集键）。
     // 流式直通路径的服务端计量走 recordStreamUsage 闭包（pipeSseResponse 收尾帧提取）。
     if (body && typeof body === 'object') {
-      const usage = (body as { usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }).usage;
+      const usage = (
+        body as {
+          usage?: {
+            prompt_tokens?: number;
+            completion_tokens?: number;
+            total_tokens?: number;
+          };
+        }
+      ).usage;
       if (usage && workspaceId && UUID_RE.test(workspaceId)) {
         const item: UsageIngestItem = {
           workspace_id: workspaceId,
@@ -466,18 +558,28 @@ export class LlmProxyService {
           model,
           input_tokens: usage.prompt_tokens ?? 0,
           output_tokens: usage.completion_tokens ?? 0,
-          total_tokens: usage.total_tokens ?? (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0),
-          cost_cents: this.estimateCostCents(model, usage.prompt_tokens ?? 0, usage.completion_tokens ?? 0),
+          total_tokens:
+            usage.total_tokens ??
+            (usage.prompt_tokens ?? 0) + (usage.completion_tokens ?? 0),
+          cost_cents: this.estimateCostCents(
+            model,
+            usage.prompt_tokens ?? 0,
+            usage.completion_tokens ?? 0,
+          ),
         };
         this.entitlementService
           .recordUsage(orgId, [item])
-          .catch((err) => this.logger.warn(`llm-proxy usage record failed (ignored): ${String(err)}`));
+          .catch((err) =>
+            this.logger.warn(
+              `llm-proxy usage record failed (ignored): ${String(err)}`,
+            ),
+          );
       }
     }
 
-    // L3 模型目录：并入对外别名（gpt-5.4 / gpt-5.5），使 multica/Console 能匹配到自己的模型名
+    // L3 模型目录：并入当前渠道的对外别名（gpt-5.4 / gpt-5.5），使 multica/Console 能匹配到自己的模型名
     if (isGet && endpoint === 'models') {
-      body = withModelAliases(body);
+      body = withModelAliases(body, aliases);
     }
     // 别名改写过的请求：把响应里的上游真名回写为调用方原名
     body = restoreBodyModel(body, modelRestore);

@@ -194,7 +194,13 @@ export class EntitlementController {
   @Get('llm-config/:orgId')
   async llmConfig(@Param('orgId') orgId: string) {
     const org = requireUuid(orgId);
-    let cfg: { base_url: string; api_key: string; key_prefix: string; source: string } | null = null;
+    let cfg: {
+      base_url: string;
+      api_key: string;
+      model: string | null;
+      key_prefix: string;
+      source: string;
+    } | null = null;
     try {
       cfg = await this.service.resolveLlmConfig(org);
     } catch (err) {
@@ -215,6 +221,7 @@ export class EntitlementController {
       org_id: orgId,
       base_url: cfg.base_url,
       api_key: cfg.api_key,
+      model: cfg.model,
       key_prefix: cfg.key_prefix,
       source: cfg.source,
     };

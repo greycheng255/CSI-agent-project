@@ -9,12 +9,24 @@ import { LlmProxyService } from './llm-proxy.service';
 import { LlmModelPrice } from './llm-model-price.entity';
 import { LlmModelPriceService } from './llm-model-price.service';
 import { LlmPriceAdminController } from './llm-price-admin.controller';
+import { LlmChannel } from './llm-channel.entity';
+import { LlmChannelService } from './llm-channel.service';
+import { LlmChannelAdminController } from './llm-channel-admin.controller';
 
-/** AI 网关直连代理模块（BYOK：按用户配置转发并计量；计费单价外置 DB） */
+/** AI 网关直连代理模块（BYOK：按用户配置转发并计量；计费单价与渠道别名表外置 DB） */
 @Module({
-  imports: [TypeOrmModule.forFeature([UserLlmConfig, LlmModelPrice]), AuthModule, AdminModule, EntitlementModule],
-  controllers: [LlmProxyController, LlmPriceAdminController],
-  providers: [LlmProxyService, LlmModelPriceService],
-  exports: [LlmProxyService, LlmModelPriceService],
+  imports: [
+    TypeOrmModule.forFeature([UserLlmConfig, LlmModelPrice, LlmChannel]),
+    AuthModule,
+    AdminModule,
+    EntitlementModule,
+  ],
+  controllers: [
+    LlmProxyController,
+    LlmPriceAdminController,
+    LlmChannelAdminController,
+  ],
+  providers: [LlmProxyService, LlmModelPriceService, LlmChannelService],
+  exports: [LlmProxyService, LlmModelPriceService, LlmChannelService],
 })
 export class LlmProxyModule {}
